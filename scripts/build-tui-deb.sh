@@ -78,6 +78,12 @@ find "$OPT/venv/bin" -type f -exec grep -l "$OPT/venv" {} + 2>/dev/null | while 
     sed -i "s|$OPT/venv|/opt/etil-tui/venv|g" "$f"
 done
 
+# --- Ensure all installed files are world-readable ---
+# dpkg installs as root; without this, users can't read the Python source
+find "$OPT" -type f -exec chmod a+r {} +
+find "$OPT" -type d -exec chmod a+rx {} +
+find "$OPT/venv/bin" -type f -exec chmod a+rx {} +
+
 # --- Create wrapper script ---
 cat > "$STAGE/usr/bin/etil-tui" <<'WRAPPER'
 #!/usr/bin/env bash
@@ -104,7 +110,7 @@ Description: ETIL MCP Client TUI
  .
  Connects to an ETIL MCP server via HTTP. Self-contained Python
  virtualenv with all dependencies included.
-Homepage: https://github.com/mdeazley/evolutionary-til
+Homepage: https://github.com/krystalmonolith/evolutionary-til
 EOF
 
 # --- Build the .deb ---
