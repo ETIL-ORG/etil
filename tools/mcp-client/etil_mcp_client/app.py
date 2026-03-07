@@ -1101,7 +1101,9 @@ class EtilMcpApp(App):
         self.notification_bar.toggle_scroll_position()
 
     def action_show_help(self) -> None:
-        """Open the help browser."""
+        """Open the help browser (ignores repeat presses while already open)."""
+        if any(isinstance(s, HelpScreen) for s in self.screen_stack):
+            return
         if self._connected:
             self.push_screen(HelpScreen(self._protocol, config=self._config))
         else:
