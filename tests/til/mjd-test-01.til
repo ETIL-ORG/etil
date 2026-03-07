@@ -1,0 +1,51 @@
+forget-all mjd-test-01
+: mjd-test-01 ;
+
+# A point is an array of two numeric elements
+# x: point[0]
+# y: point[1]
+
+# ( x y -- point )
+: point-new swap array-new swap array-push swap array-push ;
+
+# ( point x y -- point )
+: point!
+   rot # (x y p)
+   1   # (x y p 1)
+   rot # (x p 1 y)
+   array-set # (x p)
+   swap 0 swap # (p 0 x)
+   array-set ; # (-- p)
+
+# ( point -- x y ) — consumes the array ref
+: point@ array-shift swap array-shift swap drop ;
+
+# ( point -- point x )
+: pointx dup 0 array-get ;
+
+# ( point -- point y )
+: pointy dup 1 array-get ;
+
+# x y point name
+# ( -- point )
+: point create point-new , does> @ ;
+
+# ( point -- str) — consumes the array ref
+: pformat point@ swap s" (" swap s+ s" ," s+ swap s+ s" )" s+ ;
+
+# ( point -- ) — consumes the array ref
+: p. pformat s. ;
+
+# ( arrayA[2] -- arrayA[2] arrayB[2] )
+: point-dup dup point@ point-new ;
+
+123  456 point p1
+987 -654 point p2
+
+# non-destructive access via pointx/pointy
+." p1:(" p1 pointx . ." ," pointy . ." )" cr drop
+." p2:(" p2 pointx . ." ," pointy . ." )" cr drop
+
+# destructive access via p. (uses point@ internally)
+." p1:" p1 p. cr
+." p2:" p2 p. cr

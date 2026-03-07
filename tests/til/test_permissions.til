@@ -1,0 +1,20 @@
+\ test_permissions.til — Standalone mode permission regression tests
+\ In standalone mode (REPL), permissions pointer is null → all permitted.
+include tests/til/harness.til
+
+\ --- evaluate works in standalone mode ---
+." test-evaluate-standalone: "
+s" 1 2 +" evaluate 3 expect-eq
+
+\ --- sregex-replace produces clean output in standalone mode ---
+." test-sregex-standalone: "
+s" abc123" s" [0-9]+" s" X" sregex-replace
+dup s" abcX" s= true expect-eq
+staint false expect-eq
+
+\ --- number->string is clean ---
+." test-number-string-clean: "
+42 number->string staint false expect-eq
+
+\ Done
+." PASS: all standalone permission tests " cr

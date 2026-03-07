@@ -1,0 +1,55 @@
+# test_xt.til — Execution token (xt) tests
+
+include tests/til/harness.til
+
+# Test: ['] inside colon definition pushes xt, execute runs it
+: test-bracket-tick
+  ." test-bracket-tick: "
+  42 ['] dup execute
+  42 expect-eq
+  42 expect-eq ;
+
+# Test: xt? returns true for xt inside definition via [']
+: test-xt-query-true
+  ." test-xt-query-true: "
+  ['] dup xt? true expect-eq ;
+
+# Test: xt? returns false for integer
+: test-xt-query-false-int
+  ." test-xt-query-false-int: "
+  42 xt? false expect-eq ;
+
+# Test: >name extracts word name (length > 0)
+: test-xt-to-name
+  ." test-xt-to-name: "
+  ['] cr >name slength 0 > true expect-eq ;
+
+# Test: xt stored in variable
+variable xt-var
+: test-xt-in-variable
+  ." test-xt-in-variable: "
+  ['] dup xt-var !
+  99 xt-var @ execute
+  99 expect-eq
+  99 expect-eq ;
+
+# Test: execute on compiled word
+: triple 3 * ;
+: test-execute-compiled
+  ." test-execute-compiled: "
+  7 ['] triple execute 21 expect-eq ;
+
+# Test: ['] xt? false for non-xt (using xt? on an integer)
+: test-xt-query-false-string
+  ." test-xt-query-false-string: "
+  ['] cr >name xt? false expect-eq ;
+
+# Master test runner
+: testall
+  test-bracket-tick
+  test-xt-query-true
+  test-xt-query-false-int
+  test-xt-to-name
+  test-xt-in-variable
+  test-execute-compiled
+  test-xt-query-false-string ;

@@ -1,0 +1,15 @@
+forget-all mjd-test-04
+: mjd-test-04 ;
+
+: get-file s" ae2.lst" read-file not if s" File Read Failed!" 0 abort then ;
+get-file s| \n| ssplit constant word-array
+
+: random-words
+    10000 0
+    do
+        word-array array-length 0 swap random-range array-get s.
+        space i 1 + 10 mod 0 =
+        if cr then
+    loop ;
+
+random-words

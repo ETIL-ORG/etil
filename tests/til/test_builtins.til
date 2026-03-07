@@ -1,0 +1,89 @@
+# test_builtins.til — Tests for self-hosted words defined in builtins.til
+
+include tests/til/harness.til
+
+# --- forget ---
+
+: forget-target 42 ;
+." forget existing word: "
+forget forget-target
+pass
+
+# Define again so we can test forget with shadowing
+: shadow-word 1 ;
+: shadow-word 2 ;
+." forget reveals previous: "
+forget shadow-word
+shadow-word 1 expect-eq
+
+." forget last impl: "
+forget shadow-word
+pass
+
+# --- forget-all ---
+
+: multi-impl 10 ;
+: multi-impl 20 ;
+: multi-impl 30 ;
+." forget-all removes all impls: "
+forget-all multi-impl
+pass
+
+# --- meta! / meta@ / meta-del / meta-keys ---
+
+: testword dup + ;
+
+." meta! set desc: "
+s" testword" s" desc" s" text" s" A word that doubles" meta!
+true expect-eq
+
+." meta@ get desc: "
+s" testword" s" desc" meta@
+true expect-eq
+s" A word that doubles" s= true expect-eq
+
+." meta! set author: "
+s" testword" s" author" s" text" s" Claude" meta!
+true expect-eq
+
+# 2 user keys (definition-type/source-file/source-line are now impl-level)
+." meta-keys count: "
+s" testword" meta-keys
+true expect-eq
+array-length 2 expect-eq drop
+
+." meta-del success: "
+s" testword" s" author" meta-del
+true expect-eq
+
+." meta@ after delete: "
+s" testword" s" author" meta@
+false expect-eq
+
+# 1 user key remaining
+." meta-keys after delete: "
+s" testword" meta-keys
+true expect-eq
+array-length 1 expect-eq drop
+
+# --- impl-meta! / impl-meta@ ---
+
+." impl-meta! set: "
+s" testword" s" version" s" text" s" v2.0" impl-meta!
+true expect-eq
+
+." impl-meta@ get: "
+s" testword" s" version" impl-meta@
+true expect-eq
+s" v2.0" s= true expect-eq
+
+# --- Error cases ---
+
+." meta! unknown word: "
+s" nonexistent" s" desc" s" text" s" hello" meta!
+false expect-eq
+
+." meta@ unknown word: "
+s" nonexistent" s" desc" meta@
+false expect-eq
+

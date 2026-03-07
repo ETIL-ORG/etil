@@ -1,0 +1,27 @@
+volumes:
+  etil-sessions:
+  etil-library:
+
+services:
+  etil-mcp-http:
+    build: .
+    command: ["--port", "8080"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - ETIL_MCP_API_KEY=${ETIL_MCP_API_KEY:-}
+      - ETIL_SESSIONS_DIR=/data/sessions
+      - ETIL_LIBRARY_DIR=/data/library
+      - ETIL_AUTH_CONFIG=${ETIL_AUTH_CONFIG:-}
+    volumes:
+      - etil-sessions:/data/sessions
+      - etil-library:/data/library:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=10M
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 50

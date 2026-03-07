@@ -1,0 +1,39 @@
+services:
+  etil-mcp-http:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    command: ["--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ETIL_MCP_API_KEY=${ETIL_MCP_API_KEY}
+      - ETIL_HTTP_ALLOWLIST=${ETIL_HTTP_ALLOWLIST:-}
+      - ETIL_AUTH_CONFIG=/etc/etil
+      - ETIL_MONGODB_URI=${ETIL_MONGODB_URI:-mongodb://host.docker.internal:27017}
+      - ETIL_MONGODB_DATABASE=${ETIL_MONGODB_DATABASE:-etil}
+    volumes:
+      # Auth config (roles, keys, users) — create these on your host
+      - /opt/etil/oauth:/etc/etil:ro
+      # MongoDB TLS certs — uncomment and adjust paths for x.509 auth
+      # - /path/to/client-cert.pem:/etc/etil-mongo/client.pem:ro
+      # - /path/to/ca.pem:/etc/etil-mongo/ca.pem:ro
+    # group_add:
+    #   - "CERT_GID"  # GID that owns the cert files on the host
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=10M
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 50
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,6 @@
+# harness.til — TIL test harness
+# Usage: caller prints test name with ." then leaves ( actual expected ) on stack
+
+: pass ." PASS" cr ;
+: fail ." FAIL" cr ;
+: expect-eq = if pass else fail then ;

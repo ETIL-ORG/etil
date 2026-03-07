@@ -1,0 +1,122 @@
+# test_variable_constant.til — variable and constant tests
+
+include tests/til/harness.til
+
+# --- Scalar variable tests ---
+
+variable x
+variable y
+
+: test-var-default
+  ." test-var-default: "
+  x @ 0 expect-eq ;
+
+: test-var-store-fetch
+  ." test-var-store-fetch: "
+  42 x !
+  x @ 42 expect-eq ;
+
+: test-var-overwrite
+  ." test-var-overwrite: "
+  99 x !
+  x @ 99 expect-eq ;
+
+: test-var-independent
+  ." test-var-independent: "
+  10 x !
+  20 y !
+  x @ 10 expect-eq ;
+
+: test-var-in-colon
+  ." test-var-in-colon: "
+  77 x !
+  x @ 77 expect-eq ;
+
+# --- Scalar constant tests ---
+
+42 constant answer
+100 constant century
+
+: test-const-value
+  ." test-const-value: "
+  answer 42 expect-eq ;
+
+: test-const-independent
+  ." test-const-independent: "
+  century 100 expect-eq ;
+
+: test-const-in-colon
+  ." test-const-in-colon: "
+  answer 42 expect-eq ;
+
+3.14 constant approx-pi
+
+: test-const-float
+  ." test-const-float: "
+  approx-pi 3.14 = if pass else fail then ;
+
+# --- Heap object: variable with string ---
+
+variable sv
+
+: test-var-string
+  ." test-var-string: "
+  s" hello" sv !
+  sv @ s" hello" s= if pass else fail then ;
+
+: test-var-string-overwrite
+  ." test-var-string-overwrite: "
+  s" world" sv !
+  sv @ s" world" s= if pass else fail then ;
+
+# --- Heap object: variable with array ---
+
+variable av
+
+: test-var-array
+  ." test-var-array: "
+  array-new 10 array-push 20 array-push av !
+  av @ array-length 2 expect-eq ;
+
+# --- Heap object: constant with string ---
+
+s" greeting" constant hello-str
+
+: test-const-string
+  ." test-const-string: "
+  hello-str s" greeting" s= if pass else fail then ;
+
+# --- Heap object: constant with array ---
+
+array-new 1 array-push 2 array-push 3 array-push constant trio
+
+: test-const-array
+  ." test-const-array: "
+  trio array-length 3 expect-eq ;
+
+# --- Heap object: constant with byte array ---
+
+16 bytes-new constant buf
+
+: test-const-bytes
+  ." test-const-bytes: "
+  buf bytes-length 16 expect-eq ;
+
+# --- Master test runner ---
+
+: testall
+  test-var-default
+  test-var-store-fetch
+  test-var-overwrite
+  test-var-independent
+  test-var-in-colon
+  test-const-value
+  test-const-independent
+  test-const-in-colon
+  test-const-float
+  test-var-string
+  test-var-string-overwrite
+  test-var-array
+  test-const-string
+  test-const-array
+  test-const-bytes ;

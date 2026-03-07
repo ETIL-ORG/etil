@@ -1,0 +1,76 @@
+# test_pipe_strings.til — Tests for .| and s| string literals with escape processing
+# Convention: leading space after s| is stripped, but NO trailing space before |
+# i.e. s| text| not s| text |  (trailing space would be included in string)
+
+include tests/til/harness.til
+
+# --- Basic s| usage ---
+
+." s-pipe basic string: "
+s| hello world| s" hello world" s= true expect-eq
+
+# --- Embedded quotes (the whole point!) ---
+
+." s-pipe embedded quotes len: "
+s| say "hello"| slength 11 expect-eq
+
+." s-pipe quotes in content: "
+s| He said "yes"| slength 13 expect-eq
+
+# --- .| basic output ---
+
+." dot-pipe basic: "
+s| hello| s" hello" s= true expect-eq
+
+# --- Escape sequences ---
+
+." s-pipe newline escape: "
+s| line1\nline2| slength 11 expect-eq
+
+." s-pipe tab escape: "
+s| col1\tcol2| slength 9 expect-eq
+
+." s-pipe backslash escape: "
+s| a\\b| slength 3 expect-eq
+
+." s-pipe escaped pipe: "
+s| pipe\|here| slength 9 expect-eq
+
+# Verify escaped pipe content matches a | character
+." s-pipe escaped pipe content: "
+s| a\|b| s" a|b" s= true expect-eq
+
+# --- Hex escapes ---
+
+." s-pipe hex A: "
+s| \%41| s" A" s= true expect-eq
+
+." s-pipe hex newline: "
+s| \%0A| slength 1 expect-eq
+
+." s-pipe hex multi: "
+s| \%48\%49| s" HI" s= true expect-eq
+
+# --- Compile mode ---
+
+: test-compile-s-pipe s| hello\nworld| ;
+." compile s-pipe push: "
+test-compile-s-pipe slength 11 expect-eq
+
+: test-compile-dot-pipe .| compiled| ;
+." compile dot-pipe: "
+# .| outputs to stdout, we just verify no crash
+true true expect-eq
+
+# --- Round-trip: escaped pipe in content ---
+
+." s-pipe round-trip pipe: "
+s| a\|b\|c| slength 5 expect-eq
+
+# --- Combined escapes ---
+
+." s-pipe combined: "
+s| \\\|\n| slength 3 expect-eq
+
+." All pipe string tests: "
+true true expect-eq

@@ -1,0 +1,1406 @@
+# help.til -- Built-in help metadata for all ETIL words
+# Loaded on startup after builtins.til.
+# Uses stack-based meta! to attach description, stack-effect, and category to each word.
+# Syntax: s" word" s" key" s" fmt" s" content" meta! drop
+# NOTE: No # character inside "..." strings -- it starts a comment and eats the closing quote.
+# Use \n=> to show expected output on a separate line in examples.
+# Use s| content| instead of s" content" when content contains double-quote characters.
+
+# --- Arithmetic ---
+
+s" +" s" description" s" text" s" Add two numbers" meta! drop
+s" +" s" stack-effect" s" text" s" ( a b -- a+b )" meta! drop
+s" +" s" category" s" text" s" arithmetic" meta! drop
+
+s" -" s" description" s" text" s" Subtract top from second" meta! drop
+s" -" s" stack-effect" s" text" s" ( a b -- a-b )" meta! drop
+s" -" s" category" s" text" s" arithmetic" meta! drop
+
+s" *" s" description" s" text" s" Multiply two numbers" meta! drop
+s" *" s" stack-effect" s" text" s" ( a b -- a*b )" meta! drop
+s" *" s" category" s" text" s" arithmetic" meta! drop
+
+s" /" s" description" s" text" s" Divide second by top (truncating for integers)" meta! drop
+s" /" s" stack-effect" s" text" s" ( a b -- a/b )" meta! drop
+s" /" s" category" s" text" s" arithmetic" meta! drop
+
+s" mod" s" description" s" text" s" Remainder of second divided by top" meta! drop
+s" mod" s" stack-effect" s" text" s" ( a b -- a%b )" meta! drop
+s" mod" s" category" s" text" s" arithmetic" meta! drop
+
+s" /mod" s" description" s" text" s" Divide with remainder" meta! drop
+s" /mod" s" stack-effect" s" text" s" ( a b -- rem quot )" meta! drop
+s" /mod" s" category" s" text" s" arithmetic" meta! drop
+
+s" negate" s" description" s" text" s" Negate top of stack" meta! drop
+s" negate" s" stack-effect" s" text" s" ( n -- -n )" meta! drop
+s" negate" s" category" s" text" s" arithmetic" meta! drop
+
+s" abs" s" description" s" text" s" Absolute value of top of stack" meta! drop
+s" abs" s" stack-effect" s" text" s" ( n -- |n| )" meta! drop
+s" abs" s" category" s" text" s" arithmetic" meta! drop
+
+s" +" s" examples" s" code" s" 3 4 + .\n=> 7" meta! drop
+s" -" s" examples" s" code" s" 10 3 - .\n=> 7" meta! drop
+s" *" s" examples" s" code" s" 6 7 * .\n=> 42" meta! drop
+s" /" s" examples" s" code" s" 42 6 / .\n=> 7" meta! drop
+s" mod" s" examples" s" code" s" 10 3 mod .\n=> 1" meta! drop
+s" /mod" s" examples" s" code" s" 10 3 /mod .| quot=| . .| rem=| .\n=> quot=3 rem=1 " meta! drop
+s" negate" s" examples" s" code" s" 5 negate .\n=> -5" meta! drop
+s" abs" s" examples" s" code" s" -7 abs .\n=> 7" meta! drop
+
+s" max" s" description" s" text" s" Return the greater of two values" meta! drop
+s" max" s" stack-effect" s" text" s" ( n1 n2 -- max )" meta! drop
+s" max" s" category" s" text" s" arithmetic" meta! drop
+s" max" s" examples" s" code" s" 3 7 max .\n=> 7" meta! drop
+
+s" min" s" description" s" text" s" Return the lesser of two values" meta! drop
+s" min" s" stack-effect" s" text" s" ( n1 n2 -- min )" meta! drop
+s" min" s" category" s" text" s" arithmetic" meta! drop
+s" min" s" examples" s" code" s" 3 7 min .\n=> 3" meta! drop
+
+s" 1+" s" description" s" text" s" Increment by one" meta! drop
+s" 1+" s" stack-effect" s" text" s" ( n -- n+1 )" meta! drop
+s" 1+" s" category" s" text" s" arithmetic" meta! drop
+s" 1+" s" examples" s" code" s" 5 1+ .\n=> 6" meta! drop
+
+s" 1-" s" description" s" text" s" Decrement by one" meta! drop
+s" 1-" s" stack-effect" s" text" s" ( n -- n-1 )" meta! drop
+s" 1-" s" category" s" text" s" arithmetic" meta! drop
+s" 1-" s" examples" s" code" s" 5 1- .\n=> 4" meta! drop
+
+# --- Stack ---
+
+s" dup" s" description" s" text" s" Duplicate top of stack" meta! drop
+s" dup" s" stack-effect" s" text" s" ( x -- x x )" meta! drop
+s" dup" s" category" s" text" s" stack" meta! drop
+
+s" drop" s" description" s" text" s" Remove top of stack" meta! drop
+s" drop" s" stack-effect" s" text" s" ( x -- )" meta! drop
+s" drop" s" category" s" text" s" stack" meta! drop
+
+s" swap" s" description" s" text" s" Swap top two stack items" meta! drop
+s" swap" s" stack-effect" s" text" s" ( a b -- b a )" meta! drop
+s" swap" s" category" s" text" s" stack" meta! drop
+
+s" over" s" description" s" text" s" Copy second item to top" meta! drop
+s" over" s" stack-effect" s" text" s" ( a b -- a b a )" meta! drop
+s" over" s" category" s" text" s" stack" meta! drop
+
+s" rot" s" description" s" text" s" Rotate third item to top" meta! drop
+s" rot" s" stack-effect" s" text" s" ( a b c -- b c a )" meta! drop
+s" rot" s" category" s" text" s" stack" meta! drop
+
+s" dup" s" examples" s" code" s" 5 dup . .\n=> 5 5" meta! drop
+s" drop" s" examples" s" code" s" 1 2 drop .\n=> 1" meta! drop
+s" swap" s" examples" s" code" s" 1 2 swap . .\n=> 1 2" meta! drop
+s" over" s" examples" s" code" s" 1 2 over . . .\n=> 1 2 1" meta! drop
+s" rot" s" examples" s" code" s" 1 2 3 rot . . .\n=> 1 3 2" meta! drop
+
+s" pick" s" description" s" text" s" Copy the Nth item (zero-based) below TOS onto TOS" meta! drop
+s" pick" s" stack-effect" s" text" s" ( xn ... x1 x0 n -- xn ... x1 x0 xn )" meta! drop
+s" pick" s" category" s" text" s" stack" meta! drop
+s" pick" s" examples" s" code" s| 10 20 30 0 pick . cr drop drop drop\n=> 30 | meta! drop
+
+s" nip" s" description" s" text" s" Remove second item, keeping TOS" meta! drop
+s" nip" s" stack-effect" s" text" s" ( x1 x2 -- x2 )" meta! drop
+s" nip" s" category" s" text" s" stack" meta! drop
+s" nip" s" examples" s" code" s" 1 2 nip .\n=> 2" meta! drop
+
+s" tuck" s" description" s" text" s" Copy TOS under second item" meta! drop
+s" tuck" s" stack-effect" s" text" s" ( x1 x2 -- x2 x1 x2 )" meta! drop
+s" tuck" s" category" s" text" s" stack" meta! drop
+s" tuck" s" examples" s" code" s" 1 2 tuck . . .\n=> 2 1 2" meta! drop
+
+s" depth" s" description" s" text" s" Push current data stack depth" meta! drop
+s" depth" s" stack-effect" s" text" s" ( -- u )" meta! drop
+s" depth" s" category" s" text" s" stack" meta! drop
+s" depth" s" examples" s" code" s" 10 20 30 depth .\n=> 3" meta! drop
+
+s" ?dup" s" description" s" text" s" Duplicate TOS if non-zero" meta! drop
+s" ?dup" s" stack-effect" s" text" s" ( x -- x x | 0 )" meta! drop
+s" ?dup" s" category" s" text" s" stack" meta! drop
+s" ?dup" s" examples" s" code" s" 5 ?dup . .\n=> 5 5" meta! drop
+
+s" roll" s" description" s" text" s" Move the Nth item (zero-based) to TOS, removing it from its original position" meta! drop
+s" roll" s" stack-effect" s" text" s" ( xu ... x0 u -- xu-1 ... x0 xu )" meta! drop
+s" roll" s" category" s" text" s" stack" meta! drop
+s" roll" s" examples" s" code" s" 10 20 30 2 roll . . .\n=> 10 30 20" meta! drop
+
+s" -rot" s" description" s" text" s" Reverse rotate: move TOS under third item" meta! drop
+s" -rot" s" stack-effect" s" text" s" ( a b c -- c a b )" meta! drop
+s" -rot" s" category" s" text" s" stack" meta! drop
+s" -rot" s" examples" s" code" s" 1 2 3 -rot . . .\n=> 2 3 1" meta! drop
+
+# --- Comparison ---
+
+s" =" s" description" s" text" s" Test equality" meta! drop
+s" =" s" stack-effect" s" text" s" ( a b -- bool )" meta! drop
+s" =" s" category" s" text" s" comparison" meta! drop
+
+s" <>" s" description" s" text" s" Test inequality" meta! drop
+s" <>" s" stack-effect" s" text" s" ( a b -- bool )" meta! drop
+s" <>" s" category" s" text" s" comparison" meta! drop
+
+s" <" s" description" s" text" s" Test less than" meta! drop
+s" <" s" stack-effect" s" text" s" ( a b -- bool )" meta! drop
+s" <" s" category" s" text" s" comparison" meta! drop
+
+s" >" s" description" s" text" s" Test greater than" meta! drop
+s" >" s" stack-effect" s" text" s" ( a b -- bool )" meta! drop
+s" >" s" category" s" text" s" comparison" meta! drop
+
+s" <=" s" description" s" text" s" Test less than or equal" meta! drop
+s" <=" s" stack-effect" s" text" s" ( a b -- bool )" meta! drop
+s" <=" s" category" s" text" s" comparison" meta! drop
+
+s" >=" s" description" s" text" s" Test greater than or equal" meta! drop
+s" >=" s" stack-effect" s" text" s" ( a b -- bool )" meta! drop
+s" >=" s" category" s" text" s" comparison" meta! drop
+
+s" 0=" s" description" s" text" s" Test if zero" meta! drop
+s" 0=" s" stack-effect" s" text" s" ( n -- bool )" meta! drop
+s" 0=" s" category" s" text" s" comparison" meta! drop
+
+s" 0<" s" description" s" text" s" Test if negative" meta! drop
+s" 0<" s" stack-effect" s" text" s" ( n -- bool )" meta! drop
+s" 0<" s" category" s" text" s" comparison" meta! drop
+
+s" 0>" s" description" s" text" s" Test if positive" meta! drop
+s" 0>" s" stack-effect" s" text" s" ( n -- bool )" meta! drop
+s" 0>" s" category" s" text" s" comparison" meta! drop
+
+s" =" s" examples" s" code" s" 3 3 = .| equal? | .\n=> equal? -1 " meta! drop
+s" <>" s" examples" s" code" s" 3 4 <> .| not-equal? | .\n=> not-equal? -1 " meta! drop
+s" <" s" examples" s" code" s" 3 4 < .| less? | .\n=> less? -1 " meta! drop
+s" >" s" examples" s" code" s" 4 3 > .| greater? | .\n=> greater? -1 " meta! drop
+s" <=" s" examples" s" code" s" 3 3 <= .| lte? | .\n=> lte? -1 " meta! drop
+s" >=" s" examples" s" code" s" 3 3 >= .| gte? | .\n=> gte? -1 " meta! drop
+s" 0=" s" examples" s" code" s" 0 0= .| zero? | .\n=> zero? -1 " meta! drop
+s" 0<" s" examples" s" code" s" -1 0< .| negative? | .\n=> negative? -1 " meta! drop
+s" 0>" s" examples" s" code" s" 1 0> .| positive? | .\n=> positive? -1 " meta! drop
+
+# --- Logic ---
+
+s" and" s" description" s" text" s" Both Boolean: logical AND (returns bool). Both Integer: bitwise AND (returns int). Mixed types: error." meta! drop
+s" and" s" stack-effect" s" text" s" ( a b -- a&b )" meta! drop
+s" and" s" category" s" text" s" logic" meta! drop
+
+s" or" s" description" s" text" s" Both Boolean: logical OR (returns bool). Both Integer: bitwise OR (returns int). Mixed types: error." meta! drop
+s" or" s" stack-effect" s" text" s" ( a b -- a|b )" meta! drop
+s" or" s" category" s" text" s" logic" meta! drop
+
+s" xor" s" description" s" text" s" Both Boolean: logical XOR (returns bool). Both Integer: bitwise XOR (returns int). Mixed types: error." meta! drop
+s" xor" s" stack-effect" s" text" s" ( a b -- a^b )" meta! drop
+s" xor" s" category" s" text" s" logic" meta! drop
+
+s" invert" s" description" s" text" s" Boolean: logical NOT (returns bool). Integer: bitwise NOT (returns int)." meta! drop
+s" invert" s" stack-effect" s" text" s" ( n -- ~n )" meta! drop
+s" invert" s" category" s" text" s" logic" meta! drop
+
+s" and" s" examples" s" code" s" -1 -1 and .\n=> -1" meta! drop
+s" or" s" examples" s" code" s" 0 -1 or .\n=> -1" meta! drop
+s" xor" s" examples" s" code" s" -1 -1 xor .\n=> 0" meta! drop
+s" invert" s" examples" s" code" s" 0 invert .\n=> -1" meta! drop
+
+s" lshift" s" description" s" text" s" Left bit shift" meta! drop
+s" lshift" s" stack-effect" s" text" s" ( x u -- x<<u )" meta! drop
+s" lshift" s" category" s" text" s" logic" meta! drop
+s" lshift" s" examples" s" code" s" 1 8 lshift .\n=> 256" meta! drop
+
+s" rshift" s" description" s" text" s" Logical right bit shift" meta! drop
+s" rshift" s" stack-effect" s" text" s" ( x u -- x>>u )" meta! drop
+s" rshift" s" category" s" text" s" logic" meta! drop
+s" rshift" s" examples" s" code" s" 256 8 rshift .\n=> 1" meta! drop
+s" lroll" s" description" s" text" s" Bitwise rotate left (circular shift)" meta! drop
+s" lroll" s" stack-effect" s" text" s" ( x u -- x' )" meta! drop
+s" lroll" s" category" s" text" s" logic" meta! drop
+s" lroll" s" examples" s" code" s" 1 1 lroll .\n=> 2" meta! drop
+s" rroll" s" description" s" text" s" Bitwise rotate right (circular shift)" meta! drop
+s" rroll" s" stack-effect" s" text" s" ( x u -- x' )" meta! drop
+s" rroll" s" category" s" text" s" logic" meta! drop
+s" rroll" s" examples" s" code" s" 2 1 rroll .\n=> 1" meta! drop
+s" true" s" examples" s" code" s" true .\n=> true" meta! drop
+s" false" s" examples" s" code" s" false .\n=> false" meta! drop
+s" not" s" examples" s" code" s" true not .\n=> false" meta! drop
+s" bool" s" examples" s" code" s" 42 bool .\n=> true" meta! drop
+
+# --- I/O ---
+
+s" ." s" description" s" text" s" Print and consume top of stack" meta! drop
+s" ." s" stack-effect" s" text" s" ( x -- )" meta! drop
+s" ." s" category" s" text" s" i/o" meta! drop
+
+s" cr" s" description" s" text" s" Print newline" meta! drop
+s" cr" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" cr" s" category" s" text" s" i/o" meta! drop
+
+s" emit" s" description" s" text" s" Print character from ASCII code" meta! drop
+s" emit" s" stack-effect" s" text" s" ( char -- )" meta! drop
+s" emit" s" category" s" text" s" i/o" meta! drop
+
+s" space" s" description" s" text" s" Print a space" meta! drop
+s" space" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" space" s" category" s" text" s" i/o" meta! drop
+
+s" spaces" s" description" s" text" s" Print n spaces" meta! drop
+s" spaces" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" spaces" s" category" s" text" s" i/o" meta! drop
+
+s" words" s" description" s" text" s" List all dictionary words" meta! drop
+s" words" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" words" s" category" s" text" s" i/o" meta! drop
+
+s" ." s" examples" s" code" s" 42 .\n=> 42" meta! drop
+s" cr" s" examples" s" code" s" 42 . cr 99 .\n=> 42\n=> 99" meta! drop
+s" emit" s" examples" s" code" s" 65 emit .| <-- ASCII 65|\n=> A<-- ASCII 65" meta! drop
+s" space" s" examples" s" code" s" 1 . space 2 .\n=> 1 2" meta! drop
+s" spaces" s" examples" s" code" s" 10 spaces 42 ." meta! drop
+s" words" s" examples" s" code" s" words" meta! drop
+
+# --- Handler words: compiling ---
+
+s" :" s" description" s" text" s" Begin colon definition" meta! drop
+s" :" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" :" s" category" s" text" s" compiling" meta! drop
+s" :" s" word-type" s" text" s" interpret-only" meta! drop
+s" :" s" examples" s" code" s" : my-double dup + ;\n21 my-double .\n=> 42 " meta! drop
+
+s" ;" s" description" s" text" s" End colon definition" meta! drop
+s" ;" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" ;" s" category" s" text" s" compiling" meta! drop
+s" ;" s" word-type" s" text" s" compile-only" meta! drop
+s" ;" s" examples" s" code" s" : my-square dup * ;\n3 my-square .\n=> 9 " meta! drop
+
+s" does>" s" description" s" text" s" Set runtime behavior for CREATE'd words" meta! drop
+s" does>" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" does>" s" category" s" text" s" compiling" meta! drop
+s" does>" s" word-type" s" text" s" compile-only" meta! drop
+s" does>" s" examples" s" code" s" : my-const create , does> @ ;\n99 my-const bottles\nbottles .\n=> 99 " meta! drop
+
+# --- Handler words: I/O ---
+
+s| ."|  s" description" s" text" s" Print string literal (interpret/compile)" meta! drop
+s| ."|  s" stack-effect" s" text" s" ( -- )" meta! drop
+s| ."|  s" category" s" text" s" i/o" meta! drop
+s| ."|  s" word-type" s" text" s" both" meta! drop
+s| ."|  s" examples" s" code" s| ." Hello!"\n=> Hello!| meta! drop
+
+s| s"|  s" description" s" text" s" Create heap string literal (interpret/compile)" meta! drop
+s| s"|  s" stack-effect" s" text" s" ( -- str )" meta! drop
+s| s"|  s" category" s" text" s" string" meta! drop
+s| s"|  s" word-type" s" text" s" both" meta! drop
+s| s"|  s" examples" s" code" s| s" hello" type\n=> hello| meta! drop
+
+s" .|" s" description" s" text" s" Print string literal with escape processing" meta! drop
+s" .|" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" .|" s" category" s" text" s" i/o" meta! drop
+s" .|" s" word-type" s" text" s" both" meta! drop
+
+s" s|" s" description" s" text" s" Push string literal with escape processing" meta! drop
+s" s|" s" stack-effect" s" text" s" ( -- str )" meta! drop
+s" s|" s" category" s" text" s" string" meta! drop
+s" s|" s" word-type" s" text" s" both" meta! drop
+
+# --- Handler words: control flow ---
+
+s" if" s" description" s" text" s" Conditional branch (compile-only). Requires Boolean on TOS." meta! drop
+s" if" s" stack-effect" s" text" s" ( bool -- )" meta! drop
+s" if" s" category" s" text" s" control" meta! drop
+s" if" s" word-type" s" text" s" compile-only" meta! drop
+s" if" s" examples" s" code" s" : my-abs   dup 0< if negate then ;\n-5 my-abs .\n=> 5 " meta! drop
+
+s" else" s" description" s" text" s" Alternative branch (compile-only)" meta! drop
+s" else" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" else" s" category" s" text" s" control" meta! drop
+s" else" s" word-type" s" text" s" compile-only" meta! drop
+s" else" s" examples" s" code" s" : my-sign   dup 0> if drop 1 else 0< if -1 else 0 then then ;\n42 my-sign .\n=> 1 " meta! drop
+
+s" then" s" description" s" text" s" End conditional (compile-only)" meta! drop
+s" then" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" then" s" category" s" text" s" control" meta! drop
+s" then" s" word-type" s" text" s" compile-only" meta! drop
+s" then" s" examples" s" code" s" : my-abs   dup 0< if negate then ;\n-5 my-abs .\n=> 5 " meta! drop
+
+s" do" s" description" s" text" s" Begin counted loop (compile-only)" meta! drop
+s" do" s" stack-effect" s" text" s" ( limit start -- )" meta! drop
+s" do" s" category" s" text" s" control" meta! drop
+s" do" s" word-type" s" text" s" compile-only" meta! drop
+s" do" s" examples" s" code" s" : my-sum   0 swap 1 + 0 do i + loop ;\n10 my-sum .\n=> 55 " meta! drop
+
+s" loop" s" description" s" text" s" Increment and loop (compile-only)" meta! drop
+s" loop" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" loop" s" category" s" text" s" control" meta! drop
+s" loop" s" word-type" s" text" s" compile-only" meta! drop
+s" loop" s" examples" s" code" s" : my-sum   0 swap 1 + 0 do i + loop ;\n10 my-sum .\n=> 55 " meta! drop
+
+s" +loop" s" description" s" text" s" Add increment and loop (compile-only)" meta! drop
+s" +loop" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" +loop" s" category" s" text" s" control" meta! drop
+s" +loop" s" word-type" s" text" s" compile-only" meta! drop
+s" +loop" s" examples" s" code" s" : my-evens   10 0 do i . 2 +loop ;\nmy-evens\n=> 0 2 4 6 8 " meta! drop
+
+s" i" s" description" s" text" s" Push current loop index (compile-only)" meta! drop
+s" i" s" stack-effect" s" text" s" ( -- n )" meta! drop
+s" i" s" category" s" text" s" control" meta! drop
+s" i" s" word-type" s" text" s" compile-only" meta! drop
+s" i" s" examples" s" code" s" : my-squares   5 0 do i dup * . loop ;\nmy-squares\n=> 0 1 4 9 16 " meta! drop
+
+s" j" s" description" s" text" s" Push outer loop index (compile-only)" meta! drop
+s" j" s" stack-effect" s" text" s" ( -- n )" meta! drop
+s" j" s" category" s" text" s" control" meta! drop
+s" j" s" word-type" s" text" s" compile-only" meta! drop
+s" j" s" examples" s" code" s" : my-pairs   3 0 do 3 0 do j . i . loop loop ;\nmy-pairs\n=> 0 0 0 1 0 2 1 0 1 1 1 2 2 0 2 1 2 2 " meta! drop
+
+s" begin" s" description" s" text" s" Begin indefinite loop (compile-only)" meta! drop
+s" begin" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" begin" s" category" s" text" s" control" meta! drop
+s" begin" s" word-type" s" text" s" compile-only" meta! drop
+s" begin" s" examples" s" code" s" : my-countdown   begin dup while dup . 1 - repeat drop ;\n5 my-countdown\n=> 5 4 3 2 1 " meta! drop
+
+s" until" s" description" s" text" s" Loop until true (compile-only). Requires Boolean on TOS." meta! drop
+s" until" s" stack-effect" s" text" s" ( bool -- )" meta! drop
+s" until" s" category" s" text" s" control" meta! drop
+s" until" s" word-type" s" text" s" compile-only" meta! drop
+s" until" s" examples" s" code" s" : my-countup   0 begin 1 + dup . dup 5 = until drop ;\nmy-countup\n=> 1 2 3 4 5 " meta! drop
+
+s" while" s" description" s" text" s" Test and continue loop (compile-only). Requires Boolean on TOS." meta! drop
+s" while" s" stack-effect" s" text" s" ( bool -- )" meta! drop
+s" while" s" category" s" text" s" control" meta! drop
+s" while" s" word-type" s" text" s" compile-only" meta! drop
+s" while" s" examples" s" code" s" : my-countdown   begin dup while dup . 1 - repeat drop ;\n5 my-countdown\n=> 5 4 3 2 1 " meta! drop
+
+s" repeat" s" description" s" text" s" End begin/while loop (compile-only)" meta! drop
+s" repeat" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" repeat" s" category" s" text" s" control" meta! drop
+s" repeat" s" word-type" s" text" s" compile-only" meta! drop
+s" repeat" s" examples" s" code" s" : my-countdown   begin dup while dup . 1 - repeat drop ;\n5 my-countdown\n=> 5 4 3 2 1 " meta! drop
+
+s" again" s" description" s" text" s" Unconditional loop back to begin (compile-only)" meta! drop
+s" again" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" again" s" category" s" text" s" control" meta! drop
+s" again" s" word-type" s" text" s" compile-only" meta! drop
+s" again" s" examples" s" code" s" : my-loop   0 begin dup . 1 + dup 5 = if drop exit then again ;\nmy-loop\n=> 0 1 2 3 4 " meta! drop
+
+s" >r" s" description" s" text" s" Move value to return stack (compile-only)" meta! drop
+s" >r" s" stack-effect" s" text" s" ( x -- ) ( R: -- x )" meta! drop
+s" >r" s" category" s" text" s" control" meta! drop
+s" >r" s" word-type" s" text" s" compile-only" meta! drop
+s" >r" s" examples" s" code" s" : my-swap   >r >r r> swap r> ;\n1 2 my-swap . .\n=> 1 2 " meta! drop
+
+s" r>" s" description" s" text" s" Move value from return stack (compile-only)" meta! drop
+s" r>" s" stack-effect" s" text" s" ( -- x ) ( R: x -- )" meta! drop
+s" r>" s" category" s" text" s" control" meta! drop
+s" r>" s" word-type" s" text" s" compile-only" meta! drop
+s" r>" s" examples" s" code" s" : my-dup   >r r> r> dup >r swap >r ;\n42 my-dup . .\n=> 42 42 " meta! drop
+
+s" r@" s" description" s" text" s" Copy top of return stack (compile-only)" meta! drop
+s" r@" s" stack-effect" s" text" s" ( -- x ) ( R: x -- x )" meta! drop
+s" r@" s" category" s" text" s" control" meta! drop
+s" r@" s" word-type" s" text" s" compile-only" meta! drop
+s" r@" s" examples" s" code" s" : my-peek   >r r@ r> ;\n42 my-peek . .\n=> 42 42 " meta! drop
+
+s" leave" s" description" s" text" s" Exit do loop immediately (compile-only)" meta! drop
+s" leave" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" leave" s" category" s" text" s" control" meta! drop
+s" leave" s" word-type" s" text" s" compile-only" meta! drop
+s" leave" s" examples" s" code" s" : my-find   10 0 do i 5 = if i . leave then loop ;\nmy-find\n=> 5 " meta! drop
+
+s" exit" s" description" s" text" s" Return from current word (compile-only)" meta! drop
+s" exit" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" exit" s" category" s" text" s" control" meta! drop
+s" exit" s" word-type" s" text" s" compile-only" meta! drop
+s" exit" s" examples" s" code" s" : my-abs   dup 0< if negate exit then ;\n-5 my-abs .\n=> 5 " meta! drop
+
+s" recurse" s" description" s" text" s" Call current word recursively (compile-only)" meta! drop
+s" recurse" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" recurse" s" category" s" text" s" control" meta! drop
+s" recurse" s" word-type" s" text" s" compile-only" meta! drop
+s" recurse" s" examples" s" code" s" : my-fact   dup 1 <= if drop 1 else dup 1 - recurse * then ;\n5 my-fact .\n=> 120 " meta! drop
+
+s| [']| s" description" s" text" s" Compile-time tick -- push xt at runtime (compile-only)" meta! drop
+s| [']| s" stack-effect" s" text" s" ( -- xt )" meta! drop
+s| [']| s" category" s" text" s" control" meta! drop
+s| [']| s" word-type" s" text" s" compile-only" meta! drop
+s| [']| s" examples" s" code" s" : my-exec   ['] dup execute ;\n42 my-exec . .\n=> 42 42 " meta! drop
+
+# --- Memory ---
+
+s" create" s" description" s" text" s" Define a new word with a data field" meta! drop
+s" create" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" create" s" category" s" text" s" memory" meta! drop
+
+s" ," s" description" s" text" s" Append value to last created word's data field" meta! drop
+s" ," s" stack-effect" s" text" s" ( x -- )" meta! drop
+s" ," s" category" s" text" s" memory" meta! drop
+
+s" @" s" description" s" text" s" Fetch value from bounds-checked DataRef" meta! drop
+s" @" s" stack-effect" s" text" s" ( dataref -- x )" meta! drop
+s" @" s" category" s" text" s" memory" meta! drop
+
+s" !" s" description" s" text" s" Store value via bounds-checked DataRef" meta! drop
+s" !" s" stack-effect" s" text" s" ( x dataref -- )" meta! drop
+s" !" s" category" s" text" s" memory" meta! drop
+
+s" allot" s" description" s" text" s" Reserve n cells in last created word" meta! drop
+s" allot" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" allot" s" category" s" text" s" memory" meta! drop
+
+s" create" s" examples" s" code" s" : constant create , does> @ ;\n99 constant bottles\nbottles .\n=> 99" meta! drop
+s" ," s" examples" s" code" s" create mydata 10 , 20 , 30 ," meta! drop
+s" @" s" examples" s" code" s" create myvar 0 ,\nmyvar @ .\n=> 0" meta! drop
+s" !" s" examples" s" code" s" create myvar 0 ,\n42 myvar !\nmyvar @ .\n=> 42" meta! drop
+s" allot" s" examples" s" code" s" create buffer 100 allot" meta! drop
+
+# --- Math ---
+
+s" sqrt" s" description" s" text" s" Square root" meta! drop
+s" sqrt" s" stack-effect" s" text" s" ( x -- sqrt(x) )" meta! drop
+s" sqrt" s" category" s" text" s" math" meta! drop
+
+s" sin" s" description" s" text" s" Sine (radians)" meta! drop
+s" sin" s" stack-effect" s" text" s" ( x -- sin(x) )" meta! drop
+s" sin" s" category" s" text" s" math" meta! drop
+
+s" cos" s" description" s" text" s" Cosine (radians)" meta! drop
+s" cos" s" stack-effect" s" text" s" ( x -- cos(x) )" meta! drop
+s" cos" s" category" s" text" s" math" meta! drop
+
+s" tan" s" description" s" text" s" Tangent (radians)" meta! drop
+s" tan" s" stack-effect" s" text" s" ( x -- tan(x) )" meta! drop
+s" tan" s" category" s" text" s" math" meta! drop
+
+s" asin" s" description" s" text" s" Arc sine" meta! drop
+s" asin" s" stack-effect" s" text" s" ( x -- asin(x) )" meta! drop
+s" asin" s" category" s" text" s" math" meta! drop
+
+s" acos" s" description" s" text" s" Arc cosine" meta! drop
+s" acos" s" stack-effect" s" text" s" ( x -- acos(x) )" meta! drop
+s" acos" s" category" s" text" s" math" meta! drop
+
+s" atan" s" description" s" text" s" Arc tangent" meta! drop
+s" atan" s" stack-effect" s" text" s" ( x -- atan(x) )" meta! drop
+s" atan" s" category" s" text" s" math" meta! drop
+
+s" atan2" s" description" s" text" s" Two-argument arc tangent" meta! drop
+s" atan2" s" stack-effect" s" text" s" ( y x -- atan2(y,x) )" meta! drop
+s" atan2" s" category" s" text" s" math" meta! drop
+
+s" log" s" description" s" text" s" Natural logarithm" meta! drop
+s" log" s" stack-effect" s" text" s" ( x -- ln(x) )" meta! drop
+s" log" s" category" s" text" s" math" meta! drop
+
+s" log2" s" description" s" text" s" Base-2 logarithm" meta! drop
+s" log2" s" stack-effect" s" text" s" ( x -- log2(x) )" meta! drop
+s" log2" s" category" s" text" s" math" meta! drop
+
+s" log10" s" description" s" text" s" Base-10 logarithm" meta! drop
+s" log10" s" stack-effect" s" text" s" ( x -- log10(x) )" meta! drop
+s" log10" s" category" s" text" s" math" meta! drop
+
+s" exp" s" description" s" text" s" Exponential (e^x)" meta! drop
+s" exp" s" stack-effect" s" text" s" ( x -- e^x )" meta! drop
+s" exp" s" category" s" text" s" math" meta! drop
+
+s" pow" s" description" s" text" s" Raise base to exponent" meta! drop
+s" pow" s" stack-effect" s" text" s" ( base exp -- base^exp )" meta! drop
+s" pow" s" category" s" text" s" math" meta! drop
+
+s" ceil" s" description" s" text" s" Ceiling (round up)" meta! drop
+s" ceil" s" stack-effect" s" text" s" ( x -- ceil(x) )" meta! drop
+s" ceil" s" category" s" text" s" math" meta! drop
+
+s" floor" s" description" s" text" s" Floor (round down)" meta! drop
+s" floor" s" stack-effect" s" text" s" ( x -- floor(x) )" meta! drop
+s" floor" s" category" s" text" s" math" meta! drop
+
+s" round" s" description" s" text" s" Round to nearest integer" meta! drop
+s" round" s" stack-effect" s" text" s" ( x -- round(x) )" meta! drop
+s" round" s" category" s" text" s" math" meta! drop
+
+s" trunc" s" description" s" text" s" Truncate toward zero (FORTH FTRUNC)" meta! drop
+s" trunc" s" stack-effect" s" text" s" ( r -- r )" meta! drop
+s" trunc" s" category" s" text" s" math" meta! drop
+
+s" fmin" s" description" s" text" s" Minimum of two numbers" meta! drop
+s" fmin" s" stack-effect" s" text" s" ( a b -- min(a,b) )" meta! drop
+s" fmin" s" category" s" text" s" math" meta! drop
+
+s" fmax" s" description" s" text" s" Maximum of two numbers" meta! drop
+s" fmax" s" stack-effect" s" text" s" ( a b -- max(a,b) )" meta! drop
+s" fmax" s" category" s" text" s" math" meta! drop
+
+s" pi" s" description" s" text" s" Push pi (3.14159...)" meta! drop
+s" pi" s" stack-effect" s" text" s" ( -- pi )" meta! drop
+s" pi" s" category" s" text" s" math" meta! drop
+
+s" sqrt" s" examples" s" code" s" 9 sqrt .\n=> 3" meta! drop
+s" sin" s" examples" s" code" s" pi 2.0 / sin .\n=> 1" meta! drop
+s" cos" s" examples" s" code" s" 0 cos .\n=> 1" meta! drop
+s" tan" s" examples" s" code" s" 0 tan .\n=> 0" meta! drop
+s" asin" s" examples" s" code" s" 1 asin .\n=> 1.5708" meta! drop
+s" acos" s" examples" s" code" s" 1 acos .\n=> 0" meta! drop
+s" atan" s" examples" s" code" s" 1 atan .\n=> 0.7854" meta! drop
+s" atan2" s" examples" s" code" s" 1 1 atan2 .\n=> 0.7854" meta! drop
+s" log" s" examples" s" code" s" 1 exp log .\n=> 1" meta! drop
+s" log2" s" examples" s" code" s" 8 log2 .\n=> 3" meta! drop
+s" log10" s" examples" s" code" s" 100 log10 .\n=> 2" meta! drop
+s" exp" s" examples" s" code" s" 1 exp .\n=> 2.71828" meta! drop
+s" pow" s" examples" s" code" s" 2 10 pow .\n=> 1024" meta! drop
+s" ceil" s" examples" s" code" s" 3.2 ceil .\n=> 4" meta! drop
+s" floor" s" examples" s" code" s" 3.7 floor .\n=> 3" meta! drop
+s" round" s" examples" s" code" s" 3.5 round .\n=> 4" meta! drop
+s" trunc" s" examples" s" code" s" 3.7 trunc .\n=> 3\n-3.7 trunc .\n=> -3" meta! drop
+s" fmin" s" examples" s" code" s" 3 7 fmin .\n=> 3" meta! drop
+s" fmax" s" examples" s" code" s" 3 7 fmax .\n=> 7" meta! drop
+s" pi" s" examples" s" code" s" pi .\n=> 3.14159" meta! drop
+
+s" f~" s" description" s" text" s" Approximate float equality (FORTH F~). r3>0: absolute tolerance. r3=0: exact equality. r3<0: relative tolerance" meta! drop
+s" f~" s" stack-effect" s" text" s" ( r1 r2 r3 -- flag )" meta! drop
+s" f~" s" category" s" text" s" math" meta! drop
+s" f~" s" examples" s" code" s" 1.0 1.001 0.01 f~ .\n=> -1\n100.0 101.0 -0.02 f~ .\n=> -1\n3.14 3.14 0.0 f~ .\n=> -1" meta! drop
+
+# --- System ---
+
+s" sys-semver" s" description" s" text" s" Print project semantic version" meta! drop
+s" sys-semver" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" sys-semver" s" category" s" text" s" system" meta! drop
+
+s" sys-timestamp" s" description" s" text" s" Print build timestamp" meta! drop
+s" sys-timestamp" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" sys-timestamp" s" category" s" text" s" system" meta! drop
+
+s" sys-datafields" s" description" s" text" s" Print DataFieldRegistry diagnostics (entries, live, cells, bytes)" meta! drop
+s" sys-datafields" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" sys-datafields" s" category" s" text" s" system" meta! drop
+
+s" sys-semver" s" examples" s" code" s" sys-semver\n=> 0.5.15" meta! drop
+s" sys-timestamp" s" examples" s" code" s" sys-timestamp" meta! drop
+s" sys-datafields" s" examples" s" code" s" sys-datafields" meta! drop
+
+s" sys-notification" s" description" s" text" s" Queue a MCP notification (Any value auto-converted to string). Requires send_system_notification permission." meta! drop
+s" sys-notification" s" stack-effect" s" text" s" ( x -- )" meta! drop
+s" sys-notification" s" category" s" text" s" system" meta! drop
+
+s" user-notification" s" description" s" text" s" Send a notification to all sessions of a specific user. Requires send_user_notification permission. Pushes true (-1) if notified, false (0) otherwise." meta! drop
+s" user-notification" s" stack-effect" s" text" s" ( msg-str user-id-str -- flag )" meta! drop
+s" user-notification" s" category" s" text" s" system" meta! drop
+
+s" abort" s" description" s" text" s" Terminate interpretation. With true flag: success abort (normal response). With false flag: pops error message, error abort. Remaining tokens not executed." meta! drop
+s" abort" s" stack-effect" s" text" s" ( flag -- ) or ( error-string false -- )" meta! drop
+s" abort" s" category" s" text" s" system" meta! drop
+s| abort| s| examples| s| code| s| true abort\n=> (execution stops, success)\ns" something went wrong" false abort\n=> (execution stops, error response with message)| meta! drop
+
+# --- Time ---
+
+s" time-us" s" description" s" text" s" Push current UTC time as microseconds since epoch (int64)" meta! drop
+s" time-us" s" stack-effect" s" text" s" ( -- n )" meta! drop
+s" time-us" s" category" s" text" s" time" meta! drop
+
+s" us->iso" s" description" s" text" s" Format microseconds as compact ISO 8601 string (YYYYMMDDTHHMMSSZ)" meta! drop
+s" us->iso" s" stack-effect" s" text" s" ( n -- str )" meta! drop
+s" us->iso" s" category" s" text" s" time" meta! drop
+
+s" us->iso-us" s" description" s" text" s" Format microseconds as high-res ISO 8601 string (YYYYMMDDTHHMMSS.ddddddZ)" meta! drop
+s" us->iso-us" s" stack-effect" s" text" s" ( n -- str )" meta! drop
+s" us->iso-us" s" category" s" text" s" time" meta! drop
+
+s" time-iso" s" description" s" text" s" Push current UTC time as compact ISO 8601 string" meta! drop
+s" time-iso" s" stack-effect" s" text" s" ( -- str )" meta! drop
+s" time-iso" s" category" s" text" s" time" meta! drop
+
+s" time-iso-us" s" description" s" text" s" Push current UTC time as high-res ISO 8601 string with microseconds" meta! drop
+s" time-iso-us" s" stack-effect" s" text" s" ( -- str )" meta! drop
+s" time-iso-us" s" category" s" text" s" time" meta! drop
+
+s" us->jd" s" description" s" text" s" Convert UTC microseconds since epoch to Julian Date" meta! drop
+s" us->jd" s" stack-effect" s" text" s" ( n -- f )" meta! drop
+s" us->jd" s" category" s" text" s" time" meta! drop
+
+s" jd->us" s" description" s" text" s" Convert Julian Date to UTC microseconds since epoch" meta! drop
+s" jd->us" s" stack-effect" s" text" s" ( f -- n )" meta! drop
+s" jd->us" s" category" s" text" s" time" meta! drop
+
+s" us->mjd" s" description" s" text" s" Convert UTC microseconds since epoch to Modified Julian Date" meta! drop
+s" us->mjd" s" stack-effect" s" text" s" ( n -- f )" meta! drop
+s" us->mjd" s" category" s" text" s" time" meta! drop
+
+s" mjd->us" s" description" s" text" s" Convert Modified Julian Date to UTC microseconds since epoch" meta! drop
+s" mjd->us" s" stack-effect" s" text" s" ( f -- n )" meta! drop
+s" mjd->us" s" category" s" text" s" time" meta! drop
+
+s" time-jd" s" description" s" text" s" Push current UTC time as Julian Date" meta! drop
+s" time-jd" s" stack-effect" s" text" s" ( -- f )" meta! drop
+s" time-jd" s" category" s" text" s" time" meta! drop
+
+s" time-mjd" s" description" s" text" s" Push current UTC time as Modified Julian Date" meta! drop
+s" time-mjd" s" stack-effect" s" text" s" ( -- f )" meta! drop
+s" time-mjd" s" category" s" text" s" time" meta! drop
+
+s" sleep" s" description" s" text" s" Sleep for the given number of microseconds. Errors if the duration would exceed the execution deadline." meta! drop
+s" sleep" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" sleep" s" category" s" text" s" time" meta! drop
+
+s" time-us" s" examples" s" code" s" time-us ." meta! drop
+s" us->iso" s" examples" s" code" s" time-us us->iso type cr\n=> 20260216T103000Z" meta! drop
+s" us->iso-us" s" examples" s" code" s" time-us us->iso-us type cr\n=> 20260216T103000.123456Z" meta! drop
+s" time-iso" s" examples" s" code" s" time-iso type cr\n=> 20260216T103000Z" meta! drop
+s" time-iso-us" s" examples" s" code" s" time-iso-us type cr\n=> 20260216T103000.123456Z" meta! drop
+s" us->jd" s" examples" s" code" s" time-us us->jd ." meta! drop
+s" jd->us" s" examples" s" code" s" 2460723.5 jd->us us->iso type cr" meta! drop
+s" us->mjd" s" examples" s" code" s" time-us us->mjd ." meta! drop
+s" mjd->us" s" examples" s" code" s" 60723.0 mjd->us us->iso type cr" meta! drop
+s" time-jd" s" examples" s" code" s" time-jd ." meta! drop
+s" time-mjd" s" examples" s" code" s" time-mjd ." meta! drop
+
+# --- Input Reading ---
+
+s" word-read" s" description" s" text" s" Read next whitespace-delimited token" meta! drop
+s" word-read" s" stack-effect" s" text" s" ( -- str flag )" meta! drop
+s" word-read" s" category" s" text" s" input" meta! drop
+
+s" string-read-delim" s" description" s" text" s" Read string between delimiters" meta! drop
+s" string-read-delim" s" stack-effect" s" text" s" ( char -- str flag )" meta! drop
+s" string-read-delim" s" category" s" text" s" input" meta! drop
+
+s" word-read" s" examples" s" code" s" : greet word-read drop type cr ;\ngreet World\n=> World" meta! drop
+s" string-read-delim" s" examples" s" code" s" 34 string-read-delim" meta! drop
+
+# --- Dictionary Operations ---
+
+s" dict-forget" s" description" s" text" s" Remove latest implementation of word" meta! drop
+s" dict-forget" s" stack-effect" s" text" s" ( name-str -- flag )" meta! drop
+s" dict-forget" s" category" s" text" s" dictionary" meta! drop
+
+s" dict-forget-all" s" description" s" text" s" Remove all implementations of word" meta! drop
+s" dict-forget-all" s" stack-effect" s" text" s" ( name-str -- flag )" meta! drop
+s" dict-forget-all" s" category" s" text" s" dictionary" meta! drop
+
+s" file-load" s" description" s" text" s" Load and interpret a TIL file" meta! drop
+s" file-load" s" stack-effect" s" text" s" ( path-str -- flag )" meta! drop
+s" file-load" s" category" s" text" s" dictionary" meta! drop
+
+s" include" s" description" s" text" s" Load a TIL file (reads path from input)" meta! drop
+s" include" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" include" s" category" s" text" s" dictionary" meta! drop
+
+s" dict-forget" s" examples" s" code" s" s| myword| dict-forget" meta! drop
+s" dict-forget-all" s" examples" s" code" s" s| myword| dict-forget-all" meta! drop
+s" file-load" s" examples" s" code" s" s| mylib.til| file-load" meta! drop
+s" include" s" examples" s" code" s" include mylib.til" meta! drop
+
+s" library" s" description" s" text" s" Load a TIL file from the library directory (reads path from input)" meta! drop
+s" library" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" library" s" category" s" text" s" dictionary" meta! drop
+s" library" s" examples" s" code" s" library mylib.til" meta! drop
+
+s" evaluate" s" description" s" text" s" Interpret a string as TIL code at runtime. Tracks call depth for recursion safety" meta! drop
+s" evaluate" s" stack-effect" s" text" s" ( str -- )" meta! drop
+s" evaluate" s" category" s" text" s" dictionary" meta! drop
+s" evaluate" s" examples" s" code" s| s" 42 dup +" evaluate . cr\n=> 84| meta! drop
+
+s" forget" s" examples" s" code" s" : test 42 . ;\nforget test" meta! drop
+s" forget-all" s" examples" s" code" s" forget-all test" meta! drop
+
+s" marker" s" description" s" text" s" Create a dictionary checkpoint (FORTH MARKER). Executing the marker word later restores the dictionary to the state before the marker was created" meta! drop
+s" marker" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" marker" s" category" s" text" s" dictionary" meta! drop
+s" marker" s" examples" s" code" s" marker mymark\n: foo 42 . ;\nmymark\nfoo\n=> Error: Unknown word 'foo'" meta! drop
+
+s" marker-restore" s" description" s" text" s" Restore dictionary to a marker checkpoint (internal helper)" meta! drop
+s" marker-restore" s" stack-effect" s" text" s" ( name-str -- )" meta! drop
+s" marker-restore" s" category" s" text" s" dictionary" meta! drop
+
+# --- Metadata Operations ---
+
+s" dict-meta-set" s" description" s" text" s" Set concept-level metadata" meta! drop
+s" dict-meta-set" s" stack-effect" s" text" s" ( word-str key-str fmt-str content-str -- flag )" meta! drop
+s" dict-meta-set" s" category" s" text" s" metadata" meta! drop
+
+s" dict-meta-get" s" description" s" text" s" Get concept-level metadata" meta! drop
+s" dict-meta-get" s" stack-effect" s" text" s" ( word-str key-str -- content-str flag )" meta! drop
+s" dict-meta-get" s" category" s" text" s" metadata" meta! drop
+
+s" dict-meta-del" s" description" s" text" s" Delete concept-level metadata entry" meta! drop
+s" dict-meta-del" s" stack-effect" s" text" s" ( word-str key-str -- flag )" meta! drop
+s" dict-meta-del" s" category" s" text" s" metadata" meta! drop
+
+s" dict-meta-keys" s" description" s" text" s" List concept-level metadata keys" meta! drop
+s" dict-meta-keys" s" stack-effect" s" text" s" ( word-str -- array flag )" meta! drop
+s" dict-meta-keys" s" category" s" text" s" metadata" meta! drop
+
+s" impl-meta-set" s" description" s" text" s" Set implementation-level metadata" meta! drop
+s" impl-meta-set" s" stack-effect" s" text" s" ( word-str key-str fmt-str content-str -- flag )" meta! drop
+s" impl-meta-set" s" category" s" text" s" metadata" meta! drop
+
+s" impl-meta-get" s" description" s" text" s" Get implementation-level metadata" meta! drop
+s" impl-meta-get" s" stack-effect" s" text" s" ( word-str key-str -- content-str flag )" meta! drop
+s" impl-meta-get" s" category" s" text" s" metadata" meta! drop
+
+s" dict-meta-set" s" examples" s" code" s" s| dup| s| author| s| text| s| Alice| dict-meta-set" meta! drop
+s" dict-meta-get" s" examples" s" code" s" s| +| s| description| dict-meta-get" meta! drop
+s" dict-meta-del" s" examples" s" code" s" s| dup| s| author| dict-meta-del" meta! drop
+s" dict-meta-keys" s" examples" s" code" s" s| +| dict-meta-keys" meta! drop
+s" impl-meta-set" s" examples" s" code" s" s| dup| s| note| s| text| s| fast| impl-meta-set" meta! drop
+s" impl-meta-get" s" examples" s" code" s" s| dup| s| note| impl-meta-get" meta! drop
+s" meta!" s" examples" s" code" s| s" +" s" author" s" text" s" Alice" meta! drop| meta! drop
+s" meta@" s" examples" s" code" s| s" +" s" description" meta@| meta! drop
+s" meta-del" s" examples" s" code" s| s" +" s" author" meta-del| meta! drop
+s" meta-keys" s" examples" s" code" s| s" +" meta-keys| meta! drop
+s" impl-meta!" s" examples" s" code" s| s" +" s" note" s" text" s" optimized" impl-meta! drop| meta! drop
+s" impl-meta@" s" examples" s" code" s| s" +" s" note" impl-meta@| meta! drop
+
+# --- String ---
+
+s" type" s" description" s" text" s" Print a heap string" meta! drop
+s" type" s" stack-effect" s" text" s" ( str -- )" meta! drop
+s" type" s" category" s" text" s" string" meta! drop
+
+s" s." s" description" s" text" s" Print string with trailing space" meta! drop
+s" s." s" stack-effect" s" text" s" ( str -- )" meta! drop
+s" s." s" category" s" text" s" debug" meta! drop
+
+s" s+" s" description" s" text" s" Concatenate two strings" meta! drop
+s" s+" s" stack-effect" s" text" s" ( str1 str2 -- str3 )" meta! drop
+s" s+" s" category" s" text" s" string" meta! drop
+
+s" s=" s" description" s" text" s" Test string equality" meta! drop
+s" s=" s" stack-effect" s" text" s" ( str1 str2 -- bool )" meta! drop
+s" s=" s" category" s" text" s" string" meta! drop
+
+s" s<>" s" description" s" text" s" Test string inequality" meta! drop
+s" s<>" s" stack-effect" s" text" s" ( str1 str2 -- bool )" meta! drop
+s" s<>" s" category" s" text" s" string" meta! drop
+
+s" slength" s" description" s" text" s" Get string length in bytes" meta! drop
+s" slength" s" stack-effect" s" text" s" ( str -- n )" meta! drop
+s" slength" s" category" s" text" s" string" meta! drop
+
+s" substr" s" description" s" text" s" Extract substring" meta! drop
+s" substr" s" stack-effect" s" text" s" ( str start len -- substr )" meta! drop
+s" substr" s" category" s" text" s" string" meta! drop
+
+s" strim" s" description" s" text" s" Trim whitespace from both ends" meta! drop
+s" strim" s" stack-effect" s" text" s" ( str -- trimmed )" meta! drop
+s" strim" s" category" s" text" s" string" meta! drop
+
+s" sfind" s" description" s" text" s" Find substring, return index or -1" meta! drop
+s" sfind" s" stack-effect" s" text" s" ( str needle -- index )" meta! drop
+s" sfind" s" category" s" text" s" string" meta! drop
+
+s" sreplace" s" description" s" text" s" Replace all occurrences of substring" meta! drop
+s" sreplace" s" stack-effect" s" text" s" ( str old new -- result )" meta! drop
+s" sreplace" s" category" s" text" s" string" meta! drop
+
+s" ssplit" s" description" s" text" s" Split string by delimiter into array" meta! drop
+s" ssplit" s" stack-effect" s" text" s" ( str delim -- array )" meta! drop
+s" ssplit" s" category" s" text" s" string" meta! drop
+
+s" sjoin" s" description" s" text" s" Join array of strings with delimiter" meta! drop
+s" sjoin" s" stack-effect" s" text" s" ( array delim -- str )" meta! drop
+s" sjoin" s" category" s" text" s" string" meta! drop
+
+s" sregex-find" s" description" s" text" s" Find first regex match" meta! drop
+s" sregex-find" s" stack-effect" s" text" s" ( str pattern -- match flag )" meta! drop
+s" sregex-find" s" category" s" text" s" string" meta! drop
+
+s" sregex-replace" s" description" s" text" s" Replace regex matches" meta! drop
+s" sregex-replace" s" stack-effect" s" text" s" ( str pattern replacement -- result )" meta! drop
+s" sregex-replace" s" category" s" text" s" string" meta! drop
+
+s" sregex-search" s" description" s" text" s" Find first regex match anywhere in string, returning capture groups as array" meta! drop
+s" sregex-search" s" stack-effect" s" text" s" ( str pattern -- match-array -1 | 0 )" meta! drop
+s" sregex-search" s" category" s" text" s" string" meta! drop
+
+s" sregex-match" s" description" s" text" s" Test if entire string matches regex pattern, returning capture groups as array" meta! drop
+s" sregex-match" s" stack-effect" s" text" s" ( str pattern -- match-array -1 | 0 )" meta! drop
+s" sregex-match" s" category" s" text" s" string" meta! drop
+
+s" type" s" examples" s" code" s" s| hello| type\n=> hello" meta! drop
+s" s." s" examples" s" code" s" s| hello| s.\n=> hello " meta! drop
+s" s+" s" examples" s" code" s" s| hello | s| world| s+ type\n=> hello world" meta! drop
+s" s=" s" examples" s" code" s" s| abc| s| abc| s= .| equal? | .\n=> equal? -1 " meta! drop
+s" s<>" s" examples" s" code" s" s| abc| s| xyz| s<> .| not-equal? | .\n=> not-equal? -1 " meta! drop
+s" slength" s" examples" s" code" s" s| hello| slength .\n=> 5 " meta! drop
+s" substr" s" examples" s" code" s" s| hello world| 6 5 substr type\n=> world" meta! drop
+s" strim" s" examples" s" code" s" s| hello | strim type\n=> hello" meta! drop
+s" sfind" s" examples" s" code" s" s| hello world| s| world| sfind .| found at index | .\n=> found at index 6 " meta! drop
+s" sreplace" s" examples" s" code" s" s| hello world| s| world| s| ETIL| sreplace type\n=> hello ETIL" meta! drop
+s" ssplit" s" examples" s" code" s" s| a,b,c| s| ,| ssplit 1 array-get type\n=> b" meta! drop
+s" sjoin" s" examples" s" code" s" s| a,b,c| s| ,| ssplit s| -| sjoin type\n=> a-b-c" meta! drop
+s" sregex-find" s" examples" s" code" s" s| abc123def| s| [0-9]+| sregex-find .| match at index | .\n=> match at index 3 " meta! drop
+s" sregex-replace" s" examples" s" code" s" s| abc123| s| [0-9]| s| X| sregex-replace type\n=> abcXXX" meta! drop
+s" sregex-search" s" examples" s" code" s| s" hello 42 world" s" (\d+)" sregex-search if 0 array-get type then\n=> 42| meta! drop
+s" sregex-match" s" examples" s" code" s| s" 2026-03-02" s" (\d{4})-(\d{2})-(\d{2})" sregex-match if 1 array-get type then\n=> 2026| meta! drop
+
+s" sprintf" s" description" s" text" s" C-style formatted string (supports %d %f %s %x %o %e %g %c %%)" meta! drop
+s" sprintf" s" stack-effect" s" text" s" ( arg1 ... argN fmt -- string )" meta! drop
+s" sprintf" s" category" s" text" s" string" meta! drop
+s" sprintf" s" examples" s" code" s" 42 3.14 s| %d items at $%.2f| sprintf type\n=> 42 items at $3.14" meta! drop
+
+s" staint" s" description" s" text" s" Query whether a string is tainted (originated from external I/O)" meta! drop
+s" staint" s" stack-effect" s" text" s" ( string -- bool )" meta! drop
+s" staint" s" category" s" text" s" string" meta! drop
+s" staint" s" examples" s" code" s| s" hello" staint .  => 0 (literal is clean)| meta! drop
+
+# --- Array ---
+
+s" array-new" s" description" s" text" s" Create a new empty array" meta! drop
+s" array-new" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" array-new" s" category" s" text" s" array" meta! drop
+
+s" array-push" s" description" s" text" s" Push value onto end of array" meta! drop
+s" array-push" s" stack-effect" s" text" s" ( array value -- array )" meta! drop
+s" array-push" s" category" s" text" s" array" meta! drop
+
+s" array-pop" s" description" s" text" s" Pop value from end of array" meta! drop
+s" array-pop" s" stack-effect" s" text" s" ( array -- array value )" meta! drop
+s" array-pop" s" category" s" text" s" array" meta! drop
+
+s" array-get" s" description" s" text" s" Get value at index" meta! drop
+s" array-get" s" stack-effect" s" text" s" ( array index -- value )" meta! drop
+s" array-get" s" category" s" text" s" array" meta! drop
+
+s" array-set" s" description" s" text" s" Set value at index" meta! drop
+s" array-set" s" stack-effect" s" text" s" ( array index value -- array )" meta! drop
+s" array-set" s" category" s" text" s" array" meta! drop
+
+s" array-length" s" description" s" text" s" Get number of elements" meta! drop
+s" array-length" s" stack-effect" s" text" s" ( array -- array n )" meta! drop
+s" array-length" s" category" s" text" s" array" meta! drop
+
+s" array-shift" s" description" s" text" s" Remove and return first element" meta! drop
+s" array-shift" s" stack-effect" s" text" s" ( array -- array value )" meta! drop
+s" array-shift" s" category" s" text" s" array" meta! drop
+
+s" array-unshift" s" description" s" text" s" Insert value at beginning" meta! drop
+s" array-unshift" s" stack-effect" s" text" s" ( array value -- array )" meta! drop
+s" array-unshift" s" category" s" text" s" array" meta! drop
+
+s" array-compact" s" description" s" text" s" Remove zero/null elements" meta! drop
+s" array-compact" s" stack-effect" s" text" s" ( array -- array )" meta! drop
+s" array-compact" s" category" s" text" s" array" meta! drop
+
+s" array-reverse" s" description" s" text" s" Reverse array in-place" meta! drop
+s" array-reverse" s" stack-effect" s" text" s" ( array -- array )" meta! drop
+s" array-reverse" s" category" s" text" s" array" meta! drop
+
+s" array-new" s" examples" s" code" s" array-new 42 array-push dump drop" meta! drop
+s" array-push" s" examples" s" code" s" array-new 1 array-push 2 array-push dump drop" meta! drop
+s" array-pop" s" examples" s" code" s" array-new 1 array-push 2 array-push array-pop . drop" meta! drop
+s" array-get" s" examples" s" code" s" array-new 10 array-push 20 array-push 0 array-get .\n=> 10" meta! drop
+s" array-set" s" examples" s" code" s" array-new 10 array-push 0 99 array-set dump drop" meta! drop
+s" array-length" s" examples" s" code" s" array-new 1 array-push 2 array-push array-length .\n=> 2" meta! drop
+s" array-shift" s" examples" s" code" s" array-new 10 array-push 20 array-push array-shift . drop" meta! drop
+s" array-unshift" s" examples" s" code" s" array-new 2 array-push 1 array-unshift dump drop" meta! drop
+s" array-compact" s" examples" s" code" s" array-new 0 array-push 1 array-push 0 array-push array-compact dump drop" meta! drop
+s" array-reverse" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push array-reverse dump drop" meta! drop
+
+# --- Byte Array ---
+
+s" bytes-new" s" description" s" text" s" Create a new byte array of given size" meta! drop
+s" bytes-new" s" stack-effect" s" text" s" ( n -- bytes )" meta! drop
+s" bytes-new" s" category" s" text" s" byte-array" meta! drop
+
+s" bytes-get" s" description" s" text" s" Get byte at index" meta! drop
+s" bytes-get" s" stack-effect" s" text" s" ( bytes index -- value )" meta! drop
+s" bytes-get" s" category" s" text" s" byte-array" meta! drop
+
+s" bytes-set" s" description" s" text" s" Set byte at index" meta! drop
+s" bytes-set" s" stack-effect" s" text" s" ( bytes index value -- bytes )" meta! drop
+s" bytes-set" s" category" s" text" s" byte-array" meta! drop
+
+s" bytes-length" s" description" s" text" s" Get byte array length" meta! drop
+s" bytes-length" s" stack-effect" s" text" s" ( bytes -- n )" meta! drop
+s" bytes-length" s" category" s" text" s" byte-array" meta! drop
+
+s" bytes-resize" s" description" s" text" s" Resize byte array" meta! drop
+s" bytes-resize" s" stack-effect" s" text" s" ( bytes n -- bytes )" meta! drop
+s" bytes-resize" s" category" s" text" s" byte-array" meta! drop
+
+s" bytes->string" s" description" s" text" s" Convert byte array to string" meta! drop
+s" bytes->string" s" stack-effect" s" text" s" ( bytes -- str )" meta! drop
+s" bytes->string" s" category" s" text" s" byte-array" meta! drop
+
+s" string->bytes" s" description" s" text" s" Convert string to byte array" meta! drop
+s" string->bytes" s" stack-effect" s" text" s" ( str -- bytes )" meta! drop
+s" string->bytes" s" category" s" text" s" byte-array" meta! drop
+
+s" bytes-new" s" examples" s" code" s" 256 bytes-new dump drop" meta! drop
+s" bytes-get" s" examples" s" code" s" 4 bytes-new 0 bytes-get .\n=> 0" meta! drop
+s" bytes-set" s" examples" s" code" s" 4 bytes-new 0 65 bytes-set dump drop" meta! drop
+s" bytes-length" s" examples" s" code" s" 256 bytes-new bytes-length .\n=> 256" meta! drop
+s" bytes-resize" s" examples" s" code" s" 4 bytes-new 8 bytes-resize bytes-length .\n=> 8" meta! drop
+s" string->bytes" s" examples" s" code" s" s| Hi| string->bytes .| bytes=| bytes-length .\n=> bytes=2 " meta! drop
+s" bytes->string" s" examples" s" code" s" 4 bytes-new 0 72 bytes-set 1 105 bytes-set bytes->string type\n=> Hi" meta! drop
+
+# --- Self-hosted words (from builtins.til) ---
+
+s" forget" s" description" s" text" s" Remove latest implementation of a word" meta! drop
+s" forget" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" forget" s" category" s" text" s" dictionary" meta! drop
+
+s" forget-all" s" description" s" text" s" Remove all implementations of a word" meta! drop
+s" forget-all" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" forget-all" s" category" s" text" s" dictionary" meta! drop
+
+s" meta!" s" description" s" text" s" Set concept-level metadata" meta! drop
+s" meta!" s" stack-effect" s" text" s" ( word-str key-str fmt-str content-str -- flag )" meta! drop
+s" meta!" s" category" s" text" s" metadata" meta! drop
+
+s" meta@" s" description" s" text" s" Get concept-level metadata" meta! drop
+s" meta@" s" stack-effect" s" text" s" ( word-str key-str -- content-str flag )" meta! drop
+s" meta@" s" category" s" text" s" metadata" meta! drop
+
+s" meta-del" s" description" s" text" s" Delete concept-level metadata" meta! drop
+s" meta-del" s" stack-effect" s" text" s" ( word-str key-str -- flag )" meta! drop
+s" meta-del" s" category" s" text" s" metadata" meta! drop
+
+s" meta-keys" s" description" s" text" s" List metadata keys for a word" meta! drop
+s" meta-keys" s" stack-effect" s" text" s" ( word-str -- array flag )" meta! drop
+s" meta-keys" s" category" s" text" s" metadata" meta! drop
+
+s" impl-meta!" s" description" s" text" s" Set implementation-level metadata" meta! drop
+s" impl-meta!" s" stack-effect" s" text" s" ( word-str key-str fmt-str content-str -- flag )" meta! drop
+s" impl-meta!" s" category" s" text" s" metadata" meta! drop
+
+s" impl-meta@" s" description" s" text" s" Get implementation-level metadata" meta! drop
+s" impl-meta@" s" stack-effect" s" text" s" ( word-str key-str -- content-str flag )" meta! drop
+s" impl-meta@" s" category" s" text" s" metadata" meta! drop
+
+# --- Defining words (self-hosted) ---
+
+s" variable" s" description" s" text" s" Define a new variable initialized to zero" meta! drop
+s" variable" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" variable" s" category" s" text" s" memory" meta! drop
+
+s" constant" s" description" s" text" s" Define a named constant" meta! drop
+s" constant" s" stack-effect" s" text" s" ( x -- )" meta! drop
+s" constant" s" category" s" text" s" memory" meta! drop
+
+s" variable" s" examples" s" code" s" variable x\n42 x !\nx @ .\n=> 42" meta! drop
+s" constant" s" examples" s" code" s" 99 constant bottles\nbottles .\n=> 99" meta! drop
+
+# --- Boolean / Logic (primitives) ---
+
+s" true" s" description" s" text" s" Push boolean true onto the stack" meta! drop
+s" true" s" stack-effect" s" text" s" ( -- bool )" meta! drop
+s" true" s" category" s" text" s" logic" meta! drop
+
+s" false" s" description" s" text" s" Push boolean false onto the stack" meta! drop
+s" false" s" stack-effect" s" text" s" ( -- bool )" meta! drop
+s" false" s" category" s" text" s" logic" meta! drop
+
+s" not" s" description" s" text" s" Logical negation. Boolean: logical NOT. Integer: 0= coerced to Boolean. Float: 0.0= coerced to Boolean." meta! drop
+s" not" s" stack-effect" s" text" s" ( x -- bool )" meta! drop
+s" not" s" category" s" text" s" logic" meta! drop
+
+s" bool" s" description" s" text" s" Convert to boolean. Integer/Float: nonzero becomes true, zero becomes false. Boolean: pass-through." meta! drop
+s" bool" s" stack-effect" s" text" s" ( x -- bool )" meta! drop
+s" bool" s" category" s" text" s" conversion" meta! drop
+
+# --- Help ---
+
+s" help" s" description" s" text" s" Show help for a word (parsing word)" meta! drop
+s" help" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" help" s" category" s" text" s" help" meta! drop
+
+s" help" s" examples" s" code" s" help dup" meta! drop
+
+# --- Debug ---
+
+s" dump" s" description" s" text" s" Deep-inspect top of stack (non-destructive)" meta! drop
+s" dump" s" stack-effect" s" text" s" ( x -- x )" meta! drop
+s" dump" s" category" s" text" s" debug" meta! drop
+
+s" see" s" description" s" text" s" Decompile a word definition" meta! drop
+s" see" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" see" s" category" s" text" s" debug" meta! drop
+
+s" dump" s" examples" s" code" s" 42 dump" meta! drop
+s" see" s" examples" s" code" s" : double dup + ;\nsee double" meta! drop
+
+# --- PRNG ---
+
+s" random" s" description" s" text" s" Push a pseudo-random float in [0.0, 1.0)" meta! drop
+s" random" s" stack-effect" s" text" s" ( -- f )" meta! drop
+s" random" s" category" s" text" s" math" meta! drop
+
+s" random-seed" s" description" s" text" s" Seed the PRNG engine (same seed produces same sequence)" meta! drop
+s" random-seed" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" random-seed" s" category" s" text" s" math" meta! drop
+
+s" random-range" s" description" s" text" s" Push a pseudo-random integer in [lo, hi)" meta! drop
+s" random-range" s" stack-effect" s" text" s" ( lo hi -- n )" meta! drop
+s" random-range" s" category" s" text" s" math" meta! drop
+
+s" random" s" examples" s" code" s" random ." meta! drop
+s" random-seed" s" examples" s" code" s" 42 random-seed\nrandom ." meta! drop
+s" random-range" s" examples" s" code" s" 0 100 random-range ." meta! drop
+
+# --- Map ---
+s" map-new" s" description" s" text" s" Create an empty hash map" meta! drop
+s" map-new" s" stack-effect" s" text" s" ( -- map )" meta! drop
+s" map-new" s" category" s" text" s" map" meta! drop
+
+s" map-set" s" description" s" text" s" Set key (string) to value, return map" meta! drop
+s" map-set" s" stack-effect" s" text" s" ( map key val -- map )" meta! drop
+s" map-set" s" category" s" text" s" map" meta! drop
+
+s" map-get" s" description" s" text" s" Get value by key; fails if key not found" meta! drop
+s" map-get" s" stack-effect" s" text" s" ( map key -- val )" meta! drop
+s" map-get" s" category" s" text" s" map" meta! drop
+
+s" map-remove" s" description" s" text" s" Remove key from map; fails if key not found" meta! drop
+s" map-remove" s" stack-effect" s" text" s" ( map key -- map )" meta! drop
+s" map-remove" s" category" s" text" s" map" meta! drop
+
+s" map-length" s" description" s" text" s" Push the number of entries in the map" meta! drop
+s" map-length" s" stack-effect" s" text" s" ( map -- n )" meta! drop
+s" map-length" s" category" s" text" s" map" meta! drop
+
+s" map-keys" s" description" s" text" s" Push an array of all keys (strings)" meta! drop
+s" map-keys" s" stack-effect" s" text" s" ( map -- arr )" meta! drop
+s" map-keys" s" category" s" text" s" map" meta! drop
+
+s" map-values" s" description" s" text" s" Push an array of all values" meta! drop
+s" map-values" s" stack-effect" s" text" s" ( map -- arr )" meta! drop
+s" map-values" s" category" s" text" s" map" meta! drop
+
+s" map-has?" s" description" s" text" s" Test if key exists in map" meta! drop
+s" map-has?" s" stack-effect" s" text" s" ( map key -- bool )" meta! drop
+s" map-has?" s" category" s" text" s" map" meta! drop
+
+s" map-new" s" examples" s" code" s" map-new map-length ." meta! drop
+s" map-set" s" examples" s" code" s" map-new s| name| s| Alice| map-set map-length .\n=> 1 " meta! drop
+s" map-get" s" examples" s" code" s" map-new s| x| 42 map-set dup s| x| map-get .\n=> 42 " meta! drop
+s" map-remove" s" examples" s" code" s" map-new s| a| 1 map-set s| a| map-remove map-length .\n=> 0 " meta! drop
+s" map-length" s" examples" s" code" s" map-new map-length ." meta! drop
+s" map-keys" s" examples" s" code" s" map-new s| a| 1 map-set map-keys array-length .\n=> 1 " meta! drop
+s" map-values" s" examples" s" code" s" map-new s| a| 100 map-set map-values array-length .\n=> 1 " meta! drop
+s" map-has?" s" examples" s" code" s" map-new s| x| 1 map-set s| x| map-has? .\n=> -1 " meta! drop
+
+# --- JSON ---
+
+s" json-parse" s" description" s" text" s" Parse a JSON string into a HeapJson value" meta! drop
+s" json-parse" s" stack-effect" s" text" s" ( string -- json )" meta! drop
+s" json-parse" s" category" s" text" s" json" meta! drop
+
+s" json-dump" s" description" s" text" s" Convert JSON value to compact string" meta! drop
+s" json-dump" s" stack-effect" s" text" s" ( json -- string )" meta! drop
+s" json-dump" s" category" s" text" s" json" meta! drop
+
+s" json-pretty" s" description" s" text" s" Convert JSON value to indented string" meta! drop
+s" json-pretty" s" stack-effect" s" text" s" ( json -- string )" meta! drop
+s" json-pretty" s" category" s" text" s" json" meta! drop
+
+s" json-get" s" description" s" text" s" Look up by string key in JSON object or integer index in JSON array; nested objects stay as JSON" meta! drop
+s" json-get" s" stack-effect" s" text" s" ( json key|index -- value )" meta! drop
+s" json-get" s" category" s" text" s" json" meta! drop
+
+s" json-length" s" description" s" text" s" Array length or object size" meta! drop
+s" json-length" s" stack-effect" s" text" s" ( json -- int )" meta! drop
+s" json-length" s" category" s" text" s" json" meta! drop
+
+s" json-type" s" description" s" text" s" Type of JSON value: object, array, string, number, boolean, null" meta! drop
+s" json-type" s" stack-effect" s" text" s" ( json -- string )" meta! drop
+s" json-type" s" category" s" text" s" json" meta! drop
+
+s" json-keys" s" description" s" text" s" Get array of object keys as strings" meta! drop
+s" json-keys" s" stack-effect" s" text" s" ( json -- array )" meta! drop
+s" json-keys" s" category" s" text" s" json" meta! drop
+
+s" json->map" s" description" s" text" s" Recursively convert JSON object to HeapMap" meta! drop
+s" json->map" s" stack-effect" s" text" s" ( json -- map )" meta! drop
+s" json->map" s" category" s" text" s" json" meta! drop
+
+s" json->array" s" description" s" text" s" Recursively convert JSON array to HeapArray" meta! drop
+s" json->array" s" stack-effect" s" text" s" ( json -- array )" meta! drop
+s" json->array" s" category" s" text" s" json" meta! drop
+
+s" map->json" s" description" s" text" s" Recursively convert HeapMap to JSON object" meta! drop
+s" map->json" s" stack-effect" s" text" s" ( map -- json )" meta! drop
+s" map->json" s" category" s" text" s" json" meta! drop
+
+s" array->json" s" description" s" text" s" Recursively convert HeapArray to JSON array" meta! drop
+s" array->json" s" stack-effect" s" text" s" ( array -- json )" meta! drop
+s" array->json" s" category" s" text" s" json" meta! drop
+
+s" json->value" s" description" s" text" s" Auto-unpack JSON: object->map, array->array, string->string, number->int/float, boolean->bool" meta! drop
+s" json->value" s" stack-effect" s" text" s" ( json -- value )" meta! drop
+s" json->value" s" category" s" text" s" json" meta! drop
+
+s" j|" s" description" s" text" s" JSON literal handler word: parse text to closing | as JSON" meta! drop
+s" j|" s" stack-effect" s" text" s" j| ... | ( -- json )" meta! drop
+s" j|" s" category" s" text" s" json" meta! drop
+
+s" json-parse" s" examples" s" code" s" s| [10, 20] | strim json-parse json-length ." meta! drop
+s" json-dump" s" examples" s" code" s" j| [1, 2, 3] | json-dump type" meta! drop
+s" json-get" s" examples" s" code" s" j| [10, 20, 30] | json-length ." meta! drop
+s" json-length" s" examples" s" code" s" j| [1, 2, 3] | json-length ." meta! drop
+s" json-type" s" examples" s" code" s" j| [1, 2] | json-type type" meta! drop
+s" json->map" s" examples" s" code" s" j| 42 | json->value ." meta! drop
+s" map->json" s" examples" s" code" s| map-new s" k" 99 map-set map->json json-dump type | meta! drop
+
+# --- Execution Tokens ---
+
+s" '" s" description" s" text" s" Parse next token, look up in dictionary, push execution token" meta! drop
+s" '" s" stack-effect" s" text" s" ( -- xt )" meta! drop
+s" '" s" category" s" text" s" execution" meta! drop
+s" '" s" examples" s" code" s" ' dup >name type\n=> dup" meta! drop
+
+s" execute" s" description" s" text" s" Pop execution token and execute the referenced word" meta! drop
+s" execute" s" stack-effect" s" text" s" ( xt -- )" meta! drop
+s" execute" s" category" s" text" s" execution" meta! drop
+s" execute" s" examples" s" code" s" 42 ' dup execute . .\n=> 42 42" meta! drop
+
+s" xt?" s" description" s" text" s" Test if TOS is an execution token" meta! drop
+s" xt?" s" stack-effect" s" text" s" ( val -- bool )" meta! drop
+s" xt?" s" category" s" text" s" execution" meta! drop
+s" xt?" s" examples" s" code" s" ' dup xt? .\n=> -1" meta! drop
+
+s" >name" s" description" s" text" s" Extract the word name from an execution token as a string" meta! drop
+s" >name" s" stack-effect" s" text" s" ( xt -- str )" meta! drop
+s" >name" s" category" s" text" s" execution" meta! drop
+s" >name" s" examples" s" code" s" ' dup >name type\n=> dup" meta! drop
+
+# --- Defining words ---
+
+s" immediate" s" description" s" text" s" Mark the most recently defined word as immediate (executed during compilation)" meta! drop
+s" immediate" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" immediate" s" category" s" text" s" defining" meta! drop
+s" immediate" s" examples" s" code" s" : emit-42 42 . ; immediate\n: test emit-42 ;\n=> 42" meta! drop
+
+s" xt-body" s" description" s" text" s" Get data field reference from an execution token of a CREATE'd word" meta! drop
+s" xt-body" s" stack-effect" s" text" s" ( xt -- dataref )" meta! drop
+s" xt-body" s" category" s" text" s" execution" meta! drop
+s" xt-body" s" examples" s" code" s" create mydata 99 ,\n' mydata xt-body @ .\n=> 99" meta! drop
+
+# --- Stack display ---
+
+s" .s" s" description" s" text" s" Display the entire data stack without modifying it" meta! drop
+s" .s" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" .s" s" category" s" text" s" debug" meta! drop
+s" .s" s" examples" s" code" s" 1 2 3 .s\n=> <3> 1 2 3" meta! drop
+
+# --- Type conversion ---
+
+s" int->float" s" description" s" text" s" Convert integer to float. Pass through if already float" meta! drop
+s" int->float" s" stack-effect" s" text" s" ( n -- f )" meta! drop
+s" int->float" s" category" s" text" s" conversion" meta! drop
+s" int->float" s" examples" s" code" s" 42 int->float .\n=> 42" meta! drop
+
+s" float->int" s" description" s" text" s" Convert float to integer (truncates toward zero). Pass through if already integer" meta! drop
+s" float->int" s" stack-effect" s" text" s" ( f -- n )" meta! drop
+s" float->int" s" category" s" text" s" conversion" meta! drop
+s" float->int" s" examples" s" code" s" 3.7 float->int .\n=> 3" meta! drop
+
+s" number->string" s" description" s" text" s" Convert a number (integer or float) to its string representation" meta! drop
+s" number->string" s" stack-effect" s" text" s" ( n -- str )" meta! drop
+s" number->string" s" category" s" text" s" conversion" meta! drop
+s" number->string" s" examples" s" code" s" 42 number->string type\n=> 42" meta! drop
+
+s" string->number" s" description" s" text" s" Parse a string as a number. On success push value and -1 (true). On failure push 0 (false)" meta! drop
+s" string->number" s" stack-effect" s" text" s" ( str -- value -1 | 0 )" meta! drop
+s" string->number" s" category" s" text" s" conversion" meta! drop
+s" string->number" s" examples" s" code" s| s" 42" string->number . .\n=> -1 42| meta! drop
+
+# --- LVFS (Little Virtual File System) ---
+
+s" cwd" s" description" s" text" s" Print current working directory (virtual path)" meta! drop
+s" cwd" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" cwd" s" category" s" text" s" lvfs" meta! drop
+s" cwd" s" examples" s" code" s" cwd\n=> /home" meta! drop
+
+s" cd" s" description" s" text" s" Change working directory. No argument resets to /home. Accepts absolute (/library) or relative (sub) virtual paths" meta! drop
+s" cd" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" cd" s" category" s" text" s" lvfs" meta! drop
+s" cd" s" examples" s" code" s" cd /library\ncwd\n=> /library\ncd\ncwd\n=> /home" meta! drop
+
+s" ls" s" description" s" text" s" List directory contents. No argument lists CWD. Directories shown with trailing /" meta! drop
+s" ls" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" ls" s" category" s" text" s" lvfs" meta! drop
+s" ls" s" examples" s" code" s" ls /\n=> home/\n=> library/" meta! drop
+
+s" ll" s" description" s" text" s" Long-format directory listing sorted by modification time (newest first). Shows size, date, and name" meta! drop
+s" ll" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" ll" s" category" s" text" s" lvfs" meta! drop
+s" ll" s" examples" s" code" s" ll /home\n=>     1234  2026-02-22 10:30:00  myfile.txt" meta! drop
+
+s" lr" s" description" s" text" s" Recursive long-format directory listing sorted by modification time (newest first). Shows relative paths" meta! drop
+s" lr" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" lr" s" category" s" text" s" lvfs" meta! drop
+s" lr" s" examples" s" code" s" lr /home\n=>      100  2026-02-22 10:30:00  sub/file.txt\n=>        0  2026-02-22 10:30:00  sub/" meta! drop
+
+s" cat" s" description" s" text" s" Print the contents of a file. Requires a file path argument" meta! drop
+s" cat" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" cat" s" category" s" text" s" lvfs" meta! drop
+s" cat" s" examples" s" code" s" cat /home/hello.txt\n=> Hello, world!" meta! drop
+
+# --- File I/O Async (libuv thread-pool, cooperative await via tick()) ---
+
+s" exists?" s" description" s" text" s" Check if a file or directory exists at the given virtual path (async)" meta! drop
+s" exists?" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" exists?" s" category" s" text" s" file-io-async" meta! drop
+s" exists?" s" examples" s" code" s| s" /home/test.txt" exists? .| meta! drop
+
+s" read-file" s" description" s" text" s" Read entire file contents as a string (async). Works with /home and /library paths" meta! drop
+s" read-file" s" stack-effect" s" text" s" ( path -- string? flag )" meta! drop
+s" read-file" s" category" s" text" s" file-io-async" meta! drop
+s" read-file" s" examples" s" code" s| s" /home/data.txt" read-file drop s.| meta! drop
+
+s" write-file" s" description" s" text" s" Write string to file, truncating any existing content (async). Only writes to /home" meta! drop
+s" write-file" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
+s" write-file" s" category" s" text" s" file-io-async" meta! drop
+s" write-file" s" examples" s" code" s| s" Hello" s" /home/out.txt" write-file .| meta! drop
+
+s" append-file" s" description" s" text" s" Append string to file (async). Creates file if it does not exist. Only writes to /home" meta! drop
+s" append-file" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
+s" append-file" s" category" s" text" s" file-io-async" meta! drop
+s" append-file" s" examples" s" code" s| s" more data" s" /home/log.txt" append-file drop| meta! drop
+
+s" copy-file" s" description" s" text" s" Copy a file (async). Source can be /library, destination must be under /home" meta! drop
+s" copy-file" s" stack-effect" s" text" s" ( src dest -- flag )" meta! drop
+s" copy-file" s" category" s" text" s" file-io-async" meta! drop
+s" copy-file" s" examples" s" code" s| s" /library/template.til" s" /home/my.til" copy-file drop| meta! drop
+
+s" rename-file" s" description" s" text" s" Rename or move a file/directory (async). Both paths must be under /home" meta! drop
+s" rename-file" s" stack-effect" s" text" s" ( old new -- flag )" meta! drop
+s" rename-file" s" category" s" text" s" file-io-async" meta! drop
+s" rename-file" s" examples" s" code" s| s" /home/old.txt" s" /home/new.txt" rename-file drop| meta! drop
+
+s" lstat" s" description" s" text" s" Get file status as a 4-element array: [size, mtime_us, is_dir, is_read_only] (async)" meta! drop
+s" lstat" s" stack-effect" s" text" s" ( path -- array? flag )" meta! drop
+s" lstat" s" category" s" text" s" file-io-async" meta! drop
+s" lstat" s" examples" s" code" s| s" /home/data.txt" lstat drop 0 array-get .| meta! drop
+
+s" readdir" s" description" s" text" s" List directory contents as an array of filename strings (async)" meta! drop
+s" readdir" s" stack-effect" s" text" s" ( path -- array? flag )" meta! drop
+s" readdir" s" category" s" text" s" file-io-async" meta! drop
+s" readdir" s" examples" s" code" s| s" /home" readdir drop array-length .| meta! drop
+
+s" mkdir" s" description" s" text" s" Create a directory (and parents) under /home (async)" meta! drop
+s" mkdir" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" mkdir" s" category" s" text" s" file-io-async" meta! drop
+s" mkdir" s" examples" s" code" s| s" /home/project/src" mkdir drop| meta! drop
+
+s" mkdir-tmp" s" description" s" text" s" Create a unique temporary directory under /home with the given prefix (async). Returns virtual path" meta! drop
+s" mkdir-tmp" s" stack-effect" s" text" s" ( prefix -- string? flag )" meta! drop
+s" mkdir-tmp" s" category" s" text" s" file-io-async" meta! drop
+s" mkdir-tmp" s" examples" s" code" s| s" test" mkdir-tmp drop s.| meta! drop
+
+s" rmdir" s" description" s" text" s" Remove an empty directory under /home (async)" meta! drop
+s" rmdir" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" rmdir" s" category" s" text" s" file-io-async" meta! drop
+s" rmdir" s" examples" s" code" s| s" /home/empty-dir" rmdir drop| meta! drop
+
+s" rm" s" description" s" text" s" Remove a file or directory recursively under /home (async). Refuses to delete /home itself" meta! drop
+s" rm" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" rm" s" category" s" text" s" file-io-async" meta! drop
+s" rm" s" examples" s" code" s| s" /home/old-project" rm drop| meta! drop
+
+s" truncate" s" description" s" text" s" Truncate a file to zero length (async). File must exist under /home" meta! drop
+s" truncate" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" truncate" s" category" s" text" s" file-io-async" meta! drop
+s" truncate" s" examples" s" code" s| s" /home/log.txt" truncate drop| meta! drop
+
+# --- HTTP Client (outbound network I/O) ---
+
+s" http-get" s" description" s" text" s" Perform an HTTP/HTTPS GET request. Returns response body as opaque bytes (HeapByteArray, not string), HTTP status code, and success flag. On failure pushes only flag=0. Domain must be in ETIL_HTTP_ALLOWLIST. Per-session and per-interpret fetch budgets enforced. SSRF protection blocks loopback, RFC1918, link-local, and cloud metadata IPs" meta! drop
+s" http-get" s" stack-effect" s" text" s" ( url -- bytes status-code flag )" meta! drop
+s" http-get" s" category" s" text" s" http" meta! drop
+s" http-get" s" examples" s" code" s| s" https://httpbin.org/get" http-get -rot 2drop . cr| meta! drop
+
+# --- MongoDB ---
+
+s" mongo-find" s" description" s" text" s" Query a MongoDB collection. Filter and options accept String, Json, or Map. Options supports: skip, limit, sort, projection, hint, collation, max_time_ms, batch_size. Returns matching documents as a Json value and a success flag. Requires mongo_access permission. Results are tainted (external data)" meta! drop
+s" mongo-find" s" stack-effect" s" text" s" ( coll filter opts -- json flag )" meta! drop
+s" mongo-find" s" category" s" text" s" mongodb" meta! drop
+s" mongo-find" s" examples" s" code" s| s" test" s" {}" s" {}" mongo-find| meta! drop
+
+s" mongo-count" s" description" s" text" s" Count documents in a MongoDB collection. Filter and options accept String, Json, or Map. Uses server-side count_documents() (O(index) not O(N)). Options supports: skip, limit, hint, collation, max_time_ms. Returns the count as an integer and a success flag. Requires mongo_access permission" meta! drop
+s" mongo-count" s" stack-effect" s" text" s" ( coll filter opts -- count flag )" meta! drop
+s" mongo-count" s" category" s" text" s" mongodb" meta! drop
+s" mongo-count" s" examples" s" code" s| s" test" s" {}" s" {}" mongo-count| meta! drop
+
+s" mongo-insert" s" description" s" text" s" Insert a document into a MongoDB collection. Document accepts String, Json, or Map. Returns the inserted document _id as a string and a success flag. Requires mongo_access permission" meta! drop
+s" mongo-insert" s" stack-effect" s" text" s" ( coll doc -- inserted-id flag )" meta! drop
+s" mongo-insert" s" category" s" text" s" mongodb" meta! drop
+s" mongo-insert" s" examples" s" code" s| s" mycoll" s" {}" mongo-insert| meta! drop
+
+s" mongo-update" s" description" s" text" s" Update documents in a MongoDB collection. Filter, update, and options accept String, Json, or Map. The update should use MongoDB update operators ($set, $inc, etc.). Options supports: upsert, hint, collation. Returns the count of modified documents and a success flag. Requires mongo_access permission" meta! drop
+s" mongo-update" s" stack-effect" s" text" s" ( coll filter update opts -- count flag )" meta! drop
+s" mongo-update" s" category" s" text" s" mongodb" meta! drop
+s" mongo-update" s" examples" s" code" s| s" mycoll" s" {}" s" {}" s" {}" mongo-update| meta! drop
+
+s" mongo-delete" s" description" s" text" s" Delete documents from a MongoDB collection. Filter and options accept String, Json, or Map. Options supports: hint, collation. Returns the count of deleted documents and a success flag. Requires mongo_access permission" meta! drop
+s" mongo-delete" s" stack-effect" s" text" s" ( coll filter opts -- count flag )" meta! drop
+s" mongo-delete" s" category" s" text" s" mongodb" meta! drop
+s" mongo-delete" s" examples" s" code" s| s" mycoll" s" {}" s" {}" mongo-delete| meta! drop
+
+# --- File I/O Sync (synchronous libuv, blocking) ---
+
+s" exists-sync" s" description" s" text" s" Check if a file or directory exists at the given virtual path" meta! drop
+s" exists-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" exists-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" exists-sync" s" examples" s" code" s| s" /home/test.txt" exists-sync .| meta! drop
+
+s" read-file-sync" s" description" s" text" s" Read entire file contents as a string. Works with /home and /library paths" meta! drop
+s" read-file-sync" s" stack-effect" s" text" s" ( path -- string? flag )" meta! drop
+s" read-file-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" read-file-sync" s" examples" s" code" s| s" /home/data.txt" read-file-sync drop s.| meta! drop
+
+s" write-file-sync" s" description" s" text" s" Write string to file, truncating any existing content. Only writes to /home" meta! drop
+s" write-file-sync" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
+s" write-file-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" write-file-sync" s" examples" s" code" s| s" Hello" s" /home/out.txt" write-file-sync .| meta! drop
+
+s" append-file-sync" s" description" s" text" s" Append string to file. Creates file if it does not exist. Only writes to /home" meta! drop
+s" append-file-sync" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
+s" append-file-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" append-file-sync" s" examples" s" code" s| s" more data" s" /home/log.txt" append-file-sync drop| meta! drop
+
+s" copy-file-sync" s" description" s" text" s" Copy a file. Source can be /library (read-only), destination must be under /home" meta! drop
+s" copy-file-sync" s" stack-effect" s" text" s" ( src dest -- flag )" meta! drop
+s" copy-file-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" copy-file-sync" s" examples" s" code" s| s" /library/template.til" s" /home/my.til" copy-file-sync drop| meta! drop
+
+s" rename-sync" s" description" s" text" s" Rename or move a file/directory. Both old and new paths must be under /home" meta! drop
+s" rename-sync" s" stack-effect" s" text" s" ( old new -- flag )" meta! drop
+s" rename-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" rename-sync" s" examples" s" code" s| s" /home/old.txt" s" /home/new.txt" rename-sync drop| meta! drop
+
+s" lstat-sync" s" description" s" text" s" Get file status as a 4-element array: [size, mtime_us, is_dir, is_read_only]" meta! drop
+s" lstat-sync" s" stack-effect" s" text" s" ( path -- array? flag )" meta! drop
+s" lstat-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" lstat-sync" s" examples" s" code" s| s" /home/data.txt" lstat-sync drop 0 array-get .| meta! drop
+
+s" readdir-sync" s" description" s" text" s" List directory contents as an array of filename strings" meta! drop
+s" readdir-sync" s" stack-effect" s" text" s" ( path -- array? flag )" meta! drop
+s" readdir-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" readdir-sync" s" examples" s" code" s| s" /home" readdir-sync drop array-length .| meta! drop
+
+s" mkdir-sync" s" description" s" text" s" Create a directory (and parents) under /home" meta! drop
+s" mkdir-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" mkdir-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" mkdir-sync" s" examples" s" code" s| s" /home/project/src" mkdir-sync drop| meta! drop
+
+s" mkdir-tmp-sync" s" description" s" text" s" Create a unique temporary directory under /home with the given prefix. Returns virtual path" meta! drop
+s" mkdir-tmp-sync" s" stack-effect" s" text" s" ( prefix -- string? flag )" meta! drop
+s" mkdir-tmp-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" mkdir-tmp-sync" s" examples" s" code" s| s" test" mkdir-tmp-sync drop s.| meta! drop
+
+s" rmdir-sync" s" description" s" text" s" Remove an empty directory under /home" meta! drop
+s" rmdir-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" rmdir-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" rmdir-sync" s" examples" s" code" s| s" /home/empty-dir" rmdir-sync drop| meta! drop
+
+s" rm-sync" s" description" s" text" s" Remove a file or directory recursively under /home. Refuses to delete /home itself" meta! drop
+s" rm-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" rm-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" rm-sync" s" examples" s" code" s| s" /home/old-project" rm-sync drop| meta! drop
+
+s" truncate-sync" s" description" s" text" s" Truncate a file to zero length. File must exist under /home" meta! drop
+s" truncate-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
+s" truncate-sync" s" category" s" text" s" file-io-sync" meta! drop
+s" truncate-sync" s" examples" s" code" s| s" /home/log.txt" truncate-sync drop| meta! drop

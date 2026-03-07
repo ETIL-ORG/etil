@@ -1,0 +1,156 @@
+# test_evolve.til — Integration test for the (1+1) evolutionary strategy
+# Uses a fixed PRNG seed for deterministic, reproducible results.
+# Verifies: genome creation, mutation, fitness evaluation, evolution loop,
+# and that evaluate-as-genotype-to-phenotype works end-to-end.
+
+
+test_evolve-example
+marker test_evolve-example
+
+include tests/til/harness.til
+
+# --- Load the evolutionary prototype (without auto-run) ---
+# We inline the definitions here with a fixed seed instead of
+# auto-running, so we can test individual pieces.
+
+# --- Configuration ---
+
+42 constant TARGET
+7 constant GENOME-LEN
+1 constant NUM-LO
+21 constant NUM-HI
+500 constant MAX-GENS
+
+# --- State ---
+
+variable best-genome
+variable best-fitness
+variable generation
+variable done
+
+# --- Operator pool ---
+
+: op-pool
+    array-new s" +" array-push s" -" array-push s" *" array-push ;
+
+# --- Random gene generators ---
+
+: random-num
+    NUM-LO NUM-HI random-range number->string ;
+
+: random-op
+    op-pool
+    array-length
+    0 swap random-range
+    array-get ;
+
+: num-pos?
+    dup 2 < if
+        drop -1
+    else
+        2 mod 1 =
+    then ;
+
+: random-gene
+    num-pos? if random-num else random-op then ;
+
+# --- Genome operations ---
+
+: random-genome # ( -- genome )
+    array-new
+    GENOME-LEN 0 do
+        i random-gene array-push
+    loop
+    dup cr ." Initial random-genome:" s" |" sjoin s. space ;
+
+: genome->code
+    dup s"  " sjoin ;
+
+: clone-genome # ( genome -- genome genome )
+    genome->code
+    s"  " ssplit ;
+
+: mutate
+    array-length
+    0 swap random-range
+    dup random-gene
+    array-set ;
+
+: score
+    array-length 0 swap 0
+    do
+        i num-pos?
+        if
+            over i array-get string->number
+            if
+                +
+            else
+                ." NAN!"
+            then
+        then
+    loop
+    swap drop ;
+
+: fitness
+    genome->code
+    dup
+    evaluate
+    TARGET - abs ;
+#    swap score + ;
+
+: show-status
+    ." Gen " generation @ .
+    ." | Fitness " best-fitness @ .
+    ." | " best-genome @ genome->code type drop cr ;
+
+: check-done
+    best-fitness @ 0= if -1 done ! then ;
+
+: evolve-step
+    best-genome @
+    clone-genome
+    nip
+    mutate
+    fitness
+    dup best-fitness @ <= if
+        best-fitness !
+        best-genome !
+    else
+        drop drop
+    then
+    1 generation @ + generation ! ;
+
+: run-evolution
+    time-us random-seed
+    random-genome
+    fitness
+    best-fitness !
+    best-genome !
+    0 generation !
+    0 done !
+    begin
+        evolve-step
+        check-done
+        done @ 0 <> generation @ MAX-GENS >= or
+    until ;
+
+# ============================================================
+# Tests
+# ============================================================
+# --- Test: evolution finds a solution (deterministic seed) ---
+
+
+: one-evolution
+    ." evolution finds solution (seed 42): "
+    time-us random-seed
+    run-evolution
+    best-fitness @ 0 expect-eq
+
+    ." solution evaluates to target: "
+    best-genome @ genome->code evaluate TARGET expect-eq
+
+    ." generation count reasonable: "
+    generation @ MAX-GENS < -1 expect-eq
+    ;
+
+one-evolution dump drop

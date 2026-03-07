@@ -1,0 +1,37 @@
+forget-all mjd-test-03
+: mjd-test-03 ;
+
+: line 80 0 do ." -" loop cr ;
+
+s" https://google.com/" constant bad-url
+s" https://www.google.com/" constant url
+
+variable content
+
+: load-content
+    http-get
+    if
+        dup 200 =
+        if
+            drop bytes->string content !
+        else
+            s" Error Loading " url s+ s"  Code:" s+ swap s+ 0 abort
+        then
+    else
+        s" Error loading " url s+ 0 abort
+    then
+;
+
+." Loading..." cr
+url load-content
+
+: print-taint staint if ." Tainted." else ." Untainted!" then cr ;
+content @ print-taint
+
+content @ s" .*?(\d+).+" s" $1" sregex-replace dup print-taint cr
+line s. cr
+line content @ s. cr
+line
+
+
+

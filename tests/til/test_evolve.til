@@ -1,0 +1,248 @@
+# test_evolve.til — Integration test for the (1+1) evolutionary strategy
+# Uses a fixed PRNG seed for deterministic, reproducible results.
+# Verifies: genome creation, mutation, fitness evaluation, evolution loop,
+# and that evaluate-as-genotype-to-phenotype works end-to-end.
+
+include tests/til/harness.til
+
+# --- Load the evolutionary prototype (without auto-run) ---
+# We inline the definitions here with a fixed seed instead of
+# auto-running, so we can test individual pieces.
+
+# --- Configuration ---
+
+42 constant TARGET
+7 constant GENOME-LEN
+1 constant NUM-LO
+21 constant NUM-HI
+500 constant MAX-GENS
+
+# --- State ---
+
+variable best-genome
+variable best-fitness
+variable generation
+variable done
+
+# --- Operator pool ---
+
+: op-pool
+    array-new s" +" array-push s" -" array-push s" *" array-push ;
+
+# --- Random gene generators ---
+
+: random-num
+    NUM-LO NUM-HI random-range number->string ;
+
+: random-op
+    op-pool
+    array-length
+    0 swap random-range
+    array-get ;
+
+: num-pos?
+    dup 2 < if
+        drop true
+    else
+        2 mod 1 =
+    then ;
+
+: random-gene
+    num-pos? if random-num else random-op then ;
+
+# --- Genome operations ---
+
+: random-genome
+    array-new
+    GENOME-LEN 0 do
+        i random-gene array-push
+    loop ;
+
+: clone-genome
+    dup s"  " sjoin
+    s"  " ssplit ;
+
+: genome->code
+    dup s"  " sjoin ;
+
+: mutate
+    array-length
+    0 swap random-range
+    dup random-gene
+    array-set ;
+
+: fitness
+    genome->code
+    evaluate
+    TARGET - abs ;
+
+: show-status
+    ." Gen " generation @ .
+    ." | Fitness " best-fitness @ .
+    ." | " best-genome @ genome->code type drop cr ;
+
+: check-done
+    best-fitness @ 0= if -1 done ! then ;
+
+: evolve-step
+    best-genome @
+    clone-genome
+    nip
+    mutate
+    fitness
+    dup best-fitness @ <= if
+        best-fitness !
+        best-genome !
+    else
+        drop drop
+    then
+    1 generation @ + generation ! ;
+
+: run-evolution
+    random-genome
+    fitness
+    best-fitness !
+    best-genome !
+    0 generation !
+    0 done !
+    begin
+        evolve-step
+        check-done
+        done @ 0 <> generation @ MAX-GENS >= or
+    until ;
+
+# ============================================================
+# Tests
+# ============================================================
+
+# --- Test: op-pool creates 3-element array ---
+
+." op-pool size: "
+op-pool array-length swap drop 3 expect-eq
+
+# --- Test: num-pos? classification ---
+
+." num-pos? position 0: "
+0 num-pos? true expect-eq
+
+." num-pos? position 1: "
+1 num-pos? true expect-eq
+
+." num-pos? position 2 (operator): "
+2 num-pos? false expect-eq
+
+." num-pos? position 3 (number): "
+3 num-pos? true expect-eq
+
+." num-pos? position 4 (operator): "
+4 num-pos? false expect-eq
+
+# --- Test: random-genome length ---
+
+." random-genome length: "
+42 random-seed
+random-genome array-length swap drop GENOME-LEN expect-eq
+
+# --- Test: genome->code produces a string ---
+
+." genome->code produces string: "
+42 random-seed
+random-genome genome->code slength swap drop 0 > true expect-eq
+
+# --- Test: clone-genome creates independent copy ---
+
+." clone-genome independence: "
+42 random-seed
+random-genome clone-genome
+# Mutate clone, verify original unchanged
+mutate
+genome->code
+# Get clone code
+swap
+genome->code
+# Compare — they should differ (mutation changed one gene)
+# We can't guarantee they differ (mutation might pick same value)
+# so just verify both produce valid code strings
+slength 0 > true expect-eq
+drop
+slength 0 > true expect-eq
+drop
+
+# --- Test: fitness computes correctly ---
+
+." fitness of known genome: "
+42 random-seed
+# Create a genome that evaluates to a known value
+# Build [5, 7, +, 3, *, 1, -] = (5+7)*3-1 = 35, fitness = |35-42| = 7
+array-new
+s" 5" array-push s" 7" array-push s" +" array-push
+s" 3" array-push s" *" array-push s" 1" array-push s" -" array-push
+fitness
+7 expect-eq
+drop
+
+# --- Test: fitness of perfect genome ---
+
+." fitness of perfect genome: "
+# Build [6, 7, *, 1, +, 1, -] = 6*7+1-1 = 42, fitness = 0
+array-new
+s" 6" array-push s" 7" array-push s" *" array-push
+s" 1" array-push s" +" array-push s" 1" array-push s" -" array-push
+fitness
+0 expect-eq
+drop
+
+# --- Test: evolution finds a solution (deterministic seed) ---
+
+." evolution finds solution (seed 42): "
+42 random-seed
+run-evolution
+best-fitness @ 0 expect-eq
+
+." solution evaluates to target: "
+best-genome @ genome->code evaluate TARGET expect-eq
+
+." generation count reasonable: "
+generation @ MAX-GENS < true expect-eq
+
+# --- Test: evolution with different seed also works ---
+
+." evolution finds solution (seed 123): "
+123 random-seed
+0 done !
+run-evolution
+best-fitness @ 0 expect-eq
+
+." second solution evaluates to target: "
+best-genome @ genome->code evaluate TARGET expect-eq
+
+# --- Test: evolution with different target ---
+
+." evolution finds solution (target 100): "
+100 constant TARGET2
+: run-evolution2
+    77 random-seed
+    random-genome
+    genome->code evaluate TARGET2 - abs
+    best-fitness !
+    best-genome !
+    0 generation !
+    0 done !
+    begin
+        best-genome @
+        clone-genome nip mutate
+        genome->code evaluate TARGET2 - abs
+        dup best-fitness @ <= if
+            best-fitness !
+            best-genome !
+        else
+            drop drop
+        then
+        1 generation @ + generation !
+        best-fitness @ 0= generation @ MAX-GENS >= or
+    until ;
+run-evolution2
+best-fitness @ 0 expect-eq
+
+." target-100 result correct: "
+best-genome @ genome->code evaluate 100 expect-eq

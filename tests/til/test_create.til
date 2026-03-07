@@ -1,0 +1,25 @@
+# test_create.til — CREATE / DOES> tests
+
+include tests/til/harness.til
+
+# Defining words under test
+: my-constant create , does> @ ;
+: plus-one-constant create 1 + , does> @ ;
+
+# Create instances at top level (create parses next token from input)
+99 my-constant bottles
+27 plus-one-constant c28
+
+# Test words (verify the created words work)
+: test-constant-word
+  ." test-constant-word: "
+  bottles 99 expect-eq ;
+
+: test-plus-one-constant
+  ." test-plus-one-constant: "
+  c28 28 expect-eq ;
+
+# Master test runner
+: testall
+  test-constant-word
+  test-plus-one-constant ;

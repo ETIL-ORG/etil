@@ -1,0 +1,170 @@
+# evolve.til -- (1+1) Evolutionary Strategy in TIL
+#
+# Evolves an arithmetic RPN expression to produce a target number.
+# Demonstrates the core ETIL innovation: evaluate as the
+# genotype-to-phenotype expression mechanism.
+#
+# Usage:
+#   REPL:  include examples/evolve.til
+#   TUI:   /load examples/evolve.til
+#   Pipe:  echo "include examples/evolve.til" | etil_repl --quiet
+#
+# Algorithm: (1+1) Evolutionary Strategy (Rechenberg/Schwefel, 1960s)
+#   1. Create random genome (structured RPN expression)
+#   2. Evaluate fitness: |evaluate(genome) - TARGET|
+#   3. Clone and mutate one random gene
+#   4. If mutant fitness <= parent fitness, replace parent
+#   5. Repeat until fitness = 0 or max generations reached
+#
+# Genome: array of string tokens in structured RPN format
+#   [n1, n2, op1, n3, op2, n4, op3]
+#   Always evaluates to exactly 1 stack value.
+
+# --- Configuration ---
+
+42 constant TARGET
+7 constant GENOME-LEN
+1 constant NUM-LO
+21 constant NUM-HI
+500 constant MAX-GENS
+
+# --- State ---
+
+variable best-genome
+variable best-fitness
+variable generation
+variable done
+
+# --- Operator pool ---
+# op-pool ( -- arr )
+: op-pool
+    array-new s" +" array-push s" -" array-push s" *" array-push ;
+
+# --- Random gene generators ---
+
+# random-num ( -- str )  Random integer in [NUM-LO, NUM-HI) as string
+: random-num
+    NUM-LO NUM-HI random-range number->string ;
+
+# random-op ( -- str )  Random operator from pool
+: random-op
+    op-pool
+    array-length
+    0 swap random-range
+    array-get ;
+
+# num-pos? ( idx -- flag )  Is this genome position a number slot?
+# Positions 0,1 are numbers. For idx >= 2: odd = number, even = operator.
+: num-pos?
+    dup 2 < if
+        drop -1
+    else
+        2 mod 1 =
+    then ;
+
+# random-gene ( idx -- str )  Random gene appropriate for position
+: random-gene
+    num-pos? if random-num else random-op then ;
+
+# --- Genome operations ---
+
+# random-genome ( -- genome )  Create a fresh random genome
+: random-genome
+    array-new
+    GENOME-LEN 0 do
+        i random-gene array-push
+    loop ;
+
+# clone-genome ( genome -- genome clone )  Deep copy via sjoin+ssplit
+: clone-genome
+    dup s"  " sjoin
+    s"  " ssplit ;
+
+# genome->code ( genome -- genome code-str )  Convert to evaluable string
+: genome->code
+    dup s"  " sjoin ;
+
+# mutate ( genome -- genome )  Change one random gene in-place
+: mutate
+    array-length
+    0 swap random-range
+    dup random-gene
+    array-set ;
+
+# fitness ( genome -- genome score )  |evaluate(genome) - TARGET|
+: fitness
+    genome->code
+    evaluate
+    TARGET - abs ;
+
+# --- Display ---
+
+# show-status ( -- )  Print generation, fitness, code
+: show-status
+    ." Gen " generation @ .
+    ." | Fitness " best-fitness @ .
+    ." | " best-genome @ genome->code type drop cr ;
+
+# --- Evolution engine ---
+
+# check-done ( -- )  Set done flag if perfect fitness
+: check-done
+    best-fitness @ 0= if -1 done ! then ;
+
+# evolve-step ( -- )  One generation of (1+1) ES
+: evolve-step
+    best-genome @
+    clone-genome
+    nip
+    mutate
+    fitness
+    dup best-fitness @ <= if
+        best-fitness !
+        best-genome !
+    else
+        drop drop
+    then
+    1 generation @ + generation ! ;
+
+# run-evolution ( -- )  Main loop with early exit
+: run-evolution
+    ." === (1+1) Evolutionary Strategy ===" cr
+    ." Target: " TARGET . cr
+    ." Genome: " GENOME-LEN . ." genes, numbers " NUM-LO . ." to " NUM-HI 1 - . cr
+    ." Max generations: " MAX-GENS . cr cr
+
+    # Seed PRNG from wall clock
+    time-us random-seed
+
+    # Initialize
+    random-genome
+    fitness
+    best-fitness !
+    best-genome !
+    0 generation !
+    0 done !
+
+    show-status
+
+    # Evolution loop
+    begin
+        evolve-step
+        check-done
+        generation @ 50 mod 0= if
+            show-status
+        then
+        done @ 0 <> generation @ MAX-GENS >= or
+    until
+
+    cr
+    best-fitness @ 0= if
+        ." === SOLUTION FOUND ===" cr
+    else
+        ." === MAX GENERATIONS REACHED ===" cr
+    then
+    show-status
+    ." Result: " best-genome @ genome->code evaluate . drop cr ;
+
+# --- Run ---
+
+run-evolution

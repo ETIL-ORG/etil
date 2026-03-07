@@ -1,0 +1,23 @@
+forget-all notification-tests
+: notification-tests ;
+
+: constant create , does> @ ;
+
+s" notification-test: " constant TITLE
+
+# ( delay-msec count -- )
+: notification-test swap 1000 * swap 0 do TITLE i s+ sys-notification dup sleep loop drop ;
+
+s" SLOW NOTIFICATION TEST... 10 with 1000ms sleep" sys-notification
+: nt-1 1000 10 notification-test ; nt-1
+
+s" FAST NOTIFICATION TEST... 100 with 100ms sleep" sys-notification
+: nt-2 100 100 notification-test ; nt-2
+
+s" notifications-tests COMPLETE" sys-notification
+
+: nt nt-1 nt-2 ;
+
+sys-datafields
+
+

@@ -1,0 +1,79 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# IDE / AI agent
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Compiled files
+*.o
+*.so
+*.a
+*.exe
+*.dll
+*.dylib
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+_deps/
+
+# Logs
+*.log
+
+# Testing
+Testing/
+CTestTestfile.cmake
+
+# Documentation
+docs/_build/
+*.pdf
+
+# Package managers
+.cache/
+*.egg-info/
+
+# Secrets and server-specific config
+deploy/production/.env
+.ssh/
+
+# Claude Code project instructions (contains server internals)
+CLAUDE.md
+claude/
+
+# Internal design docs (may contain server-specific details)
+docs/claude-knowledge/
+
+# Portable dev environment (local-only)
+portaenv/
+
+# Docker staging (pre-built binary for Dockerfile)
+.docker-stage/
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+tmp/**
+
+# Output/listing files
+**/*.lst
+
+# Dependencies (fetched by CMake)
+_deps/
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+tools/mcp-client/venv/

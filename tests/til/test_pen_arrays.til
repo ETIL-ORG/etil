@@ -1,0 +1,108 @@
+# test_pen_arrays.til — PEN tests for array boundary conditions
+# Tests negative/oversize indices, empty array ops, drain-to-empty
+
+include tests/til/harness.til
+
+# --- Valid boundary operations ---
+
+." array empty length: "
+array-new array-length 0 expect-eq drop
+
+." array push and get idx 0: "
+array-new 42 array-push 0 array-get 42 expect-eq
+
+." array push 3 and length: "
+array-new 10 array-push 20 array-push 30 array-push
+array-length 3 expect-eq drop
+
+." array overwrite element: "
+array-new 42 array-push 0 99 array-set 0 array-get 99 expect-eq
+
+." array pop returns last: "
+array-new 10 array-push 20 array-push array-pop 20 expect-eq drop
+
+." array shift returns first: "
+array-new 10 array-push 20 array-push array-shift 10 expect-eq drop
+
+." array drain via pop: "
+array-new 1 array-push 2 array-push 3 array-push
+array-pop drop array-pop drop array-pop drop
+array-length 0 expect-eq drop
+
+." array drain via shift: "
+array-new 1 array-push 2 array-push 3 array-push
+array-shift drop array-shift drop array-shift drop
+array-length 0 expect-eq drop
+
+." array compact empty: "
+array-new array-compact array-length 0 expect-eq drop
+
+." array compact preserves: "
+array-new 42 array-push 99 array-push array-compact
+0 array-get 42 expect-eq
+
+." array unshift prepends: "
+array-new 20 array-push 10 array-unshift
+0 array-get 10 expect-eq
+
+." array reverse 3 elements: "
+array-new 1 array-push 2 array-push 3 array-push array-reverse
+0 array-get 3 expect-eq
+
+." array reverse empty: "
+array-new array-reverse array-length 0 expect-eq drop
+
+." array reverse single: "
+array-new 42 array-push array-reverse 0 array-get 42 expect-eq
+
+# --- PEN: operations that should fail gracefully ---
+
+." array get from empty: "
+array-new 0 array-get
+# array-get failed, stack: [arr, 0]
+drop drop pass
+
+." array pop from empty: "
+array-new array-pop
+# array-pop failed, stack: [arr]
+drop pass
+
+." array shift from empty: "
+array-new array-shift
+# array-shift failed, stack: [arr]
+drop pass
+
+." array negative index get: "
+array-new 42 array-push -1 array-get
+# failed, stack: [arr, -1]
+drop drop pass
+
+." array OOB get idx==len: "
+array-new 42 array-push 1 array-get
+# failed, stack: [arr, 1]
+drop drop pass
+
+." array oversize index get: "
+array-new 42 array-push 999999 array-get
+# failed, stack: [arr, 999999]
+drop drop pass
+
+." array negative index set: "
+array-new 42 array-push -1 99 array-set
+# failed, stack: [arr, -1, 99]
+drop drop drop pass
+
+." array OOB set idx==len: "
+array-new 42 array-push 1 99 array-set
+# failed, stack: [arr, 1, 99]
+drop drop drop pass
+
+." array large index get: "
+array-new 42 array-push 2147483647 array-get
+drop drop pass
+
+# --- Verify interpreter still healthy after PEN ---
+." array post-PEN sanity: "
+array-new 100 array-push 200 array-push
+array-length 2 expect-eq
+0 array-get 100 expect-eq

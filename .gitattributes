@@ -1,0 +1,46 @@
+# Git attributes for cross-platform development
+
+# Auto normalize line endings to LF
+* text=auto
+
+# Shell scripts must always use LF
+*.sh text eol=lf
+*.bash text eol=lf
+
+# CMake files
+CMakeLists.txt text eol=lf
+*.cmake text eol=lf
+
+# C++ source files
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.h text eol=lf
+*.c text eol=lf
+*.cc text eol=lf
+*.cxx text eol=lf
+
+# Makefiles
+Makefile text eol=lf
+*.mk text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+
+# Configuration files
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary

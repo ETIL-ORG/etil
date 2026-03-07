@@ -1,0 +1,94 @@
+# test_string_search.til — sfind, sreplace tests
+
+include tests/til/harness.til
+
+# --- sfind tests ---
+
+: test-sfind-found
+  ." test-sfind-found: "
+  s" hello world" s" world" sfind 6 expect-eq ;
+
+: test-sfind-at-start
+  ." test-sfind-at-start: "
+  s" hello world" s" hello" sfind 0 expect-eq ;
+
+: test-sfind-not-found
+  ." test-sfind-not-found: "
+  s" hello world" s" xyz" sfind -1 expect-eq ;
+
+: test-sfind-empty-needle
+  ." test-sfind-empty-needle: "
+  s" hello" s" " sfind 0 expect-eq ;
+
+: test-sfind-single-char
+  ." test-sfind-single-char: "
+  s" abcdef" s" d" sfind 3 expect-eq ;
+
+: test-sfind-same-string
+  ." test-sfind-same-string: "
+  s" hello" s" hello" sfind 0 expect-eq ;
+
+: test-sfind-needle-longer
+  ." test-sfind-needle-longer: "
+  s" hi" s" hello" sfind -1 expect-eq ;
+
+# --- sreplace tests ---
+
+: test-sreplace-basic
+  ." test-sreplace-basic: "
+  s" hello world" s" world" s" there" sreplace
+  s" hello there" s= true expect-eq ;
+
+: test-sreplace-multiple
+  ." test-sreplace-multiple: "
+  s" aXbXc" s" X" s" -" sreplace
+  s" a-b-c" s= true expect-eq ;
+
+: test-sreplace-no-match
+  ." test-sreplace-no-match: "
+  s" hello" s" xyz" s" !" sreplace
+  s" hello" s= true expect-eq ;
+
+: test-sreplace-with-longer
+  ." test-sreplace-with-longer: "
+  s" ab" s" a" s" xyz" sreplace
+  s" xyzb" s= true expect-eq ;
+
+: test-sreplace-with-shorter
+  ." test-sreplace-with-shorter: "
+  s" hello world" s" hello" s" hi" sreplace
+  s" hi world" s= true expect-eq ;
+
+: test-sreplace-with-empty
+  ." test-sreplace-with-empty: "
+  s" hello world" s" world" s" " sreplace
+  s" hello " s= true expect-eq ;
+
+: test-sreplace-empty-old
+  ." test-sreplace-empty-old: "
+  s" hello" s" " s" x" sreplace
+  s" hello" s= true expect-eq ;
+
+: test-sreplace-all-chars
+  ." test-sreplace-all-chars: "
+  s" aaa" s" a" s" b" sreplace
+  s" bbb" s= true expect-eq ;
+
+# --- testall ---
+
+: testall
+  test-sfind-found
+  test-sfind-at-start
+  test-sfind-not-found
+  test-sfind-empty-needle
+  test-sfind-single-char
+  test-sfind-same-string
+  test-sfind-needle-longer
+  test-sreplace-basic
+  test-sreplace-multiple
+  test-sreplace-no-match
+  test-sreplace-with-longer
+  test-sreplace-with-shorter
+  test-sreplace-with-empty
+  test-sreplace-empty-old
+  test-sreplace-all-chars ;

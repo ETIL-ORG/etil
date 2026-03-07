@@ -1,0 +1,97 @@
+# test_json.til — JSON type integration tests
+include tests/til/harness.til
+
+# Helper: expect boolean true on stack
+: expect-true true expect-eq ;
+
+# --- j| literal ---
+." j| object: "
+j| {"a": 1} | s" a" json-get 1 expect-eq
+
+." j| array: "
+j| [10, 20, 30] | json-length 3 expect-eq
+
+# --- json-parse ---
+." json-parse: "
+s| {"key": "val"} | json-parse s" key" json-get s" val" s= expect-true
+
+# --- json-dump ---
+." json-dump: "
+j| {"x": 42} | json-dump s| {"x":42} | strim s= expect-true
+
+# --- json-type ---
+." json-type object: "
+j| {"a": 1} | json-type s" object" s= expect-true
+
+." json-type array: "
+j| [1, 2] | json-type s" array" s= expect-true
+
+." json-type number: "
+j| 42 | json-type s" number" s= expect-true
+
+." json-type string: "
+j| "hello" | json-type s" string" s= expect-true
+
+." json-type boolean: "
+j| true | json-type s" boolean" s= expect-true
+
+# --- json-keys ---
+." json-keys: "
+j| {"x": 1, "y": 2} | json-keys array-length swap drop 2 expect-eq
+
+# --- json->map ---
+." json->map: "
+j| {"name": "test"} | json->map s" name" map-get s" test" s= expect-true
+
+# --- json->array ---
+." json->array: "
+j| [10, 20] | json->array array-length swap drop 2 expect-eq
+
+# --- map->json ---
+." map->json: "
+map-new s" k" 99 map-set map->json s" k" json-get 99 expect-eq
+
+# --- array->json ---
+." array->json: "
+array-new 5 array-push 6 array-push array->json json-length 2 expect-eq
+
+# --- json->value scalar ---
+." json->value int: "
+j| 123 | json->value 123 expect-eq
+
+." json->value string: "
+j| "hello" | json->value s" hello" s= expect-true
+
+." json->value bool: "
+j| true | json->value true expect-eq
+
+# --- json->value object (becomes map) ---
+." json->value map: "
+j| {"a": 1} | json->value s" a" map-get 1 expect-eq
+
+# --- j| in compiled word ---
+." j| compiled: "
+: test-j-compiled j| {"n": 7} | s" n" json-get ;
+test-j-compiled 7 expect-eq
+
+# --- json-get nested ---
+." json-get nested: "
+j| {"outer": {"inner": 99}} | s" outer" json-get s" inner" json-get 99 expect-eq
+
+# --- json-get array index ---
+." json-get array[0]: "
+j| [10, 20, 30] | 0 json-get 10 expect-eq
+
+." json-get array[2]: "
+j| [10, 20, 30] | 2 json-get 30 expect-eq
+
+." json-get array->object chain: "
+j| [{"name": "first"}, {"name": "second"}] | 1 json-get s" name" json-get s" second" s= expect-true
+
+# --- round-trip: map->json->map ---
+." round-trip map: "
+map-new s" hello" s" world" map-set map->json json->map s" hello" map-get s" world" s= expect-true
+
+# --- . prints compact json ---
+." dot prints json: "
+pass

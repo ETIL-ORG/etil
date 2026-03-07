@@ -1,0 +1,80 @@
+{
+  "roles": {
+    "admin": {
+      "max_sessions": 20,
+      "instruction_budget": 50000000,
+      "allowlist_admin": true,
+      "list_sessions": true,
+      "session_kick": true,
+      "send_system_notification": true,
+      "send_user_notification": true,
+
+      "lvfs_modify": true,
+      "disk_quota": 104857600,
+
+      "net_client_allowed": true,
+      "net_client_domains": ["*"],
+      "net_client_quota": 1000,
+
+      "net_server_bind": false,
+      "net_server_tcp": false,
+      "net_server_udp": false,
+
+      "evaluate": true,
+      "evaluate_tainted": true,
+
+      "mongo_access": true,
+      "mongo_query_quota": 0
+    },
+    "researcher": {
+      "max_sessions": 5,
+      "instruction_budget": 10000000,
+      "allowlist_admin": false,
+      "list_sessions": false,
+      "session_kick": false,
+      "send_system_notification": false,
+      "send_user_notification": false,
+
+      "lvfs_modify": true,
+      "disk_quota": 10485760,
+
+      "net_client_allowed": true,
+      "net_client_domains": ["httpbin.org", "*.noaa.gov", "api.weather.gov"],
+      "net_client_quota": 100,
+
+      "net_server_bind": false,
+      "net_server_tcp": false,
+      "net_server_udp": false,
+
+      "evaluate": true,
+      "evaluate_tainted": false,
+
+      "mongo_access": true,
+      "mongo_query_quota": 1000
+    },
+    "beta-tester": {
+      "max_sessions": 2,
+      "instruction_budget": 10000000,
+      "allowlist_admin": false,
+      "list_sessions": false,
+      "session_kick": false,
+      "send_system_notification": false,
+      "send_user_notification": false,
+
+      "lvfs_modify": false,
+      "disk_quota": 1048576,
+
+      "net_client_allowed": false,
+      "net_client_domains": [],
+      "net_client_quota": 0,
+
+      "net_server_bind": false,
+      "net_server_tcp": false,
+      "net_server_udp": false,
+
+      "evaluate": true,
+      "evaluate_tainted": false
+    }
+  },
+  "default_role": "beta-tester"
+}

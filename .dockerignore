@@ -1,0 +1,41 @@
+# Build directories
+build/
+build-debug/
+cmake-build-debug/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Documentation (not needed in build)
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# Claude
+claude/
+.claude/
+
+# Misc
+_deps/
+portaenv/
+x.lst
+*.pdf
+
+# Source code (not needed — binary is pre-built in .docker-stage/)
+include/
+src/
+examples/
+tests/
+cmake/
+CMakeLists.txt
+scripts/
+tools/
+deploy/

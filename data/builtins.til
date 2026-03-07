@@ -1,0 +1,53 @@
+# builtins.til -- ETIL words implemented in ETIL
+# Loaded on startup by interpreter configuration.
+# These replace the C++ interpret handlers with self-hosting definitions.
+
+# --- Dictionary management ---
+
+: forget
+    word-read
+    if
+        dict-forget drop
+    then ;
+
+: forget-all
+    word-read
+    if
+        dict-forget-all drop
+    then ;
+
+# Note: 'include' is a primitive (not self-hosted) to avoid bootstrapping issues.
+# It must be available before builtins.til can be loaded.
+
+# --- Concept-level metadata ---
+
+: meta!      dict-meta-set ;
+: meta@      dict-meta-get ;
+: meta-del   dict-meta-del ;
+: meta-keys  dict-meta-keys ;
+
+# --- Implementation-level metadata ---
+
+: impl-meta!  impl-meta-set ;
+: impl-meta@  impl-meta-get ;
+
+# --- Arithmetic convenience words ---
+
+: 1+ 1 + ;
+: 1- 1 - ;
+
+# --- Stack convenience words ---
+
+: -rot rot rot ;
+
+# --- Defining words ---
+
+: variable create 0 , ;
+: constant create , does> @ ;
+
+# --- Time convenience words ---
+
+: time-iso time-us us->iso ;
+: time-iso-us time-us us->iso-us ;
+: time-jd time-us us->jd ;
+: time-mjd time-us us->mjd ;

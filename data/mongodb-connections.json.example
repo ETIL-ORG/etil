@@ -1,0 +1,13 @@
+{
+  "default": "atlas-prod",
+  "connections": {
+    "atlas-prod": {
+      "uri": "mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority",
+      "database": "etil"
+    },
+    "local-dev": {
+      "uri": "mongodb://localhost:27017",
+      "database": "etil_dev"
+    }
+  }
+}

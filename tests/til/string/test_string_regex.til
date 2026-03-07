@@ -1,0 +1,118 @@
+# test_string_regex.til — sregex-find, sregex-replace tests
+
+include tests/til/harness.til
+
+# --- sregex-find tests ---
+
+: test-regex-find-literal
+  ." test-regex-find-literal: "
+  s" hello world" s" world" sregex-find 6 expect-eq ;
+
+: test-regex-find-pattern
+  ." test-regex-find-pattern: "
+  s" abc123def" s" [0-9]+" sregex-find 3 expect-eq ;
+
+: test-regex-find-at-start
+  ." test-regex-find-at-start: "
+  s" 42 is the answer" s" [0-9]+" sregex-find 0 expect-eq ;
+
+: test-regex-find-no-match
+  ." test-regex-find-no-match: "
+  s" hello" s" [0-9]+" sregex-find -1 expect-eq ;
+
+: test-regex-find-dot
+  ." test-regex-find-dot: "
+  s" abc" s" .b." sregex-find 0 expect-eq ;
+
+: test-regex-find-anchor
+  ." test-regex-find-anchor: "
+  s" hello" s" ^hello$" sregex-find 0 expect-eq ;
+
+: test-regex-find-no-anchor-match
+  ." test-regex-find-no-anchor-match: "
+  s" say hello" s" ^hello$" sregex-find -1 expect-eq ;
+
+# --- sregex-replace tests ---
+
+: test-regex-replace-literal
+  ." test-regex-replace-literal: "
+  s" hello world" s" world" s" there" sregex-replace
+  s" hello there" s= true expect-eq ;
+
+: test-regex-replace-digits
+  ." test-regex-replace-digits: "
+  s" abc123def456" s" [0-9]+" s" *" sregex-replace
+  s" abc*def*" s= true expect-eq ;
+
+: test-regex-replace-no-match
+  ." test-regex-replace-no-match: "
+  s" hello" s" [0-9]+" s" *" sregex-replace
+  s" hello" s= true expect-eq ;
+
+: test-regex-replace-remove
+  ." test-regex-replace-remove: "
+  s" a1b2c3" s" [0-9]" s" " sregex-replace
+  s" abc" s= true expect-eq ;
+
+: test-regex-replace-spaces
+  ." test-regex-replace-spaces: "
+  s" hello   world" s"  +" s"  " sregex-replace
+  s" hello world" s= true expect-eq ;
+
+# --- sregex-search tests ---
+
+: test-regex-search-basic
+  ." test-regex-search-basic: "
+  s" hello 42 world" s" (\d+)" sregex-search
+  true expect-eq
+  # array on stack — check element 0 is "42"
+  0 array-get s" 42" s= true expect-eq ;
+
+: test-regex-search-no-match
+  ." test-regex-search-no-match: "
+  s" hello world" s" \d+" sregex-search
+  0 expect-eq ;
+
+: test-regex-search-groups
+  ." test-regex-search-groups: "
+  s" 2026-03-02" s" (\d{4})-(\d{2})-(\d{2})" sregex-search
+  true expect-eq
+  # array has 4 elements: full + 3 groups
+  dup array-length 4 expect-eq
+  dup 1 array-get s" 2026" s= true expect-eq
+  dup 2 array-get s" 03" s= true expect-eq
+  3 array-get s" 02" s= true expect-eq ;
+
+# --- sregex-match tests ---
+
+: test-regex-match-full
+  ." test-regex-match-full: "
+  s" 2026-03-02" s" (\d{4})-(\d{2})-(\d{2})" sregex-match
+  true expect-eq
+  0 array-get s" 2026-03-02" s= true expect-eq ;
+
+: test-regex-match-partial-fail
+  ." test-regex-match-partial-fail: "
+  s" hello 42 world" s" (\d+)" sregex-match
+  0 expect-eq ;
+
+# --- testall ---
+
+: testall
+  test-regex-find-literal
+  test-regex-find-pattern
+  test-regex-find-at-start
+  test-regex-find-no-match
+  test-regex-find-dot
+  test-regex-find-anchor
+  test-regex-find-no-anchor-match
+  test-regex-replace-literal
+  test-regex-replace-digits
+  test-regex-replace-no-match
+  test-regex-replace-remove
+  test-regex-replace-spaces
+  test-regex-search-basic
+  test-regex-search-no-match
+  test-regex-search-groups
+  test-regex-match-full
+  test-regex-match-partial-fail ;

@@ -1,0 +1,76 @@
+# test_string_split_join.til — ssplit, sjoin tests
+
+include tests/til/harness.til
+
+# --- ssplit tests ---
+
+: test-ssplit-comma
+  ." test-ssplit-comma: "
+  s" a,b,c" s" ," ssplit array-length 3 expect-eq ;
+
+: test-ssplit-space
+  ." test-ssplit-space: "
+  s" hello world foo" s"  " ssplit array-length 3 expect-eq ;
+
+: test-ssplit-no-delim
+  ." test-ssplit-no-delim: "
+  s" hello" s" ," ssplit array-length 1 expect-eq ;
+
+: test-ssplit-first-element
+  ." test-ssplit-first-element: "
+  s" apple,banana,cherry" s" ," ssplit
+  0 array-get s" apple" s= true expect-eq ;
+
+: test-ssplit-last-element
+  ." test-ssplit-last-element: "
+  s" apple,banana,cherry" s" ," ssplit
+  2 array-get s" cherry" s= true expect-eq ;
+
+: test-ssplit-middle-element
+  ." test-ssplit-middle-element: "
+  s" apple,banana,cherry" s" ," ssplit
+  1 array-get s" banana" s= true expect-eq ;
+
+# --- sjoin tests ---
+
+: test-sjoin-comma
+  ." test-sjoin-comma: "
+  s" a,b,c" s" ," ssplit s" ," sjoin
+  s" a,b,c" s= true expect-eq ;
+
+: test-sjoin-space
+  ." test-sjoin-space: "
+  s" hello,world" s" ," ssplit s"  " sjoin
+  s" hello world" s= true expect-eq ;
+
+: test-sjoin-empty-delim
+  ." test-sjoin-empty-delim: "
+  s" a,b,c" s" ," ssplit s" " sjoin
+  s" abc" s= true expect-eq ;
+
+# --- round-trip split/join tests ---
+
+: test-split-join-roundtrip
+  ." test-split-join-roundtrip: "
+  s" one::two::three" s" ::" ssplit s" ::" sjoin
+  s" one::two::three" s= true expect-eq ;
+
+: test-split-join-single
+  ." test-split-join-single: "
+  s" hello" s" ," ssplit s" ," sjoin
+  s" hello" s= true expect-eq ;
+
+# --- testall ---
+
+: testall
+  test-ssplit-comma
+  test-ssplit-space
+  test-ssplit-no-delim
+  test-ssplit-first-element
+  test-ssplit-last-element
+  test-ssplit-middle-element
+  test-sjoin-comma
+  test-sjoin-space
+  test-sjoin-empty-delim
+  test-split-join-roundtrip
+  test-split-join-single ;

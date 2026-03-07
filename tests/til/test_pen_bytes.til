@@ -1,0 +1,91 @@
+# test_pen_bytes.til — PEN tests for byte array boundary conditions
+# Tests negative indices, oversize indices, value overflow, resize edge cases
+
+include tests/til/harness.til
+
+# --- Valid boundary operations ---
+
+." bytes zero-size create: "
+0 bytes-new bytes-length 0 expect-eq drop
+
+." bytes last valid index get: "
+4 bytes-new 3 bytes-get 0 expect-eq
+
+." bytes first valid index get: "
+4 bytes-new 0 bytes-get 0 expect-eq
+
+." bytes max byte value: "
+4 bytes-new 0 255 bytes-set 0 bytes-get 255 expect-eq
+
+." bytes value overflow 256 wraps: "
+4 bytes-new 0 256 bytes-set 0 bytes-get 0 expect-eq
+
+." bytes negative value wraps: "
+4 bytes-new 0 -1 bytes-set 0 bytes-get 255 expect-eq
+
+." bytes value 257 wraps to 1: "
+4 bytes-new 0 257 bytes-set 0 bytes-get 1 expect-eq
+
+." bytes resize grow from zero: "
+0 bytes-new 10 bytes-resize bytes-length 10 expect-eq drop
+
+." bytes resize shrink to zero: "
+4 bytes-new 0 bytes-resize bytes-length 0 expect-eq drop
+
+." bytes negative resize clamps: "
+4 bytes-new -5 bytes-resize bytes-length 0 expect-eq drop
+
+." bytes grow preserves data: "
+2 bytes-new 0 42 bytes-set 1 99 bytes-set 4 bytes-resize
+0 bytes-get 42 expect-eq
+
+." bytes empty to string: "
+0 bytes-new bytes->string slength 0 expect-eq
+
+." bytes round-trip: "
+s" hello" string->bytes bytes->string s" hello" s= true expect-eq
+
+." bytes round-trip length: "
+s" hello" string->bytes bytes-length 5 expect-eq drop
+
+# --- PEN: operations that should fail gracefully ---
+# These trigger "returns false" at the interpret level.
+# The interpreter continues processing after each failure.
+# We clean up the restored stack and report survival.
+
+." bytes OOB get idx==len: "
+4 bytes-new 4 bytes-get
+# bytes-get failed, stack has [bytes, 4]
+drop drop pass
+
+." bytes OOB get oversize: "
+4 bytes-new 999999 bytes-get
+drop drop pass
+
+." bytes negative index get: "
+4 bytes-new -1 bytes-get
+drop drop pass
+
+." bytes OOB set idx==len: "
+4 bytes-new 4 42 bytes-set
+drop drop drop pass
+
+." bytes negative index set: "
+4 bytes-new -1 42 bytes-set
+drop drop drop pass
+
+." bytes get from empty: "
+0 bytes-new 0 bytes-get
+drop drop pass
+
+." bytes set on empty: "
+0 bytes-new 0 42 bytes-set
+drop drop drop pass
+
+." bytes large index get: "
+4 bytes-new 2147483647 bytes-get
+drop drop pass
+
+# --- Verify interpreter still healthy after PEN ---
+." bytes post-PEN sanity: "
+2 bytes-new 0 65 bytes-set 1 66 bytes-set bytes->string s" AB" s= true expect-eq

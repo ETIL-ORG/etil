@@ -1,0 +1,96 @@
+# test_metadata.til — Metadata word tests (stack-based)
+
+forget metadata-test-begin
+: metadata-test-begin ;
+include tests/til/harness.til
+
+: square dup * ;
+
+# meta! success returns -1
+." meta! success: "
+s" square" s" description" s" text" s" Squares a number" meta!
+true expect-eq
+
+." meta! success 2: "
+s" square" s" stack-effect" s" text" s" ( n -- n*n )" meta!
+true expect-eq
+
+." meta! success 3: "
+s" square" s" example" s" code" s" 5 square .  \ prints 25" meta!
+true expect-eq
+
+# meta@ success returns content-str then -1
+." meta@ success flag: "
+s" square" s" description" meta@
+true expect-eq
+." meta@ content: "
+s" Squares a number" s= true expect-eq
+
+." meta@ stack-effect flag: "
+s" square" s" stack-effect" meta@
+true expect-eq
+." meta@ stack-effect content: "
+s" ( n -- n*n )" s= true expect-eq
+
+# meta-keys returns array-of-strings then -1
+." meta-keys success flag: "
+s" square" meta-keys
+true expect-eq
+# 3 user keys (definition-type/source-file/source-line are now impl-level)
+." meta-keys array length: "
+array-length 3 expect-eq drop
+
+# meta-del success returns -1
+." meta-del success: "
+s" square" s" example" meta-del
+true expect-eq
+
+# meta@ on deleted key returns 0
+." meta@ after delete: "
+s" square" s" example" meta@
+0 expect-eq
+
+# 2 user keys remaining
+." meta-keys after delete: "
+s" square" meta-keys
+true expect-eq
+array-length 2 expect-eq drop
+
+# meta-del failure (already deleted) returns 0
+." meta-del already deleted: "
+s" square" s" example" meta-del
+0 expect-eq
+
+# impl-meta! and impl-meta@
+." impl-meta! success: "
+s" square" s" version" s" text" s" v1.0" impl-meta!
+true expect-eq
+
+." impl-meta@ success flag: "
+s" square" s" version" impl-meta@
+true expect-eq
+." impl-meta@ content: "
+s" v1.0" s= true expect-eq
+
+# Error: unknown word
+." meta! unknown word: "
+s" nonexistent" s" desc" s" text" s" hello" meta!
+0 expect-eq
+
+." meta@ unknown word: "
+s" nonexistent" s" desc" meta@
+0 expect-eq
+
+." impl-meta! unknown word: "
+s" nonexistent" s" desc" s" text" s" hello" impl-meta!
+0 expect-eq
+
+." impl-meta@ unknown word: "
+s" nonexistent" s" desc" impl-meta@
+0 expect-eq
+
+# Error: unknown format
+." meta! bad format: "
+s" square" s" desc" s" badformat" s" hello" meta!
+0 expect-eq
+

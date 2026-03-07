@@ -1,0 +1,190 @@
+# test_pen_complex.til — PEN tests for complex arrangements and stress
+# Arrays of strings, arrays of byte arrays, nested arrays, refcount stress
+
+include tests/til/harness.til
+
+# --- Arrays of strings ---
+
+." array of strings store and get: "
+array-new s" alpha" array-push s" beta" array-push s" gamma" array-push
+0 array-get s" alpha" s= true expect-eq
+
+." array of strings get middle: "
+array-new s" alpha" array-push s" beta" array-push s" gamma" array-push
+1 array-get s" beta" s= true expect-eq
+
+." array of strings get last: "
+array-new s" alpha" array-push s" beta" array-push s" gamma" array-push
+2 array-get s" gamma" s= true expect-eq
+
+." array of strings overwrite: "
+array-new s" old" array-push 0 s" new" array-set
+0 array-get s" new" s= true expect-eq
+
+." array of strings pop: "
+array-new s" first" array-push s" second" array-push
+array-pop s" second" s= true expect-eq drop
+
+." array of strings shift: "
+array-new s" first" array-push s" second" array-push
+array-shift s" first" s= true expect-eq drop
+
+# --- Arrays of byte arrays ---
+
+." array of byte arrays: "
+array-new
+3 bytes-new array-push
+5 bytes-new array-push
+array-length 2 expect-eq
+0 array-get bytes-length 3 expect-eq drop
+
+." array of byte arrays second: "
+array-new
+3 bytes-new array-push
+5 bytes-new array-push
+1 array-get bytes-length 5 expect-eq drop
+
+." array of byte arrays with data: "
+array-new
+2 bytes-new 0 65 bytes-set 1 66 bytes-set array-push
+0 array-get bytes->string s" AB" s= true expect-eq
+
+# --- Nested arrays (2D) ---
+
+." nested array create: "
+array-new
+  array-new 10 array-push 20 array-push array-push
+  array-new 30 array-push 40 array-push array-push
+array-length 2 expect-eq drop
+
+." nested array inner access: "
+array-new
+  array-new 10 array-push 20 array-push array-push
+  array-new 30 array-push 40 array-push array-push
+0 array-get 1 array-get 20 expect-eq
+
+." nested array second row: "
+array-new
+  array-new 10 array-push 20 array-push array-push
+  array-new 30 array-push 40 array-push array-push
+1 array-get 0 array-get 30 expect-eq
+
+# --- Mixed type arrays ---
+
+." mixed type array: "
+array-new
+  42 array-push
+  s" hello" array-push
+  3 bytes-new array-push
+array-length 3 expect-eq
+0 array-get 42 expect-eq
+
+." mixed type array string: "
+array-new
+  42 array-push
+  s" hello" array-push
+  3 bytes-new array-push
+1 array-get s" hello" s= true expect-eq
+
+." mixed type array bytes: "
+array-new
+  42 array-push
+  s" hello" array-push
+  3 bytes-new array-push
+2 array-get bytes-length 3 expect-eq drop
+
+# --- String/bytes conversion round-trips ---
+
+." string to bytes and back: "
+s" ETIL" string->bytes bytes->string s" ETIL" s= true expect-eq
+
+." bytes to string exact size: "
+2 bytes-new 0 72 bytes-set 1 105 bytes-set bytes->string s" Hi" s= true expect-eq
+
+# --- ssplit into array then access ---
+
+." ssplit produces usable array: "
+s" one,two,three" s" ," ssplit
+0 array-get s" one" s= true expect-eq
+
+." ssplit last element: "
+s" one,two,three" s" ," ssplit
+2 array-get s" three" s= true expect-eq
+
+." ssplit and sjoin round-trip: "
+s" a:b:c" s" :" ssplit s" :" sjoin s" a:b:c" s= true expect-eq
+
+# --- Compact preserves all elements ---
+
+." compact preserves strings: "
+array-new s" x" array-push s" y" array-push array-compact
+0 array-get s" x" s= true expect-eq
+
+." compact preserves ints: "
+array-new 1 array-push 2 array-push 3 array-push array-compact
+array-length 3 expect-eq
+2 array-get 3 expect-eq
+
+# --- Stress: build and discard heap objects (control flow is compile-only) ---
+
+: stress-heap-alloc
+  0 100 0 do
+    array-new s" test" array-push drop
+    1 +
+  loop ;
+." stress heap alloc in loop: "
+stress-heap-alloc 100 expect-eq
+
+: stress-string-concat
+  s" " 50 0 do s" x" s+ loop ;
+." stress string concat in loop: "
+stress-string-concat slength 50 expect-eq
+
+: stress-byte-alloc
+  0 100 0 do
+    64 bytes-new drop
+    1 +
+  loop ;
+." stress byte array create-discard: "
+stress-byte-alloc 100 expect-eq
+
+# --- Stress: deep control flow nesting ---
+
+: test-nested-if
+  true true true true true true true true true true
+  if if if if if if if if if if
+    42
+  then then then then then then then then then then ;
+." nested if 10 levels: "
+test-nested-if 42 expect-eq
+
+: test-same-limit-do
+  0 5 5 do 1 + loop ;
+." do loop same-limit runs once: "
+test-same-limit-do 1 expect-eq
+
+: test-large-loop
+  0 1000 0 do 1 + loop ;
+." large do loop: "
+test-large-loop 1000 expect-eq
+
+: test-nested-do
+  0
+  3 0 do
+    4 0 do
+      1 +
+    loop
+  loop ;
+." nested do loops: "
+test-nested-do 12 expect-eq
+
+: test-begin-until
+  42 begin true until ;
+." begin-until immediate exit: "
+test-begin-until 42 expect-eq
+
+# --- Verify interpreter still healthy ---
+." complex post-PEN sanity: "
+array-new 1 array-push 2 array-push 3 array-push
+array-length 3 expect-eq
+1 array-get 2 expect-eq

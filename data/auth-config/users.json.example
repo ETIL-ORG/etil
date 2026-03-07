@@ -1,0 +1,6 @@
+{
+  "user_roles": {
+    "github:12345": "admin",
+    "github:67890": "researcher"
+  }
+}

@@ -1,0 +1,91 @@
+# test_string_substr_trim.til — substr and strim tests
+
+include tests/til/harness.til
+
+# --- substr tests ---
+
+: test-substr-basic
+  ." test-substr-basic: "
+  s" hello world" 0 5 substr s" hello" s= true expect-eq ;
+
+: test-substr-middle
+  ." test-substr-middle: "
+  s" hello world" 6 5 substr s" world" s= true expect-eq ;
+
+: test-substr-single-char
+  ." test-substr-single-char: "
+  s" abcdef" 2 1 substr s" c" s= true expect-eq ;
+
+: test-substr-full-string
+  ." test-substr-full-string: "
+  s" hello" 0 5 substr s" hello" s= true expect-eq ;
+
+: test-substr-zero-len
+  ." test-substr-zero-len: "
+  s" hello" 2 0 substr slength 0 expect-eq ;
+
+: test-substr-past-end-clamped
+  ." test-substr-past-end-clamped: "
+  s" hello" 3 100 substr s" lo" s= true expect-eq ;
+
+: test-substr-start-at-end
+  ." test-substr-start-at-end: "
+  s" hello" 5 3 substr slength 0 expect-eq ;
+
+: test-substr-from-empty
+  ." test-substr-from-empty: "
+  s" " 0 0 substr slength 0 expect-eq ;
+
+# --- strim tests ---
+
+: test-strim-leading-spaces
+  ." test-strim-leading-spaces: "
+  s"    hello" strim s" hello" s= true expect-eq ;
+
+: test-strim-trailing-spaces
+  ." test-strim-trailing-spaces: "
+  s" hello   " strim s" hello" s= true expect-eq ;
+
+: test-strim-both-sides
+  ." test-strim-both-sides: "
+  s"   hello   " strim s" hello" s= true expect-eq ;
+
+: test-strim-no-whitespace
+  ." test-strim-no-whitespace: "
+  s" hello" strim s" hello" s= true expect-eq ;
+
+: test-strim-all-whitespace
+  ." test-strim-all-whitespace: "
+  s"      " strim slength 0 expect-eq ;
+
+: test-strim-tabs-and-newlines
+  ." test-strim-tabs-and-newlines: "
+  s" hello" strim s" hello" s= true expect-eq ;
+
+: test-strim-inner-spaces-kept
+  ." test-strim-inner-spaces-kept: "
+  s"  hello world  " strim s" hello world" s= true expect-eq ;
+
+: test-strim-empty
+  ." test-strim-empty: "
+  s" " strim slength 0 expect-eq ;
+
+# --- testall ---
+
+: testall
+  test-substr-basic
+  test-substr-middle
+  test-substr-single-char
+  test-substr-full-string
+  test-substr-zero-len
+  test-substr-past-end-clamped
+  test-substr-start-at-end
+  test-substr-from-empty
+  test-strim-leading-spaces
+  test-strim-trailing-spaces
+  test-strim-both-sides
+  test-strim-no-whitespace
+  test-strim-all-whitespace
+  test-strim-tabs-and-newlines
+  test-strim-inner-spaces-kept
+  test-strim-empty ;

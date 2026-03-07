@@ -1,0 +1,35 @@
+include tests/til/harness.til
+
+# Test dump with integer
+." dump-int: "
+42 dump
+drop
+pass
+
+# Test dump with string
+." dump-string: "
+s" hello world" dump
+drop
+pass
+
+# Test dump with array
+." dump-array: "
+array-new 42 array-push dump
+drop
+pass
+
+# Test see with a primitive
+." see-dup: "
+see dup
+pass
+
+# Test see with a compiled word
+: test-double dup + ;
+." see-compiled: "
+see test-double
+pass
+
+# Test see with a handler word
+." see-handler: "
+see if
+pass

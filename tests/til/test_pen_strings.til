@@ -1,0 +1,116 @@
+# test_pen_strings.til — PEN tests for string boundary conditions
+# Tests negative/oversize substr params, empty string ops, split/join edge cases
+
+include tests/til/harness.til
+
+# --- substr boundary conditions ---
+
+." substr negative start clamps: "
+s" hello" -1 3 substr s" hel" s= true expect-eq
+
+." substr negative len clamps: "
+s" hello" 0 -1 substr s" " s= true expect-eq
+
+." substr start beyond end: "
+s" hello" 100 3 substr s" " s= true expect-eq
+
+." substr len beyond end: "
+s" hello" 0 100 substr s" hello" s= true expect-eq
+
+." substr both negative start oversize len: "
+s" hello" -1 100 substr s" hello" s= true expect-eq
+
+." substr empty string: "
+s" " 0 0 substr s" " s= true expect-eq
+
+." substr zero len middle: "
+s" hello" 2 0 substr s" " s= true expect-eq
+
+." substr exact bounds: "
+s" hello" 0 5 substr s" hello" s= true expect-eq
+
+." substr last char: "
+s" hello" 4 1 substr s" o" s= true expect-eq
+
+# --- strim edge cases ---
+
+." strim empty string: "
+s" " strim s" " s= true expect-eq
+
+." strim all whitespace: "
+s"    " strim s" " s= true expect-eq
+
+." strim no whitespace: "
+s" hello" strim s" hello" s= true expect-eq
+
+# --- sfind edge cases ---
+
+." sfind in empty string: "
+s" " s" x" sfind -1 expect-eq
+
+." sfind empty needle: "
+s" hello" s" " sfind 0 expect-eq
+
+." sfind not found: "
+s" hello" s" xyz" sfind -1 expect-eq
+
+# --- sreplace edge cases ---
+
+." sreplace in empty string: "
+s" " s" x" s" y" sreplace s" " s= true expect-eq
+
+." sreplace empty old: "
+s" hello" s" " s" x" sreplace s" hello" s= true expect-eq
+
+." sreplace no match: "
+s" hello" s" xyz" s" !" sreplace s" hello" s= true expect-eq
+
+# --- ssplit/sjoin edge cases ---
+
+." ssplit empty string: "
+s" " s" ," ssplit array-length 1 expect-eq drop
+
+." sjoin empty array: "
+array-new s" ," sjoin s" " s= true expect-eq
+
+." ssplit single char delim: "
+s" a,b,c" s" ," ssplit array-length 3 expect-eq drop
+
+." ssplit no delimiter found: "
+s" hello" s" ," ssplit array-length 1 expect-eq drop
+
+." ssplit empty delimiter: "
+s" abc" s" " ssplit array-length 3 expect-eq drop
+
+# --- slength edge cases ---
+
+." slength empty: "
+s" " slength 0 expect-eq
+
+." slength single char: "
+s" x" slength 1 expect-eq
+
+# --- s+ edge cases ---
+
+." s+ two empty strings: "
+s" " s" " s+ s" " s= true expect-eq
+
+." s+ int coercion: "
+42 s" hello" s+ s" 42hello" s= true expect-eq
+
+# --- s= / s<> edge cases ---
+
+." s= empty strings: "
+s" " s" " s= true expect-eq
+
+." s<> empty strings: "
+s" " s" " s<> 0 expect-eq
+
+# --- ssplit then sjoin round-trip ---
+
+." split-join round-trip: "
+s" one,two,three" s" ," ssplit s" ," sjoin s" one,two,three" s= true expect-eq
+
+# --- Verify interpreter still healthy ---
+." string post-PEN sanity: "
+s" abc" s" def" s+ s" abcdef" s= true expect-eq

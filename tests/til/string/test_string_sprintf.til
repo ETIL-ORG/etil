@@ -1,0 +1,46 @@
+# test_string_sprintf.til — sprintf integration tests
+
+include tests/til/harness.til
+
+: test-sprintf-int
+  ." test-sprintf-int: "
+  42 s" %d" sprintf s" 42" s= true expect-eq ;
+
+: test-sprintf-float
+  ." test-sprintf-float: "
+  3.14 s" %.2f" sprintf s" 3.14" s= true expect-eq ;
+
+: test-sprintf-multi
+  ." test-sprintf-multi: "
+  42 3.14 s" %d items at $%.2f" sprintf
+  s" 42 items at $3.14" s= true expect-eq ;
+
+: test-sprintf-string
+  ." test-sprintf-string: "
+  s" hello" s" [%s]" sprintf s" [hello]" s= true expect-eq ;
+
+: test-sprintf-percent
+  ." test-sprintf-percent: "
+  s" 100%%" sprintf s" 100%" s= true expect-eq ;
+
+: test-sprintf-hex
+  ." test-sprintf-hex: "
+  255 s" %x" sprintf s" ff" s= true expect-eq ;
+
+: test-sprintf-no-args
+  ." test-sprintf-no-args: "
+  s" hello world" sprintf s" hello world" s= true expect-eq ;
+
+: test-sprintf-padded
+  ." test-sprintf-padded: "
+  42 s" %08d" sprintf s" 00000042" s= true expect-eq ;
+
+: testall
+  test-sprintf-int
+  test-sprintf-float
+  test-sprintf-multi
+  test-sprintf-string
+  test-sprintf-percent
+  test-sprintf-hex
+  test-sprintf-no-args
+  test-sprintf-padded ;

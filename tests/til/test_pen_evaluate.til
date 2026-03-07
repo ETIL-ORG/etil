@@ -1,0 +1,80 @@
+# test_pen_evaluate.til — PEN tests for evaluate word security
+# Tests recursive bombs, input stream preservation, nested evaluate,
+# unterminated definitions, and evaluate inside compiled words.
+
+include tests/til/harness.til
+
+# --- Basic evaluate ---
+
+." evaluate basic value: "
+s" 42" evaluate 42 expect-eq
+
+." evaluate expression: "
+s" 10 20 +" evaluate 30 expect-eq
+
+." evaluate empty string: "
+s" " evaluate depth 0 expect-eq
+
+# --- Colon definition via evaluate ---
+
+." evaluate colon definition: "
+s" : ev-test-word 99 ;" evaluate
+ev-test-word 99 expect-eq
+
+# --- Evaluate in compiled word ---
+
+." evaluate in compiled word: "
+: test-eval-compiled s" 77" evaluate ;
+test-eval-compiled 77 expect-eq
+
+# --- Nested evaluate ---
+
+." nested evaluate (2 levels): "
+s| s" 55" evaluate| evaluate 55 expect-eq
+
+# --- Input stream preservation ---
+# After evaluate returns, s" on the same line should work
+
+." input stream after evaluate: "
+: test-input-stream s" 42" evaluate s" hello" slength ;
+test-input-stream 5 expect-eq
+drop
+
+# --- Unterminated definition recovery ---
+# evaluate should detect unterminated : and reset compiling_ state
+
+." unterminated definition recovery: "
+s" : incomplete-word 42" evaluate
+# After recovery, interpreter should be back in interpret mode
+100 100 expect-eq
+
+# --- Recursive bomb (call depth limit) ---
+# This defines a word that calls evaluate on itself.
+# Must hit call depth limit without crashing or hanging.
+# We set up a small call depth limit via the MCP-style limits.
+# In REPL/TIL mode, limits are unlimited by default, so the recursion
+# will hit the C++ stack limit eventually. We just verify it doesn't hang.
+# The test passes if we get here — the bomb either errors out or exhausts budget.
+
+." recursive evaluate bomb survival: "
+s" : evbomb s\" evbomb\" evaluate ; evbomb" evaluate
+# If we get here, the bomb terminated (error or limit hit)
+pass
+
+." evaluate with multiple values: "
+s" 1 2 3" evaluate
+3 expect-eq
+2 expect-eq
+1 expect-eq
+
+." evaluate defines and uses word: "
+s" : ev-sq dup * ; 7 ev-sq" evaluate
+49 expect-eq
+
+# --- evaluate does not corrupt outer definition ---
+
+." evaluate during colon def (runtime): "
+: outer-eval s" 10 20 +" evaluate ;
+outer-eval 30 expect-eq
+
+# --- All PEN evaluate tests complete ---

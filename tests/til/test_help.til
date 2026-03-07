@@ -1,0 +1,21 @@
+include tests/til/harness.til
+
+# Test help for a primitive (metadata from help.til)
+." help-dup: "
+help dup
+pass
+
+# Test help for a handler word (inline table)
+." help-if: "
+help if
+pass
+
+# Test help for a self-hosted word
+." help-forget: "
+help forget
+pass
+
+# Test help for an unknown word
+." help-unknown: "
+help xyzzy_nonexistent
+pass

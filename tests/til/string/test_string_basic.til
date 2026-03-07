@@ -1,0 +1,100 @@
+# test_string_basic.til — Basic string operations: s", slength, s+, s=, s<>
+
+include tests/til/harness.til
+
+# --- slength tests ---
+
+: test-slength-hello
+  ." test-slength-hello: "
+  s" hello" slength 5 expect-eq ;
+
+: test-slength-empty
+  ." test-slength-empty: "
+  s" " slength 0 expect-eq ;
+
+: test-slength-single-char
+  ." test-slength-single-char: "
+  s" x" slength 1 expect-eq ;
+
+: test-slength-with-spaces
+  ." test-slength-with-spaces: "
+  s" hello world" slength 11 expect-eq ;
+
+# --- s+ concatenation tests ---
+
+: test-s+-basic
+  ." test-s+-basic: "
+  s" hello" s" world" s+ s" helloworld" s= true expect-eq ;
+
+: test-s+-with-space
+  ." test-s+-with-space: "
+  s" hello " s" world" s+ s" hello world" s= true expect-eq ;
+
+: test-s+-empty-left
+  ." test-s+-empty-left: "
+  s" " s" world" s+ s" world" s= true expect-eq ;
+
+: test-s+-empty-right
+  ." test-s+-empty-right: "
+  s" hello" s" " s+ s" hello" s= true expect-eq ;
+
+: test-s+-both-empty
+  ." test-s+-both-empty: "
+  s" " s" " s+ slength 0 expect-eq ;
+
+: test-s+-chained
+  ." test-s+-chained: "
+  s" a" s" b" s+ s" c" s+ s" abc" s= true expect-eq ;
+
+# --- s= equality tests ---
+
+: test-s=-same
+  ." test-s=-same: "
+  s" hello" s" hello" s= true expect-eq ;
+
+: test-s=-different
+  ." test-s=-different: "
+  s" hello" s" world" s= 0 expect-eq ;
+
+: test-s=-case-sensitive
+  ." test-s=-case-sensitive: "
+  s" Hello" s" hello" s= 0 expect-eq ;
+
+: test-s=-empty-both
+  ." test-s=-empty-both: "
+  s" " s" " s= true expect-eq ;
+
+: test-s=-empty-vs-nonempty
+  ." test-s=-empty-vs-nonempty: "
+  s" " s" a" s= 0 expect-eq ;
+
+# --- s<> inequality tests ---
+
+: test-s<>-same
+  ." test-s<>-same: "
+  s" hello" s" hello" s<> 0 expect-eq ;
+
+: test-s<>-different
+  ." test-s<>-different: "
+  s" hello" s" world" s<> true expect-eq ;
+
+# --- testall ---
+
+: testall
+  test-slength-hello
+  test-slength-empty
+  test-slength-single-char
+  test-slength-with-spaces
+  test-s+-basic
+  test-s+-with-space
+  test-s+-empty-left
+  test-s+-empty-right
+  test-s+-both-empty
+  test-s+-chained
+  test-s=-same
+  test-s=-different
+  test-s=-case-sensitive
+  test-s=-empty-both
+  test-s=-empty-vs-nonempty
+  test-s<>-same
+  test-s<>-different ;

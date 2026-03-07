@@ -1,0 +1,39 @@
+# test_taint.til — Taint bit integration tests
+# NOTE: File I/O taint tests are in unit tests (REPL has no LVFS).
+include tests/til/harness.til
+
+# --- String literals are not tainted ---
+." test-literal-clean: "
+s" hello" staint 0 expect-eq
+
+# --- s+ of two clean strings is clean ---
+." test-splus-clean: "
+s" a" s" b" s+ staint 0 expect-eq
+
+# --- substr of clean is clean ---
+." test-substr-clean: "
+s" hello" 0 3 substr staint 0 expect-eq
+
+# --- strim of clean is clean ---
+." test-strim-clean: "
+s" hello " strim staint 0 expect-eq
+
+# --- sreplace of clean is clean ---
+." test-sreplace-clean: "
+s" hello world" s" world" s" ETIL" sreplace staint 0 expect-eq
+
+# --- sregex-replace result is always clean ---
+." test-sregex-clean: "
+s" abc123" s" [0-9]" s" X" sregex-replace staint 0 expect-eq
+
+# --- number coercion via s+ is clean ---
+." test-splus-number-clean: "
+42 s" items" s+ staint 0 expect-eq
+
+# --- ssplit of clean produces clean elements ---
+." test-ssplit-clean: "
+s" a,b,c" s" ," ssplit 0 array-get staint 0 expect-eq
+
+# --- sjoin of clean elements is clean ---
+." test-sjoin-clean: "
+s" a,b" s" ," ssplit s" -" sjoin staint 0 expect-eq
