@@ -93,22 +93,40 @@ McpServer::McpServer() {
 #endif
 
 #ifdef ETIL_MONGODB_ENABLED
-    // Initialize MongoDB client from connections config file + env overrides
+    // Initialize MongoDB clients from connections config file + env overrides.
+    // Two separate clients: one for user data (TIL primitives), one for AAA
+    // (audit_log + users collections in a separate database, inaccessible to
+    // TIL code).
     {
         auto mongo_cfg = etil::db::MongoConnectionsConfig::resolve();
         if (mongo_cfg.enabled()) {
+            // User-data client (wired to TIL mongo-* primitives)
             mongo_client_ = std::make_unique<etil::db::MongoClient>();
             if (!mongo_client_->connect(mongo_cfg.uri, mongo_cfg.database)) {
                 fprintf(stderr, "Warning: MongoDB connection failed\n");
                 mongo_client_.reset();
-            } else {
-                // Build AAA layer on top of the connected client
+            }
+
+            // AAA client (separate database for audit_log + users)
+            std::string aaa_db = "etil_aaa";
+            if (const char* v = std::getenv("ETIL_MONGODB_AAA_DATABASE")) {
+                if (v[0] != '\0') aaa_db = v;
+            }
+            aaa_client_ = std::make_unique<etil::db::MongoClient>();
+            if (!aaa_client_->connect(mongo_cfg.uri, aaa_db)) {
+                fprintf(stderr, "Warning: MongoDB AAA connection failed\n");
+                aaa_client_.reset();
+            }
+
+            // Build AAA layer on the AAA client (not the user-data client)
+            if (aaa_client_) {
                 user_store_ = std::make_unique<etil::aaa::UserStore>(
-                    *mongo_client_);
+                    *aaa_client_);
                 audit_log_ = std::make_unique<etil::aaa::AuditLog>(
-                    *mongo_client_);
+                    *aaa_client_);
                 user_store_->ensure_indexes();
                 audit_log_->ensure_indexes();
+                fprintf(stderr, "AAA database: %s\n", aaa_db.c_str());
             }
         }
     }

@@ -286,9 +286,11 @@ private:
 #endif
 
 #ifdef ETIL_MONGODB_ENABLED
-    // Server-wide MongoDB client (shared across all sessions)
+    // Server-wide MongoDB client for user data (shared across all sessions)
     std::unique_ptr<class etil::db::MongoClient> mongo_client_;
-    // AAA layer on top of MongoClient
+    // Separate MongoDB client for AAA (different database, inaccessible to TIL primitives)
+    std::unique_ptr<class etil::db::MongoClient> aaa_client_;
+    // AAA layer uses aaa_client_ (not mongo_client_)
     std::unique_ptr<etil::aaa::UserStore> user_store_;
     std::unique_ptr<etil::aaa::AuditLog> audit_log_;
 #endif
