@@ -38,16 +38,17 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # Find dependencies
 include(Dependencies)
 
-# Generate version header at build time (stamps build timestamp)
-add_custom_target(generate_version
-    COMMAND ${CMAKE_COMMAND}
-        -DINPUT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/include/etil/core/version.hpp.in
-        -DOUTPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/include/etil/core/version.hpp
-        -DETIL_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
-        -DETIL_VERSION_MINOR=${PROJECT_VERSION_MINOR}
-        -DETIL_VERSION_PATCH=${PROJECT_VERSION_PATCH}
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake
-    COMMENT "Generating version header"
+# Generate version header at configure time.
+# ninja auto-reconfigures when CMakeLists.txt changes, so a version bump
+# regenerates version.hpp and recompiles all dependents automatically.
+# (The old add_custom_target approach ran every build but didn't declare
+# outputs, so ninja couldn't track file-level dependencies — version
+# changes silently left stale object files.)
+string(TIMESTAMP ETIL_BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S UTC" UTC)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/etil/core/version.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/include/etil/core/version.hpp
+    @ONLY
 )
 
 # Core library

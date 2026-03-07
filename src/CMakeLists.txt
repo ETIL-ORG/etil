@@ -56,8 +56,6 @@ target_include_directories(etil
         $<INSTALL_INTERFACE:include>
 )
 
-add_dependencies(etil generate_version)
-
 target_link_libraries(etil
     PUBLIC
         Threads::Threads
@@ -146,8 +144,6 @@ target_include_directories(etil_mcp
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../include>
         $<INSTALL_INTERFACE:include>
 )
-
-add_dependencies(etil_mcp generate_version)
 
 target_link_libraries(etil_mcp
     PUBLIC

@@ -2,7 +2,7 @@
 
 namespace etil::core {
 
-constexpr const char* ETIL_VERSION = "@ETIL_VERSION_MAJOR@.@ETIL_VERSION_MINOR@.@ETIL_VERSION_PATCH@";
+constexpr const char* ETIL_VERSION = "@PROJECT_VERSION@";
 constexpr const char* ETIL_BUILD_TIMESTAMP = "@ETIL_BUILD_TIMESTAMP@";
 
 } // namespace etil::core

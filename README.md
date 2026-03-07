@@ -597,8 +597,7 @@ ctest --test-dir build-debug --output-on-failure
 evolutionary-til/
 ├── CMakeLists.txt              # Root build configuration
 ├── cmake/
-│   ├── Dependencies.cmake      # External dependency management
-│   └── GenerateVersion.cmake   # Build-time version header generation
+│   └── Dependencies.cmake      # External dependency management
 ├── include/etil/
 │   ├── core/
 │   │   ├── word_impl.hpp       # Word implementation with profiling
