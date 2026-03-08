@@ -14,7 +14,7 @@
 
 using namespace etil::core;
 
-class HttpGetTest : public ::testing::Test {
+class HttpPrimitivesTest : public ::testing::Test {
 protected:
     Dictionary dict;
     std::ostringstream out, err;
@@ -35,13 +35,13 @@ protected:
 
 // --- Stack argument validation ---
 
-TEST_F(HttpGetTest, UnderflowEmpty) {
+TEST_F(HttpPrimitivesTest, UnderflowEmpty) {
     // Empty stack -> underflow
     interp->interpret_line("http-get");
     EXPECT_EQ(ctx().data_stack().size(), 0u);
 }
 
-TEST_F(HttpGetTest, UnderflowOnlyUrl) {
+TEST_F(HttpPrimitivesTest, UnderflowOnlyUrl) {
     // Only URL, no headers map -> underflow (pops "url" as if it were the map)
     // With just one item on stack, the second pop (url) will fail
     interp->interpret_line("s\" http://example.com\" http-get");
@@ -49,7 +49,7 @@ TEST_F(HttpGetTest, UnderflowOnlyUrl) {
     // Stack should be empty (both pops consumed or failed)
 }
 
-TEST_F(HttpGetTest, WrongTypeForHeaders) {
+TEST_F(HttpPrimitivesTest, WrongTypeForHeaders) {
     // Push URL + integer (not a map) -> type error
     // prim pops the integer, sees wrong type, returns false.
     // The URL string remains on stack (prim failed before popping it).
@@ -62,7 +62,7 @@ TEST_F(HttpGetTest, WrongTypeForHeaders) {
     value_release(*val);
 }
 
-TEST_F(HttpGetTest, EmptyMapNoHttpState) {
+TEST_F(HttpPrimitivesTest, EmptyMapNoHttpState) {
     // URL + empty map -> should fail with "HTTP client not configured"
     // (no http_client_state on the context)
     interp->interpret_line("s\" http://example.com\" map-new http-get");
@@ -76,7 +76,7 @@ TEST_F(HttpGetTest, EmptyMapNoHttpState) {
     EXPECT_FALSE(val->as_bool());
 }
 
-TEST_F(HttpGetTest, MapWithHeadersNoHttpState) {
+TEST_F(HttpPrimitivesTest, MapWithHeadersNoHttpState) {
     // URL + map with headers -> still fails (no http state) but exercises
     // the header map pop path and verifies the map is consumed
     interp->interpret_line(
@@ -93,7 +93,7 @@ TEST_F(HttpGetTest, MapWithHeadersNoHttpState) {
     EXPECT_FALSE(val->as_bool());
 }
 
-TEST_F(HttpGetTest, MapWithMultipleHeadersNoHttpState) {
+TEST_F(HttpPrimitivesTest, MapWithMultipleHeadersNoHttpState) {
     // Multiple header entries in the map
     interp->interpret_line(
         "s\" http://example.com\" "
@@ -109,9 +109,69 @@ TEST_F(HttpGetTest, MapWithMultipleHeadersNoHttpState) {
     EXPECT_FALSE(val->as_bool());
 }
 
-TEST_F(HttpGetTest, StringInsteadOfMap) {
+TEST_F(HttpPrimitivesTest, StringInsteadOfMap) {
     // Push string where map expected
     interp->interpret_line("s\" http://example.com\" s\" not-a-map\" http-get");
     EXPECT_TRUE(err.str().find("expected Map") != std::string::npos)
+        << "err: " << err.str();
+}
+
+// --- http-post tests ---
+
+TEST_F(HttpPrimitivesTest, PostUnderflowEmpty) {
+    interp->interpret_line("http-post");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+TEST_F(HttpPrimitivesTest, PostWrongTypeForBody) {
+    // Push URL + map + integer (not ByteArray) -> type error
+    interp->interpret_line("s\" http://example.com\" map-new 42 http-post");
+    EXPECT_TRUE(err.str().find("expected ByteArray") != std::string::npos)
+        << "err: " << err.str();
+}
+
+TEST_F(HttpPrimitivesTest, PostWrongTypeForHeaders) {
+    // Push URL + string (not map) + bytes -> headers type error
+    interp->interpret_line(
+        "s\" http://example.com\" s\" not-a-map\" "
+        "s\" body\" string->bytes http-post");
+    EXPECT_TRUE(err.str().find("expected Map") != std::string::npos)
+        << "err: " << err.str();
+}
+
+TEST_F(HttpPrimitivesTest, PostEmptyBodyNoHttpState) {
+    // URL + empty map + empty bytes -> should fail with "not configured"
+    interp->interpret_line(
+        "s\" http://example.com\" map-new 0 bytes-new http-post");
+    EXPECT_TRUE(err.str().find("not configured") != std::string::npos
+                || err.str().find("not permitted") != std::string::npos)
+        << "err: " << err.str();
+    ASSERT_EQ(ctx().data_stack().size(), 1u);
+    auto val = ctx().data_stack().pop();
+    EXPECT_EQ(val->type, Value::Type::Boolean);
+    EXPECT_FALSE(val->as_bool());
+}
+
+TEST_F(HttpPrimitivesTest, PostWithBodyNoHttpState) {
+    // URL + headers + body -> fails (no http state) but exercises all pop paths
+    interp->interpret_line(
+        "s\" http://example.com\" "
+        "map-new s\" Content-Type\" s\" application/json\" map-set "
+        "s\" {\\\"key\\\":1}\" string->bytes "
+        "http-post");
+    EXPECT_TRUE(err.str().find("not configured") != std::string::npos
+                || err.str().find("not permitted") != std::string::npos)
+        << "err: " << err.str();
+    ASSERT_EQ(ctx().data_stack().size(), 1u);
+    auto val = ctx().data_stack().pop();
+    EXPECT_EQ(val->type, Value::Type::Boolean);
+    EXPECT_FALSE(val->as_bool());
+}
+
+TEST_F(HttpPrimitivesTest, PostStringInsteadOfBytes) {
+    // Push string where ByteArray expected for body
+    interp->interpret_line(
+        "s\" http://example.com\" map-new s\" not-bytes\" http-post");
+    EXPECT_TRUE(err.str().find("expected ByteArray") != std::string::npos)
         << "err: " << err.str();
 }

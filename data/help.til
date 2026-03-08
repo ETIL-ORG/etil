@@ -1311,6 +1311,11 @@ s" http-get" s" stack-effect" s" text" s" ( url headers-map -- bytes status-code
 s" http-get" s" category" s" text" s" http" meta! drop
 s" http-get" s" examples" s" code" s| s" https://httpbin.org/get" map-new http-get -rot 2drop . cr| meta! drop
 
+s" http-post" s" description" s" text" s" Perform an HTTP/HTTPS POST request. The headers parameter is a HeapMap of string key-value pairs. Content-Type is extracted from headers (default: application/octet-stream). The body parameter is a HeapByteArray (use string->bytes to convert a string). Returns response body as opaque bytes (HeapByteArray), HTTP status code, and success flag. On failure pushes only flag=false. Same domain allowlist, fetch budgets, and SSRF protection as http-get" meta! drop
+s" http-post" s" stack-effect" s" text" s" ( url headers-map body-bytes -- bytes status-code flag )" meta! drop
+s" http-post" s" category" s" text" s" http" meta! drop
+s" http-post" s" examples" s" code" s| s" https://httpbin.org/post" map-new s" hello" string->bytes http-post -rot 2drop . cr| meta! drop
+
 # --- MongoDB ---
 
 s" mongo-find" s" description" s" text" s" Query a MongoDB collection. Filter and options accept String, Json, or Map. Options supports: skip, limit, sort, projection, hint, collation, max_time_ms, batch_size. Returns matching documents as a Json value and a success flag. Requires mongo_access permission. Results are tainted (external data)" meta! drop

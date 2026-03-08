@@ -36,6 +36,8 @@ struct HttpWorkData {
     int timeout_ms = 10'000;
     size_t max_response_bytes = 1 * 1024 * 1024;
     httplib::Headers headers;      // extra HTTP headers from HeapMap
+    std::string request_body;      // POST body (empty for GET)
+    std::string content_type;      // POST Content-Type (empty for GET)
 
     // --- Output (set by worker, read by caller) ---
     std::vector<uint8_t> body;
@@ -75,6 +77,43 @@ void http_get_work(uv_work_t* req) {
 
         if (result) {
             d->status_code = result->status;
+        } else {
+            d->error = httplib::to_string(result.error());
+        }
+    } catch (const std::exception& e) {
+        d->error = e.what();
+    }
+}
+
+/// Runs on libuv thread pool.  Performs the blocking HTTP POST request.
+void http_post_work(uv_work_t* req) {
+    auto* wr = static_cast<etil::fileio::WorkRequest*>(req->data);
+    auto* d = static_cast<HttpWorkData*>(wr->user_data);
+
+    try {
+        httplib::Client cli(d->scheme_host_port);
+
+        auto timeout_sec = d->timeout_ms / 1000;
+        auto timeout_usec = (d->timeout_ms % 1000) * 1000;
+        cli.set_connection_timeout(timeout_sec, timeout_usec);
+        cli.set_read_timeout(timeout_sec, timeout_usec);
+        cli.set_write_timeout(timeout_sec, timeout_usec);
+        cli.set_follow_location(false);  // No auto-redirect (SSRF safety)
+
+        auto result = cli.Post(
+            d->path,
+            d->headers,
+            d->request_body,
+            d->content_type);
+
+        if (result) {
+            d->status_code = result->status;
+            if (result->body.size() > d->max_response_bytes) {
+                d->error = "response too large";
+            } else {
+                auto& rb = result->body;
+                d->body.assign(rb.begin(), rb.end());
+            }
         } else {
             d->error = httplib::to_string(result.error());
         }
@@ -230,6 +269,183 @@ static bool prim_http_get(etil::core::ExecutionContext& ctx) {
     return true;
 }
 
+// http-post ( url headers-map body-bytes -- bytes status-code flag )
+//
+// Perform an HTTP/HTTPS POST request.  Returns:
+//   - Response body as HeapByteArray (opaque bytes, NOT a string)
+//   - HTTP status code (integer)
+//   - Success flag (true = success, false = failure)
+// On failure, pushes only flag=false.
+// headers-map is a HeapMap of string key→string value pairs.
+// body-bytes is a HeapByteArray with the request body.
+// Content-Type is extracted from headers-map (default: application/octet-stream).
+static bool prim_http_post(etil::core::ExecutionContext& ctx) {
+    using namespace etil::core;
+
+    // Pop body bytes (TOS)
+    auto body_opt = ctx.data_stack().pop();
+    if (!body_opt) return false;
+    if (body_opt->type != Value::Type::ByteArray || !body_opt->as_ptr) {
+        ctx.err() << "Error: http-post: expected ByteArray for body\n";
+        value_release(*body_opt);
+        return false;
+    }
+    auto* body_ba = body_opt->as_byte_array();
+
+    // Pop headers map (TOS-1)
+    auto hdr_opt = ctx.data_stack().pop();
+    if (!hdr_opt) { body_ba->release(); return false; }
+    if (hdr_opt->type != Value::Type::Map || !hdr_opt->as_ptr) {
+        ctx.err() << "Error: http-post: expected Map for headers\n";
+        value_release(*hdr_opt);
+        body_ba->release();
+        return false;
+    }
+    auto* hdr_map = hdr_opt->as_map();
+
+    // Pop URL string (TOS-2)
+    auto* hs = pop_string(ctx);
+    if (!hs) { hdr_map->release(); body_ba->release(); return false; }
+    std::string url(hs->view());
+    hs->release();
+
+    // Helper: release resources and push failure flag
+    auto fail = [&](const char* msg) {
+        ctx.err() << msg;
+        hdr_map->release();
+        body_ba->release();
+        ctx.data_stack().push(Value(false));
+    };
+
+    // Check net_client_allowed permission
+    auto* perms = ctx.permissions();
+    if (perms && !perms->net_client_allowed) {
+        fail("Error: http-post: not permitted\n");
+        return true;
+    }
+
+    // Check HTTP client state
+    auto* http_state = ctx.http_client_state();
+    if (!http_state || !http_state->config || !http_state->config->enabled()) {
+        fail("Error: http-post: HTTP client not configured "
+             "(set ETIL_HTTP_ALLOWLIST env var)\n");
+        return true;
+    }
+
+    // Check per-interpret and lifetime budgets
+    if (!http_state->can_fetch()) {
+        ctx.err() << "Error: http-post: fetch budget exceeded ("
+                  << http_state->per_interpret_fetches << "/"
+                  << http_state->config->per_interpret_budget
+                  << " per-interpret, "
+                  << http_state->lifetime_fetches << "/"
+                  << http_state->config->per_session_budget
+                  << " lifetime)\n";
+        hdr_map->release();
+        body_ba->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Validate URL (parse, scheme check, allowlist, DNS + SSRF blocklist)
+    ParsedUrl parsed;
+    std::string error;
+    if (!validate_url(url, *http_state->config, parsed, error)) {
+        ctx.err() << "Error: http-post: " << error << "\n";
+        hdr_map->release();
+        body_ba->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Need UvSession for async execution
+    auto* uv = ctx.uv_session();
+    if (!uv) {
+        fail("Error: http-post: no UvSession (async I/O not available)\n");
+        return true;
+    }
+
+    // Build scheme_host_port for cpp-httplib Client constructor
+    std::string scheme_host_port = parsed.scheme + "://" + parsed.host;
+    if (parsed.port != 0) {
+        scheme_host_port += ":" + std::to_string(parsed.port);
+    }
+
+    // Set up work data
+    HttpWorkData work_data;
+    work_data.scheme_host_port = std::move(scheme_host_port);
+    work_data.path = parsed.path;
+    work_data.timeout_ms = http_state->config->request_timeout_ms;
+    work_data.max_response_bytes = http_state->config->max_response_bytes;
+
+    // Copy body bytes into request_body string
+    work_data.request_body.assign(
+        reinterpret_cast<const char*>(body_ba->data()), body_ba->length());
+    body_ba->release();
+
+    // Convert HeapMap entries to httplib::Headers, extract Content-Type
+    work_data.content_type = "application/octet-stream";  // default
+    for (const auto& [key, val] : hdr_map->entries()) {
+        if (val.type == Value::Type::String && val.as_ptr) {
+            auto sv = val.as_string()->view();
+            // Case-insensitive check for Content-Type
+            if (key.size() == 12) {
+                std::string lower_key = key;
+                for (auto& c : lower_key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                if (lower_key == "content-type") {
+                    work_data.content_type = std::string(sv);
+                    continue;  // cpp-httplib Post() takes content_type separately
+                }
+            }
+            work_data.headers.emplace(key, std::string(sv));
+        }
+    }
+    hdr_map->release();
+
+    // Submit to libuv thread pool
+    etil::fileio::WorkRequest work_req;
+    work_req.user_data = &work_data;
+
+    int r = uv_queue_work(uv->loop(), &work_req.req,
+                          http_post_work,
+                          etil::fileio::WorkRequest::on_after_work);
+    if (r != 0) {
+        ctx.err() << "Error: http-post: failed to queue work: "
+                  << uv_strerror(r) << "\n";
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Await completion with tick()-based cancellation
+    bool completed = uv->await_work(ctx, work_req, &work_data.cancelled);
+
+    // Record the fetch regardless of outcome
+    http_state->record_fetch();
+
+    if (!completed) {
+        // Execution limit hit (timeout/budget/cancellation)
+        return false;
+    }
+
+    // Check for HTTP client error
+    if (!work_data.error.empty()) {
+        ctx.err() << "Error: http-post: " << work_data.error << "\n";
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Push result: bytes status-code flag
+    auto* ba = new HeapByteArray(work_data.body.size());
+    if (!work_data.body.empty()) {
+        std::memcpy(ba->data(), work_data.body.data(), work_data.body.size());
+    }
+    ba->set_tainted(true);  // Network data is untrusted
+    ctx.data_stack().push(Value::from(ba));
+    ctx.data_stack().push(Value(static_cast<int64_t>(work_data.status_code)));
+    ctx.data_stack().push(Value(true));
+    return true;
+}
+
 void register_http_primitives(etil::core::Dictionary& dict) {
     using namespace etil::core;
     using TS = TypeSignature;
@@ -243,6 +459,11 @@ void register_http_primitives(etil::core::Dictionary& dict) {
     dict.register_word("http-get",
         make_word("prim_http_get", prim_http_get,
             {T::String, T::Unknown}, {T::Unknown, T::Integer, T::Integer}));
+
+    dict.register_word("http-post",
+        make_word("prim_http_post", prim_http_post,
+            {T::String, T::Unknown, T::Unknown},
+            {T::Unknown, T::Integer, T::Integer}));
 }
 
 } // namespace etil::net
