@@ -2,7 +2,7 @@
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libstdc++6 libssl3t64 zlib1g ca-certificates libopenblas0 \
+    libstdc++6 libssl3t64 zlib1g ca-certificates libopenblas0 liblapacke \
     && rm -rf /var/lib/apt/lists/*
 
 COPY .docker-stage/bin/etil_mcp_server /usr/local/bin/
