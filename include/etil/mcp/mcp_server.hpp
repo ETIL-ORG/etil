@@ -29,6 +29,8 @@ class AuditLog;
 
 namespace etil::mcp {
 
+struct AuthConfig;
+
 /// Maximum output size for MCP tool responses (10 MB).
 constexpr size_t MCP_MAX_OUTPUT_SIZE = 10'485'760;
 
@@ -250,6 +252,18 @@ private:
     nlohmann::json tool_manage_allowlist(const nlohmann::json& params);
 #endif
 
+#ifdef ETIL_JWT_ENABLED
+    // Admin tools (role/user management)
+    nlohmann::json tool_admin_list_roles(const nlohmann::json& params);
+    nlohmann::json tool_admin_get_role(const nlohmann::json& params);
+    nlohmann::json tool_admin_set_role(const nlohmann::json& params);
+    nlohmann::json tool_admin_delete_role(const nlohmann::json& params);
+    nlohmann::json tool_admin_list_users(const nlohmann::json& params);
+    nlohmann::json tool_admin_set_user_role(const nlohmann::json& params);
+    nlohmann::json tool_admin_delete_user(const nlohmann::json& params);
+    nlohmann::json tool_admin_reload_config(const nlohmann::json& params);
+#endif
+
     // Resource implementations
     nlohmann::json resource_dictionary(const std::string& uri);
     nlohmann::json resource_word(const std::string& uri);
@@ -277,8 +291,10 @@ private:
     std::string library_dir_;        // ETIL_LIBRARY_DIR
 
 #ifdef ETIL_JWT_ENABLED
-    // Auth configuration (loaded from ETIL_AUTH_CONFIG env var path)
-    std::unique_ptr<struct AuthConfig> auth_config_;
+    // Auth configuration (loaded from ETIL_AUTH_CONFIG env var path).
+    // shared_ptr<const> for thread-safe reload via atomic store/load.
+    std::shared_ptr<const AuthConfig> auth_config_;
+    std::string auth_config_dir_;  // directory path for persisting changes
     std::unique_ptr<class JwtAuth> jwt_auth_;
     // OAuth providers (keyed by provider name, e.g. "github", "google")
     std::unordered_map<std::string, std::unique_ptr<class OAuthProvider>>

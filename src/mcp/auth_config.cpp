@@ -89,6 +89,7 @@ void parse_roles(AuthConfig& config, const nlohmann::json& j) {
                       perms.send_system_notification);
             read_bool(role_json, "send_user_notification",
                       perms.send_user_notification);
+            read_bool(role_json, "role_admin", perms.role_admin);
 
             // --- LVFS ---
             // Backward compat: file_io → lvfs_modify
@@ -253,6 +254,120 @@ AuthConfig::permissions_for(const std::string& user_id) const {
         return &it->second;
     }
     return nullptr;
+}
+
+RolePermissions
+AuthConfig::parse_role_permissions(const nlohmann::json& j) {
+    RolePermissions perms;
+    // Reuse the same field readers as parse_roles(), but on a single role object.
+    read_int(j, "max_sessions", perms.max_sessions);
+    read_int(j, "instruction_budget", perms.instruction_budget);
+    read_bool(j, "allowlist_admin", perms.allowlist_admin);
+    read_bool(j, "list_sessions", perms.list_sessions);
+    read_bool(j, "session_kick", perms.session_kick);
+    read_bool(j, "send_system_notification", perms.send_system_notification);
+    read_bool(j, "send_user_notification", perms.send_user_notification);
+    read_bool(j, "role_admin", perms.role_admin);
+    // LVFS
+    bool has_file_io = j.contains("file_io") && j["file_io"].is_boolean();
+    if (has_file_io) perms.lvfs_modify = j["file_io"].get<bool>();
+    read_bool(j, "lvfs_modify", perms.lvfs_modify);
+    read_int64(j, "disk_quota", perms.disk_quota);
+    // Network Client
+    read_string_array(j, "http_domains", perms.net_client_domains);
+    if (j.contains("net_client_domains") && j["net_client_domains"].is_array()) {
+        perms.net_client_domains.clear();
+        read_string_array(j, "net_client_domains", perms.net_client_domains);
+    }
+    read_bool(j, "net_client_allowed", perms.net_client_allowed);
+    if (!perms.net_client_domains.empty() && !j.contains("net_client_allowed")) {
+        perms.net_client_allowed = true;
+    }
+    read_int(j, "net_client_quota", perms.net_client_quota);
+    // Network Server
+    read_bool(j, "net_server_bind", perms.net_server_bind);
+    read_bool(j, "net_server_tcp", perms.net_server_tcp);
+    read_bool(j, "net_server_udp", perms.net_server_udp);
+    // Code Execution
+    read_bool(j, "evaluate", perms.evaluate);
+    read_bool(j, "evaluate_tainted", perms.evaluate_tainted);
+    // Database
+    read_bool(j, "mongo_access", perms.mongo_access);
+    read_int(j, "mongo_query_quota", perms.mongo_query_quota);
+    return perms;
+}
+
+namespace {
+
+nlohmann::json role_to_json(const RolePermissions& p) {
+    nlohmann::json j;
+    // System
+    j["max_sessions"] = p.max_sessions;
+    j["instruction_budget"] = p.instruction_budget;
+    j["allowlist_admin"] = p.allowlist_admin;
+    j["list_sessions"] = p.list_sessions;
+    j["session_kick"] = p.session_kick;
+    j["send_system_notification"] = p.send_system_notification;
+    j["send_user_notification"] = p.send_user_notification;
+    j["role_admin"] = p.role_admin;
+    // LVFS
+    j["lvfs_modify"] = p.lvfs_modify;
+    j["disk_quota"] = p.disk_quota;
+    // Network Client
+    j["net_client_allowed"] = p.net_client_allowed;
+    j["net_client_domains"] = p.net_client_domains;
+    j["net_client_quota"] = p.net_client_quota;
+    // Network Server
+    j["net_server_bind"] = p.net_server_bind;
+    j["net_server_tcp"] = p.net_server_tcp;
+    j["net_server_udp"] = p.net_server_udp;
+    // Code Execution
+    j["evaluate"] = p.evaluate;
+    j["evaluate_tainted"] = p.evaluate_tainted;
+    // Database
+    j["mongo_access"] = p.mongo_access;
+    j["mongo_query_quota"] = p.mongo_query_quota;
+    return j;
+}
+
+} // anonymous namespace
+
+nlohmann::json AuthConfig::roles_to_json() const {
+    nlohmann::json j;
+    nlohmann::json roles_obj;
+    for (const auto& [name, perms] : roles) {
+        roles_obj[name] = role_to_json(perms);
+    }
+    j["roles"] = roles_obj;
+    j["default_role"] = default_role;
+    return j;
+}
+
+nlohmann::json AuthConfig::users_to_json() const {
+    nlohmann::json j;
+    nlohmann::json user_roles_obj;
+    for (const auto& [user_id, role] : user_roles) {
+        user_roles_obj[user_id] = role;
+    }
+    j["user_roles"] = user_roles_obj;
+    return j;
+}
+
+void AuthConfig::write_json_atomic(const std::string& path,
+                                   const nlohmann::json& j) {
+    std::string tmp_path = path + ".tmp";
+    {
+        std::ofstream ofs(tmp_path);
+        if (!ofs.is_open()) {
+            throw std::runtime_error("Cannot open for writing: " + tmp_path);
+        }
+        ofs << j.dump(2) << "\n";
+        ofs.flush();
+        if (ofs.fail()) {
+            throw std::runtime_error("Write failed: " + tmp_path);
+        }
+    }
+    std::filesystem::rename(tmp_path, path);
 }
 
 } // namespace etil::mcp

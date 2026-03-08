@@ -8,6 +8,7 @@
       "session_kick": true,
       "send_system_notification": true,
       "send_user_notification": true,
+      "role_admin": true,
 
       "lvfs_modify": true,
       "disk_quota": 104857600,

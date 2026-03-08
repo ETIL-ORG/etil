@@ -181,8 +181,12 @@ libuv backend without the event loop overhead.
 Model Context Protocol server for programmatic AI interaction — run ETIL from Claude Code,
 custom agents, or any MCP client.
 
-- **10 tools** — `interpret`, `list_words`, `get_word_info`, `get_stack`, `set_weight`,
-  `reset`, `get_session_stats`, `write_file`, `list_files`, `read_file`
+- **21 tools** — `interpret`, `list_words`, `get_word_info`, `get_stack`, `set_weight`,
+  `reset`, `get_session_stats`, `write_file`, `list_files`, `read_file`,
+  `list_sessions`, `kick_session`, `manage_allowlist`, plus 8 admin tools for
+  role/user management (`admin_list_roles`, `admin_get_role`, `admin_set_role`,
+  `admin_delete_role`, `admin_list_users`, `admin_set_user_role`,
+  `admin_delete_user`, `admin_reload_config`)
 - **4 resources** — `etil://dictionary`, `etil://word/{name}`, `etil://stack`,
   `etil://session/stats`
 - **HTTP Streamable Transport** — real-time SSE streaming for notifications during
@@ -202,6 +206,8 @@ OAuth login, script execution (`--exec`/`--execux`), and session logging.
 - **OAuth Device Flow** — GitHub + Google via RFC 8628. Three endpoints: `/auth/device`,
   `/auth/poll`, `/auth/token`. Stateless — provider tokens used once then discarded
 - **API key fallback** — backward-compatible Bearer token auth for simple deployments
+- **Admin tools** — 8 MCP tools for role/user management gated by `role_admin` permission;
+  create/update/delete roles and user mappings with atomic file persistence and live reload
 - **Audit logging** — permission-denied events, session lifecycle, logins, user creation
   (backed by MongoDB)
 

@@ -27,6 +27,7 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -278,7 +279,131 @@ void McpServer::register_all_tools() {
         }
     );
 
-    // 13. manage_allowlist
+    // 13. manage_allowlist (gated below)
+
+    // 14–21. Admin tools (role/user management)
+#ifdef ETIL_JWT_ENABLED
+    register_tool(
+        "admin_list_roles",
+        "List all defined roles and the default role",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_list_roles(params);
+        }
+    );
+
+    register_tool(
+        "admin_get_role",
+        "Get full permissions for a role",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"role", {{"type", "string"},
+                    {"description", "Role name to inspect"}}}
+            }},
+            {"required", nlohmann::json::array({"role"})}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_get_role(params);
+        }
+    );
+
+    register_tool(
+        "admin_set_role",
+        "Create or update a role with the given permissions",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"role", {{"type", "string"},
+                    {"description", "Role name to create or update"}}},
+                {"permissions", {{"type", "object"},
+                    {"description", "Permissions object (same keys as roles.json)"}}}
+            }},
+            {"required", nlohmann::json::array({"role", "permissions"})}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_set_role(params);
+        }
+    );
+
+    register_tool(
+        "admin_delete_role",
+        "Delete a role (fails if users are still assigned to it)",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"role", {{"type", "string"},
+                    {"description", "Role name to delete"}}}
+            }},
+            {"required", nlohmann::json::array({"role"})}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_delete_role(params);
+        }
+    );
+
+    register_tool(
+        "admin_list_users",
+        "List all user-to-role mappings",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_list_users(params);
+        }
+    );
+
+    register_tool(
+        "admin_set_user_role",
+        "Assign a role to a user",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"user_id", {{"type", "string"},
+                    {"description", "User ID (e.g. github:12345)"}}},
+                {"role", {{"type", "string"},
+                    {"description", "Role to assign"}}}
+            }},
+            {"required", nlohmann::json::array({"user_id", "role"})}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_set_user_role(params);
+        }
+    );
+
+    register_tool(
+        "admin_delete_user",
+        "Remove a user-to-role mapping (user will fall back to default role)",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"user_id", {{"type", "string"},
+                    {"description", "User ID to remove"}}}
+            }},
+            {"required", nlohmann::json::array({"user_id"})}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_delete_user(params);
+        }
+    );
+
+    register_tool(
+        "admin_reload_config",
+        "Reload auth configuration from disk (roles.json, users.json)",
+        {
+            {"type", "object"},
+            {"properties", nlohmann::json::object()}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_reload_config(params);
+        }
+    );
+#endif
+
 #if defined(ETIL_HTTP_CLIENT_ENABLED) && defined(ETIL_JWT_ENABLED)
     register_tool(
         "manage_allowlist",
@@ -1300,5 +1425,476 @@ nlohmann::json McpServer::tool_manage_allowlist(const nlohmann::json& params) {
     return {{"content", content_array}};
 }
 #endif
+
+// ---------------------------------------------------------------------------
+// Admin tools — role/user management (gated by ETIL_JWT_ENABLED)
+// ---------------------------------------------------------------------------
+
+#ifdef ETIL_JWT_ENABLED
+
+namespace {
+
+/// Check role_admin permission.  Returns an error JSON if denied, nullopt if OK.
+std::optional<nlohmann::json> check_role_admin(
+    const Session& session,
+    const std::shared_ptr<const AuthConfig>& auth_config,
+    const char* tool_name
+#ifdef ETIL_MONGODB_ENABLED
+    , etil::aaa::AuditLog* audit_log
+#endif
+) {
+    if (!session.role.empty() && auth_config) {
+        auto* perms = auth_config->permissions_for(session.user_id);
+        if (perms && !perms->role_admin) {
+#ifdef ETIL_MONGODB_ENABLED
+            if (audit_log)
+                audit_log->log_permission_denied(session.email, tool_name,
+                                                 session.role);
+#endif
+            nlohmann::json content_array = nlohmann::json::array();
+            content_array.push_back({
+                {"type", "text"},
+                {"text", std::string("Error: ") + tool_name +
+                         " not permitted for role '" + session.role + "'"}
+            });
+            return nlohmann::json{{"content", content_array}, {"isError", true}};
+        }
+    }
+    return std::nullopt;
+}
+
+} // anonymous namespace
+
+nlohmann::json McpServer::tool_admin_list_roles(
+    const nlohmann::json& /*params*/) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_list_roles"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    nlohmann::json roles_array = nlohmann::json::array();
+    for (const auto& [name, _] : auth_config_->roles) {
+        roles_array.push_back(name);
+    }
+    std::sort(roles_array.begin(), roles_array.end());
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"roles", roles_array},
+            {"default_role", auth_config_->default_role},
+            {"count", roles_array.size()}
+        }).dump(2)}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_get_role(const nlohmann::json& params) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_get_role"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::string role_name = params.at("role").get<std::string>();
+    auto it = auth_config_->roles.find(role_name);
+    if (it == auth_config_->roles.end()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: role not found: " + role_name}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    // Build a temporary single-role config to reuse roles_to_json() format
+    nlohmann::json role_json;
+    AuthConfig tmp;
+    tmp.roles[role_name] = it->second;
+    auto j = tmp.roles_to_json();
+    role_json = j["roles"][role_name];
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"role", role_name},
+            {"permissions", role_json},
+            {"is_default", role_name == auth_config_->default_role}
+        }).dump(2)}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_set_role(const nlohmann::json& params) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_set_role"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_ || auth_config_dir_.empty()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded or directory not set"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::string role_name = params.at("role").get<std::string>();
+    auto perms_json = params.at("permissions");
+    auto new_perms = AuthConfig::parse_role_permissions(perms_json);
+
+    // Copy-on-write: copy current config, mutate, replace atomically
+    auto new_config = std::make_shared<AuthConfig>(*auth_config_);
+    bool is_new = new_config->roles.find(role_name) == new_config->roles.end();
+    new_config->roles[role_name] = new_perms;
+
+    // Persist to disk
+    try {
+        AuthConfig::write_json_atomic(
+            auth_config_dir_ + "/roles.json",
+            new_config->roles_to_json());
+    } catch (const std::exception& e) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", std::string("Error: failed to persist roles.json: ") +
+                     e.what()}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    // Atomically swap the config
+    std::atomic_store(&auth_config_, std::shared_ptr<const AuthConfig>(new_config));
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"action", is_new ? "created" : "updated"},
+            {"role", role_name}
+        }).dump()}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_delete_role(const nlohmann::json& params) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_delete_role"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_ || auth_config_dir_.empty()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded or directory not set"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::string role_name = params.at("role").get<std::string>();
+
+    // Cannot delete the default role
+    if (role_name == auth_config_->default_role) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: cannot delete the default role '" + role_name + "'"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    // Check no users are assigned to this role
+    for (const auto& [user_id, role] : auth_config_->user_roles) {
+        if (role == role_name) {
+            nlohmann::json content_array = nlohmann::json::array();
+            content_array.push_back({
+                {"type", "text"},
+                {"text", "Error: cannot delete role '" + role_name +
+                         "' — user '" + user_id + "' is still assigned to it"}
+            });
+            return {{"content", content_array}, {"isError", true}};
+        }
+    }
+
+    auto new_config = std::make_shared<AuthConfig>(*auth_config_);
+    auto it = new_config->roles.find(role_name);
+    if (it == new_config->roles.end()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: role not found: " + role_name}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+    new_config->roles.erase(it);
+
+    try {
+        AuthConfig::write_json_atomic(
+            auth_config_dir_ + "/roles.json",
+            new_config->roles_to_json());
+    } catch (const std::exception& e) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", std::string("Error: failed to persist roles.json: ") +
+                     e.what()}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::atomic_store(&auth_config_, std::shared_ptr<const AuthConfig>(new_config));
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"action", "deleted"},
+            {"role", role_name}
+        }).dump()}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_list_users(
+    const nlohmann::json& /*params*/) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_list_users"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    nlohmann::json users_array = nlohmann::json::array();
+    for (const auto& [user_id, role] : auth_config_->user_roles) {
+        users_array.push_back({{"user_id", user_id}, {"role", role}});
+    }
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"users", users_array},
+            {"default_role", auth_config_->default_role},
+            {"count", users_array.size()}
+        }).dump(2)}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_set_user_role(
+    const nlohmann::json& params) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_set_user_role"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_ || auth_config_dir_.empty()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded or directory not set"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::string user_id = params.at("user_id").get<std::string>();
+    std::string role = params.at("role").get<std::string>();
+
+    // Validate role exists
+    if (auth_config_->roles.find(role) == auth_config_->roles.end()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: role not found: " + role +
+                     " (create it first with admin_set_role)"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    auto new_config = std::make_shared<AuthConfig>(*auth_config_);
+    new_config->user_roles[user_id] = role;
+
+    try {
+        AuthConfig::write_json_atomic(
+            auth_config_dir_ + "/users.json",
+            new_config->users_to_json());
+    } catch (const std::exception& e) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", std::string("Error: failed to persist users.json: ") +
+                     e.what()}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::atomic_store(&auth_config_, std::shared_ptr<const AuthConfig>(new_config));
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"user_id", user_id},
+            {"role", role}
+        }).dump()}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_delete_user(
+    const nlohmann::json& params) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_delete_user"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_ || auth_config_dir_.empty()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded or directory not set"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::string user_id = params.at("user_id").get<std::string>();
+
+    auto new_config = std::make_shared<AuthConfig>(*auth_config_);
+    auto it = new_config->user_roles.find(user_id);
+    if (it == new_config->user_roles.end()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: user not found: " + user_id}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+    std::string old_role = it->second;
+    new_config->user_roles.erase(it);
+
+    try {
+        AuthConfig::write_json_atomic(
+            auth_config_dir_ + "/users.json",
+            new_config->users_to_json());
+    } catch (const std::exception& e) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", std::string("Error: failed to persist users.json: ") +
+                     e.what()}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::atomic_store(&auth_config_, std::shared_ptr<const AuthConfig>(new_config));
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"action", "deleted"},
+            {"user_id", user_id},
+            {"previous_role", old_role},
+            {"now_defaults_to", new_config->default_role}
+        }).dump()}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_reload_config(
+    const nlohmann::json& /*params*/) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_reload_config"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (auth_config_dir_.empty()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth config directory configured"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    try {
+        auto new_config = std::make_shared<const AuthConfig>(
+            AuthConfig::from_directory(auth_config_dir_));
+        std::atomic_store(&auth_config_, new_config);
+    } catch (const std::exception& e) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", std::string("Error: failed to reload config: ") + e.what()}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"action", "reloaded"},
+            {"directory", auth_config_dir_},
+            {"roles_count", auth_config_->roles.size()},
+            {"users_count", auth_config_->user_roles.size()}
+        }).dump()}
+    });
+    return {{"content", content_array}};
+}
+
+#endif // ETIL_JWT_ENABLED
 
 } // namespace etil::mcp

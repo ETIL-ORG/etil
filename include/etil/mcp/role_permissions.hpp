@@ -23,6 +23,7 @@ struct RolePermissions {
     bool session_kick = false;
     bool send_system_notification = false;
     bool send_user_notification = false;
+    bool role_admin = false;
 
     // --- LVFS (Little Virtual File System) ---
     // lvfs_read is always true (design invariant, not stored)

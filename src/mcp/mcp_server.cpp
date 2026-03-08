@@ -50,7 +50,8 @@ McpServer::McpServer() {
     const char* auth_config_env = std::getenv("ETIL_AUTH_CONFIG");
     if (auth_config_env && auth_config_env[0] != '\0') {
         try {
-            auth_config_ = std::make_unique<AuthConfig>(
+            auth_config_dir_ = auth_config_env;
+            auth_config_ = std::make_shared<const AuthConfig>(
                 AuthConfig::from_directory(auth_config_env));
             if (!auth_config_->jwt_private_key.empty() &&
                 !auth_config_->jwt_public_key.empty()) {

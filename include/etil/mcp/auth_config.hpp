@@ -8,6 +8,7 @@
 
 #include "etil/mcp/role_permissions.hpp"
 
+#include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -60,6 +61,19 @@ struct AuthConfig {
     /// Get the permissions for a user ID.
     /// Returns nullptr if the resolved role has no permissions entry.
     const RolePermissions* permissions_for(const std::string& user_id) const;
+
+    /// Parse a RolePermissions from a JSON object (for admin tools).
+    static RolePermissions parse_role_permissions(const nlohmann::json& j);
+
+    /// Serialize the roles map to JSON (for writing roles.json).
+    nlohmann::json roles_to_json() const;
+
+    /// Serialize the user_roles map to JSON (for writing users.json).
+    nlohmann::json users_to_json() const;
+
+    /// Atomically write a JSON object to a file (write tmp + rename).
+    static void write_json_atomic(const std::string& path,
+                                  const nlohmann::json& j);
 };
 
 } // namespace etil::mcp
