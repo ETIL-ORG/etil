@@ -1,0 +1,44 @@
+# test_matrix.til — TIL integration tests for matrix primitives
+include tests/til/harness.til
+
+# --- Constructors ---
+
+." mat-new: " 3 4 mat-new dup mat-rows 3 expect-eq
+." mat-new cols: " mat-cols 4 expect-eq
+
+." mat-eye: " 3 mat-eye dup 0 0 mat-get 1.0 = if pass else fail then
+." mat-eye off-diag: " 0 1 mat-get 0.0 = if pass else fail then
+
+# --- Accessors ---
+
+." mat-set/get: " 2 2 mat-new 0 1 3.14 mat-set 0 1 mat-get 3.14 = if pass else fail then
+
+." mat-row: " array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array 0 mat-row array-length 2 expect-eq
+
+." mat-col: " array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array 1 mat-col array-length 2 expect-eq
+
+# --- Arithmetic ---
+
+." mat-eye mul: " 2 mat-eye 2 mat-eye mat* 0 0 mat-get 1.0 = if pass else fail then
+
+." mat+: " array-new 1.0 array-push 2.0 array-push 2 1 mat-from-array array-new 10.0 array-push 20.0 array-push 2 1 mat-from-array mat+ 0 0 mat-get 11.0 = if pass else fail then
+
+." mat-scale: " array-new 2.0 array-push 4.0 array-push 2 1 mat-from-array 3.0 mat-scale 1 0 mat-get 12.0 = if pass else fail then
+
+." mat-transpose: " array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array mat-transpose dup mat-rows 3 expect-eq
+
+# --- Solvers ---
+
+." mat-solve: " array-new 1.0 array-push 0.0 array-push 0.0 array-push 1.0 array-push 2 2 mat-from-array array-new 5.0 array-push 3.0 array-push 2 1 mat-from-array mat-solve 0 expect-eq 0 0 mat-get 5.0 = if pass else fail then
+
+." mat-inv identity: " 2 mat-eye mat-inv 0 expect-eq 0 0 mat-get 1.0 = if pass else fail then
+
+." mat-det identity: " 2 mat-eye mat-det 0 expect-eq 1.0 = if pass else fail then
+
+# --- Utilities ---
+
+." mat-norm: " array-new 3.0 array-push 4.0 array-push 1 2 mat-from-array mat-norm 5.0 = if pass else fail then
+
+." mat-trace: " array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-trace 5.0 = if pass else fail then
+
+." mat.: " 2 2 mat-new mat.

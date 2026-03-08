@@ -244,6 +244,26 @@ else()
     FetchContent_MakeAvailable(libuv)
 endif()
 
+# OpenBLAS/LAPACK for linear algebra (mat-* primitives)
+if(ETIL_BUILD_LINALG)
+    find_package(BLAS QUIET)
+    find_package(LAPACK QUIET)
+    if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
+        FetchContent_Declare(
+            OpenBLAS
+            GIT_REPOSITORY https://github.com/OpenMathLib/OpenBLAS.git
+            GIT_TAG v0.3.28
+        )
+        set(NOFORTRAN ON CACHE BOOL "")
+        set(BUILD_TESTING OFF CACHE BOOL "")
+        FetchContent_MakeAvailable(OpenBLAS)
+        set(BLAS_LIBRARIES openblas)
+        set(LAPACK_LIBRARIES openblas)
+    else()
+        message(STATUS "Using pre-built BLAS/LAPACK")
+    endif()
+endif()
+
 # Optional: jemalloc for better memory performance
 if(ETIL_USE_JEMALLOC)
     find_package(PkgConfig REQUIRED)

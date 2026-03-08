@@ -3,6 +3,7 @@
 
 #include "etil/core/interpreter.hpp"
 #include "etil/core/heap_map.hpp"
+#include "etil/core/heap_matrix.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/primitives.hpp"
@@ -289,6 +290,12 @@ std::string Interpreter::format_value(const Value& v) {
             return "{map:" + std::to_string(m->size()) + "}";
         }
         return "{map:0}";
+    } else if (v.type == Value::Type::Matrix) {
+        if (v.as_ptr) {
+            auto* mat = v.as_matrix();
+            return "{matrix:" + std::to_string(mat->rows()) + "x" + std::to_string(mat->cols()) + "}";
+        }
+        return "{matrix:0x0}";
     } else if (v.type == Value::Type::Json) {
         return "<json>";
     } else if (v.type == Value::Type::Xt) {

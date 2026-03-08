@@ -32,6 +32,7 @@ namespace etil::core
     class HeapByteArray;
     class HeapMap;
     class HeapJson;
+    class HeapMatrix;
 
     // Value type on stack (union/variant)
     struct Value
@@ -47,6 +48,7 @@ namespace etil::core
             ByteArray,
             Map,
             Json,
+            Matrix,
             Xt
         };
 
@@ -83,6 +85,7 @@ namespace etil::core
         HeapByteArray* as_byte_array() const { return static_cast<HeapByteArray*>(as_ptr); }
         HeapMap* as_map() const { return static_cast<HeapMap*>(as_ptr); }
         HeapJson* as_json() const { return static_cast<HeapJson*>(as_ptr); }
+        HeapMatrix* as_matrix() const { return static_cast<HeapMatrix*>(as_ptr); }
         WordImpl* as_xt_impl() const { return static_cast<WordImpl*>(as_ptr); }
 
         // DataRef member accessors

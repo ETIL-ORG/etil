@@ -983,7 +983,11 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 208u);  // +12 json primitives
+#ifdef ETIL_LINALG_ENABLED
+    EXPECT_EQ(dict.concept_count(), 233u);  // +25 matrix primitives
+#else
+    EXPECT_EQ(dict.concept_count(), 208u);
+#endif
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

@@ -24,7 +24,9 @@ jobs:
             build-essential cmake ninja-build \
             llvm-18-dev libllvm18 \
             libtbb-dev \
-            libssl-dev
+            libssl-dev \
+            libopenblas-dev \
+            liblapacke-dev
 
       - name: Configure
         run: |
@@ -33,7 +35,8 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DETIL_BUILD_JWT=ON \
             -DETIL_BUILD_HTTP_CLIENT=ON \
-            -DETIL_BUILD_MONGODB=OFF
+            -DETIL_BUILD_MONGODB=OFF \
+            -DETIL_BUILD_LINALG=ON
 
       - name: Build
         run: ninja -C build

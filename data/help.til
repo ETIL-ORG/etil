@@ -1404,3 +1404,110 @@ s" truncate-sync" s" description" s" text" s" Truncate a file to zero length. Fi
 s" truncate-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
 s" truncate-sync" s" category" s" text" s" file-io-sync" meta! drop
 s" truncate-sync" s" examples" s" code" s| s" /home/log.txt" truncate-sync drop| meta! drop
+
+# --- Matrix (Linear Algebra) ---
+# These words are only available when built with ETIL_BUILD_LINALG=ON
+
+s" mat-new" s" description" s" text" s" Create a zero-filled matrix" meta! drop
+s" mat-new" s" stack-effect" s" text" s" ( rows cols -- mat )" meta! drop
+s" mat-new" s" category" s" text" s" matrix" meta! drop
+s" mat-new" s" examples" s" code" s" 3 4 mat-new" meta! drop
+
+s" mat-eye" s" description" s" text" s" Create an n x n identity matrix" meta! drop
+s" mat-eye" s" stack-effect" s" text" s" ( n -- mat )" meta! drop
+s" mat-eye" s" category" s" text" s" matrix" meta! drop
+s" mat-eye" s" examples" s" code" s" 3 mat-eye mat." meta! drop
+
+s" mat-from-array" s" description" s" text" s" Create matrix from flat array (row-major order)" meta! drop
+s" mat-from-array" s" stack-effect" s" text" s" ( array rows cols -- mat )" meta! drop
+s" mat-from-array" s" category" s" text" s" matrix" meta! drop
+
+s" mat-diag" s" description" s" text" s" Create diagonal matrix from array of values" meta! drop
+s" mat-diag" s" stack-effect" s" text" s" ( array -- mat )" meta! drop
+s" mat-diag" s" category" s" text" s" matrix" meta! drop
+
+s" mat-rand" s" description" s" text" s" Create matrix with random values in [0,1)" meta! drop
+s" mat-rand" s" stack-effect" s" text" s" ( rows cols -- mat )" meta! drop
+s" mat-rand" s" category" s" text" s" matrix" meta! drop
+
+s" mat-get" s" description" s" text" s" Get matrix element (bounds-checked)" meta! drop
+s" mat-get" s" stack-effect" s" text" s" ( mat row col -- val )" meta! drop
+s" mat-get" s" category" s" text" s" matrix" meta! drop
+
+s" mat-set" s" description" s" text" s" Set matrix element (returns mat for chaining)" meta! drop
+s" mat-set" s" stack-effect" s" text" s" ( mat row col val -- mat )" meta! drop
+s" mat-set" s" category" s" text" s" matrix" meta! drop
+
+s" mat-rows" s" description" s" text" s" Get row count of matrix" meta! drop
+s" mat-rows" s" stack-effect" s" text" s" ( mat -- n )" meta! drop
+s" mat-rows" s" category" s" text" s" matrix" meta! drop
+
+s" mat-cols" s" description" s" text" s" Get column count of matrix" meta! drop
+s" mat-cols" s" stack-effect" s" text" s" ( mat -- n )" meta! drop
+s" mat-cols" s" category" s" text" s" matrix" meta! drop
+
+s" mat-row" s" description" s" text" s" Extract row as HeapArray" meta! drop
+s" mat-row" s" stack-effect" s" text" s" ( mat i -- array )" meta! drop
+s" mat-row" s" category" s" text" s" matrix" meta! drop
+
+s" mat-col" s" description" s" text" s" Extract column as HeapArray" meta! drop
+s" mat-col" s" stack-effect" s" text" s" ( mat j -- array )" meta! drop
+s" mat-col" s" category" s" text" s" matrix" meta! drop
+
+s" mat*" s" description" s" text" s" Matrix multiply (DGEMM)" meta! drop
+s" mat*" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
+s" mat*" s" category" s" text" s" matrix" meta! drop
+s" mat*" s" examples" s" code" s" 3 mat-eye 3 mat-eye mat* mat." meta! drop
+
+s" mat+" s" description" s" text" s" Element-wise matrix addition" meta! drop
+s" mat+" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
+s" mat+" s" category" s" text" s" matrix" meta! drop
+
+s" mat-" s" description" s" text" s" Element-wise matrix subtraction" meta! drop
+s" mat-" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
+s" mat-" s" category" s" text" s" matrix" meta! drop
+
+s" mat-scale" s" description" s" text" s" Multiply matrix by scalar" meta! drop
+s" mat-scale" s" stack-effect" s" text" s" ( mat scalar -- mat )" meta! drop
+s" mat-scale" s" category" s" text" s" matrix" meta! drop
+
+s" mat-transpose" s" description" s" text" s" Transpose matrix" meta! drop
+s" mat-transpose" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-transpose" s" category" s" text" s" matrix" meta! drop
+
+s" mat-solve" s" description" s" text" s" Solve Ax=b via LU factorization (DGESV). Flag 0=success" meta! drop
+s" mat-solve" s" stack-effect" s" text" s" ( A b -- x flag )" meta! drop
+s" mat-solve" s" category" s" text" s" matrix" meta! drop
+
+s" mat-inv" s" description" s" text" s" Matrix inverse via LU (DGETRF+DGETRI). Flag 0=success" meta! drop
+s" mat-inv" s" stack-effect" s" text" s" ( mat -- inv flag )" meta! drop
+s" mat-inv" s" category" s" text" s" matrix" meta! drop
+
+s" mat-det" s" description" s" text" s" Matrix determinant via LU factorization. Flag 0=success" meta! drop
+s" mat-det" s" stack-effect" s" text" s" ( mat -- det flag )" meta! drop
+s" mat-det" s" category" s" text" s" matrix" meta! drop
+
+s" mat-eigen" s" description" s" text" s" Eigendecomposition (DSYEV for symmetric, DGEEV for general)" meta! drop
+s" mat-eigen" s" stack-effect" s" text" s" ( mat -- eigenvalues eigenvectors flag )" meta! drop
+s" mat-eigen" s" category" s" text" s" matrix" meta! drop
+
+s" mat-svd" s" description" s" text" s" Singular value decomposition (DGESVD)" meta! drop
+s" mat-svd" s" stack-effect" s" text" s" ( mat -- U S Vt flag )" meta! drop
+s" mat-svd" s" category" s" text" s" matrix" meta! drop
+
+s" mat-lstsq" s" description" s" text" s" Least squares solve (DGELS)" meta! drop
+s" mat-lstsq" s" stack-effect" s" text" s" ( A b -- x flag )" meta! drop
+s" mat-lstsq" s" category" s" text" s" matrix" meta! drop
+
+s" mat-norm" s" description" s" text" s" Frobenius norm of matrix" meta! drop
+s" mat-norm" s" stack-effect" s" text" s" ( mat -- val )" meta! drop
+s" mat-norm" s" category" s" text" s" matrix" meta! drop
+
+s" mat-trace" s" description" s" text" s" Sum of diagonal elements (square matrix required)" meta! drop
+s" mat-trace" s" stack-effect" s" text" s" ( mat -- val )" meta! drop
+s" mat-trace" s" category" s" text" s" matrix" meta! drop
+
+s" mat." s" description" s" text" s" Pretty-print matrix (consumes it)" meta! drop
+s" mat." s" stack-effect" s" text" s" ( mat -- )" meta! drop
+s" mat." s" category" s" text" s" matrix" meta! drop
+s" mat." s" examples" s" code" s" 3 mat-eye mat." meta! drop

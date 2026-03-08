@@ -100,6 +100,22 @@ if(ETIL_BUILD_MONGODB)
     gtest_discover_tests(etil_mongo_tests)
 endif()
 
+# Linear algebra unit tests
+if(ETIL_BUILD_LINALG)
+    add_executable(etil_linalg_tests
+        unit/test_matrix_primitives.cpp
+    )
+
+    target_link_libraries(etil_linalg_tests
+        PRIVATE
+            etil
+            GTest::gtest_main
+    )
+
+    etil_add_link_map(etil_linalg_tests)
+    gtest_discover_tests(etil_linalg_tests)
+endif()
+
 # HTTP transport unit tests (helper methods only — no socket, safe to run natively)
 add_executable(etil_http_tests
     unit/test_http_transport.cpp

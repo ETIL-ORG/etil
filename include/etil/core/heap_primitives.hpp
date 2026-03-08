@@ -20,4 +20,9 @@ void register_byte_primitives(Dictionary& dict);
 /// Register map primitives (map-new, map-set, map-get, etc.)
 void register_map_primitives(Dictionary& dict);
 
+#ifdef ETIL_LINALG_ENABLED
+/// Register matrix primitives (mat-new, mat*, mat-solve, etc.)
+void register_matrix_primitives(Dictionary& dict);
+#endif
+
 } // namespace etil::core

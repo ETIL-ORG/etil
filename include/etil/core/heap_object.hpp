@@ -21,7 +21,7 @@ namespace etil::core {
 /// and interpreter code, not via Value copy/destructor.
 class HeapObject {
 public:
-    enum class Kind { String, Array, ByteArray, Map, Json };
+    enum class Kind { String, Array, ByteArray, Map, Json, Matrix };
 
     explicit HeapObject(Kind kind) : kind_(kind) {}
     virtual ~HeapObject() = default;
@@ -56,6 +56,7 @@ inline Value make_heap_value(HeapObject* obj) {
     case HeapObject::Kind::ByteArray: v.type = Value::Type::ByteArray; break;
     case HeapObject::Kind::Map:      v.type = Value::Type::Map;       break;
     case HeapObject::Kind::Json:     v.type = Value::Type::Json;      break;
+    case HeapObject::Kind::Matrix:   v.type = Value::Type::Matrix;    break;
     }
     v.as_ptr = static_cast<void*>(obj);
     return v;
@@ -67,7 +68,8 @@ inline bool is_heap_value(const Value& v) {
            v.type == Value::Type::Array ||
            v.type == Value::Type::ByteArray ||
            v.type == Value::Type::Map ||
-           v.type == Value::Type::Json;
+           v.type == Value::Type::Json ||
+           v.type == Value::Type::Matrix;
 }
 
 /// Extract the HeapObject pointer from a Value. Caller must ensure is_heap_value().

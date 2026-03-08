@@ -7,6 +7,7 @@
 #include "etil/core/primitives.hpp"
 #include "etil/core/heap_json.hpp"
 #include "etil/core/heap_object.hpp"
+#include "etil/core/heap_matrix.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/lvfs/lvfs.hpp"
 
@@ -608,6 +609,14 @@ nlohmann::json McpServer::tool_get_stack(const nlohmann::json& /*params*/) {
                 elem["type"] = "json";
                 if (val.as_ptr) {
                     elem["raw"] = val.as_json()->json();
+                }
+                break;
+            case etil::core::Value::Type::Matrix:
+                elem["type"] = "matrix";
+                if (val.as_ptr) {
+                    auto* mat = val.as_matrix();
+                    elem["rows"] = mat->rows();
+                    elem["cols"] = mat->cols();
                 }
                 break;
             case etil::core::Value::Type::Xt:

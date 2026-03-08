@@ -9,6 +9,7 @@
 #include "etil/core/heap_byte_array.hpp"
 #include "etil/core/heap_json.hpp"
 #include "etil/core/heap_map.hpp"
+#include "etil/core/heap_matrix.hpp"
 #include "etil/core/json_primitives.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_primitives.hpp"
@@ -65,6 +66,7 @@ const char* type_name(Value::Type t) {
     case Value::Type::ByteArray: return "bytearray";
     case Value::Type::Map:       return "map";
     case Value::Type::Json:      return "json";
+    case Value::Type::Matrix:    return "matrix";
     case Value::Type::Xt:        return "xt";
     }
     return "unknown";
@@ -724,6 +726,13 @@ bool prim_dot(ExecutionContext& ctx) {
         ctx.out() << "<bytes> ";
     } else if (v.type == Value::Type::Map) {
         ctx.out() << "<map> ";
+    } else if (v.type == Value::Type::Matrix) {
+        if (v.as_ptr) {
+            auto* mat = v.as_matrix();
+            ctx.out() << "<matrix " << mat->rows() << "x" << mat->cols() << "> ";
+        } else {
+            ctx.out() << "<matrix> ";
+        }
     } else if (v.type == Value::Type::Json) {
         if (v.as_ptr) {
             ctx.out() << v.as_json()->dump() << " ";
@@ -1705,6 +1714,26 @@ void dump_value(std::ostream& os, const Value& v, size_t depth, size_t max_depth
             if (ks.size() > DUMP_MAX_ARRAY_ITEMS) {
                 os << indent << "  ... (" << (ks.size() - DUMP_MAX_ARRAY_ITEMS) << " more)\n";
             }
+        }
+        break;
+    }
+    case Value::Type::Matrix: {
+        if (v.as_ptr) {
+            auto* mat = v.as_matrix();
+            os << indent << "<matrix " << mat->rows() << "x" << mat->cols() << ">\n";
+            for (int64_t r = 0; r < mat->rows() && r < static_cast<int64_t>(DUMP_MAX_ARRAY_ITEMS); ++r) {
+                os << indent << "  [";
+                for (int64_t c = 0; c < mat->cols(); ++c) {
+                    if (c > 0) os << ", ";
+                    os << mat->get(r, c);
+                }
+                os << "]\n";
+            }
+            if (mat->rows() > static_cast<int64_t>(DUMP_MAX_ARRAY_ITEMS)) {
+                os << indent << "  ... (" << (mat->rows() - DUMP_MAX_ARRAY_ITEMS) << " more rows)\n";
+            }
+        } else {
+            os << indent << "<matrix:null>\n";
         }
         break;
     }
@@ -2950,6 +2979,11 @@ void register_primitives(Dictionary& dict) {
     register_byte_primitives(dict);
     register_map_primitives(dict);
     register_json_primitives(dict);
+
+#ifdef ETIL_LINALG_ENABLED
+    // Register matrix primitives (mat-new, mat*, mat-solve, etc.)
+    register_matrix_primitives(dict);
+#endif
 
     // Register LVFS primitives (cwd, cd, ls, ll, lr, cat)
     etil::lvfs::register_lvfs_primitives(dict);

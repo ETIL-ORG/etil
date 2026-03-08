@@ -49,4 +49,12 @@ inline HeapJson* pop_json(ExecutionContext& ctx) {
     return opt->as_json();
 }
 
+/// Pop a HeapMatrix* from the data stack. Returns nullptr on type mismatch or underflow.
+inline HeapMatrix* pop_matrix(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return nullptr;
+    if (opt->type != Value::Type::Matrix || !opt->as_ptr) return nullptr;
+    return opt->as_matrix();
+}
+
 } // namespace etil::core

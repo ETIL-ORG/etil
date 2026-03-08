@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(EvolutionaryTIL VERSION 0.8.9 LANGUAGES C CXX)
+project(EvolutionaryTIL VERSION 0.8.10 LANGUAGES C CXX)
 
 # All executables go to <builddir>/bin/
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -31,6 +31,7 @@ option(ETIL_USE_JEMALLOC "Use jemalloc allocator" OFF)
 option(ETIL_BUILD_HTTP_CLIENT "Build HTTP client primitives (http-get)" OFF)
 option(ETIL_BUILD_JWT "Build JWT authentication" OFF)
 option(ETIL_BUILD_MONGODB "Build MongoDB integration (requires ETIL_BUILD_JWT)" OFF)
+option(ETIL_BUILD_LINALG "Linear algebra support (OpenBLAS/LAPACK)" OFF)
 
 # Include custom CMake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

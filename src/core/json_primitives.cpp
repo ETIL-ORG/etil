@@ -6,6 +6,7 @@
 #include "etil/core/heap_array.hpp"
 #include "etil/core/heap_json.hpp"
 #include "etil/core/heap_map.hpp"
+#include "etil/core/heap_matrix.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/primitives.hpp"
@@ -126,6 +127,21 @@ nlohmann::json etil_value_to_json(const Value& v) {
         return nlohmann::json::array();
     case Value::Type::Json:
         if (v.as_ptr) return v.as_json()->json();
+        return nlohmann::json(nullptr);
+    case Value::Type::Matrix:
+        if (v.as_ptr) {
+            auto* mat = v.as_matrix();
+            nlohmann::json rows = nlohmann::json::array();
+            for (int64_t r = 0; r < mat->rows(); ++r) {
+                nlohmann::json row = nlohmann::json::array();
+                for (int64_t c = 0; c < mat->cols(); ++c) {
+                    row.push_back(mat->get(r, c));
+                }
+                rows.push_back(row);
+            }
+            return nlohmann::json{{"type", "matrix"}, {"rows", mat->rows()},
+                                  {"cols", mat->cols()}, {"data", rows}};
+        }
         return nlohmann::json(nullptr);
     default:
         return nlohmann::json(nullptr);

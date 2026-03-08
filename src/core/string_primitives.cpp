@@ -6,6 +6,7 @@
 #include "etil/core/heap_string.hpp"
 #include "etil/core/heap_array.hpp"
 #include "etil/core/heap_json.hpp"
+#include "etil/core/heap_matrix.hpp"
 #include "etil/core/execution_context.hpp"
 #include "etil/core/dictionary.hpp"
 #include "etil/core/primitives.hpp"
@@ -70,6 +71,13 @@ std::optional<std::string> pop_as_string(ExecutionContext& ctx) {
         auto len = m ? m->size() : 0;
         if (m) m->release();
         return "map(" + std::to_string(len) + ")";
+    }
+    case Value::Type::Matrix: {
+        auto* mat = opt->as_matrix();
+        auto r = mat ? mat->rows() : 0;
+        auto c = mat ? mat->cols() : 0;
+        if (mat) mat->release();
+        return "matrix(" + std::to_string(r) + "x" + std::to_string(c) + ")";
     }
     case Value::Type::Json: {
         if (opt->as_ptr) {
