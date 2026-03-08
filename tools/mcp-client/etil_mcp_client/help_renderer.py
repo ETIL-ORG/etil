@@ -23,10 +23,13 @@ CATEGORY_ORDER = [
     "map",
     "array",
     "byte-array",
+    "json",
+    "matrix",
     "lvfs",
     "file-io-async",
     "file-io-sync",
     "http",
+    "mongodb",
     "time",
     "system",
     "input",
@@ -65,6 +68,9 @@ CATEGORY_LABELS = {
     "execution": "Execution Tokens",
     "defining": "Defining Words",
     "conversion": "Type Conversion",
+    "json": "JSON",
+    "matrix": "Matrix (Linear Algebra)",
+    "mongodb": "MongoDB",
 }
 
 # Meta-commands available in the TUI

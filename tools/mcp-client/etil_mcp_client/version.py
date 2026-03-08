@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Single source of truth for the project SEMVER (shared with ETIL)."""
 
-__version__ = "0.8.11"
+__version__ = "0.8.12"
