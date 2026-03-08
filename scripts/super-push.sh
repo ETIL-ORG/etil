@@ -137,25 +137,17 @@ else
 fi
 
 # --- Step 5: Version bump (if code change) ---
-VERSION_PY="$ETIL_PROJECT_DIR/tools/mcp-client/etil_mcp_client/version.py"
 
 if [[ "$DOCS_ONLY" == false ]]; then
     step "Version bump"
     if [[ "$DRY_RUN" == true ]]; then
         local_new="${ETIL_VERSION_MAJOR}.${ETIL_VERSION_MINOR}.$((ETIL_VERSION_PATCH + 1))"
         etil_log "[dry-run] Would bump v$ETIL_VERSION → v$local_new"
-        etil_log "[dry-run] Would update version.py → $local_new"
     else
         NEW_VERSION=$(etil_version_bump_patch)
         # Re-parse in parent shell (subshell can't update our vars)
         etil_parse_version
         etil_log "Bumped CMakeLists.txt: v$ETIL_VERSION"
-
-        # Update version.py to match
-        if [[ -f "$VERSION_PY" ]]; then
-            sed -i "s/__version__ = \".*\"/__version__ = \"$ETIL_VERSION\"/" "$VERSION_PY"
-            etil_log "Updated version.py: $ETIL_VERSION"
-        fi
 
         # Re-stage after version bump
         git add -A
