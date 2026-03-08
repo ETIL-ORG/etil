@@ -83,7 +83,7 @@ copy overhead.
 > 2 2 mat-new 1.0 0 0 mat-set 2.0 0 1 mat-set
                 3.0 1 0 mat-set 4.0 1 1 mat-set    # A = [1 2; 3 4]
 > 2 1 mat-new 5.0 0 0 mat-set 6.0 1 0 mat-set      # b = [5; 6]
-> mat-solve mat.                                     # x = A\b
+> mat-solve drop mat.                                # x = A\b (drop success flag)
  -4.000
   4.500
 ```

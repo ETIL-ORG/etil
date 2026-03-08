@@ -1480,15 +1480,15 @@ s" mat-transpose" s" description" s" text" s" Transpose matrix" meta! drop
 s" mat-transpose" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-transpose" s" category" s" text" s" matrix" meta! drop
 
-s" mat-solve" s" description" s" text" s" Solve Ax=b via LU factorization (DGESV). Flag 0=success" meta! drop
+s" mat-solve" s" description" s" text" s" Solve Ax=b via LU factorization (DGESV). Flag true=success" meta! drop
 s" mat-solve" s" stack-effect" s" text" s" ( A b -- x flag )" meta! drop
 s" mat-solve" s" category" s" text" s" matrix" meta! drop
 
-s" mat-inv" s" description" s" text" s" Matrix inverse via LU (DGETRF+DGETRI). Flag 0=success" meta! drop
+s" mat-inv" s" description" s" text" s" Matrix inverse via LU (DGETRF+DGETRI). Flag true=success" meta! drop
 s" mat-inv" s" stack-effect" s" text" s" ( mat -- inv flag )" meta! drop
 s" mat-inv" s" category" s" text" s" matrix" meta! drop
 
-s" mat-det" s" description" s" text" s" Matrix determinant via LU factorization. Flag 0=success" meta! drop
+s" mat-det" s" description" s" text" s" Matrix determinant via LU factorization. Flag true=success" meta! drop
 s" mat-det" s" stack-effect" s" text" s" ( mat -- det flag )" meta! drop
 s" mat-det" s" category" s" text" s" matrix" meta! drop
 

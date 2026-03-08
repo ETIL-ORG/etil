@@ -1,7 +1,8 @@
 # Dependencies management
 #
 # For each dependency, try find_package() first (pre-built prefix).
-# Fall back to FetchContent for local development builds.
+# Fall back to FetchContent with URL-based archives (not git clones)
+# to avoid GitHub rate-limiting on git pack downloads.
 
 include(FetchContent)
 
@@ -32,8 +33,9 @@ find_package(TBB QUIET CONFIG)
 if(NOT TBB_FOUND)
     FetchContent_Declare(
         tbb
-        GIT_REPOSITORY https://github.com/oneapi-src/oneTBB.git
-        GIT_TAG v2021.11.0
+        URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.11.0.tar.gz
+        URL_HASH SHA256=782ce0cab62df9ea125cdea253a50534862b563f1d85d4cda7ad4e77550ac363
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     set(TBB_TEST OFF CACHE BOOL "")
     set(TBB_STRICT OFF CACHE BOOL "")
@@ -47,8 +49,9 @@ find_package(absl QUIET CONFIG)
 if(NOT absl_FOUND)
     FetchContent_Declare(
         abseil
-        GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
-        GIT_TAG 20240116.1
+        URL https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.1.tar.gz
+        URL_HASH SHA256=3c743204df78366ad2eaf236d6631d83f6bc928d1705dd0000b872e53b73dc6a
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     set(ABSL_PROPAGATE_CXX_STD ON)
     FetchContent_MakeAvailable(abseil)
@@ -62,8 +65,9 @@ if(ETIL_BUILD_TESTS)
     if(NOT GTest_FOUND)
         FetchContent_Declare(
             googletest
-            GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG v1.14.0
+            URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz
+            URL_HASH SHA256=8ad598c73ad796e0d8280b082cebd82a630d73e73cd3c70057938a6501bba5d7
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         )
         # No FORCE - FORCE causes CMakeCache.txt writes every configure,
         # which triggers infinite ninja re-run loops
@@ -79,8 +83,9 @@ find_package(benchmark QUIET CONFIG)
 if(NOT benchmark_FOUND)
     FetchContent_Declare(
         benchmark
-        GIT_REPOSITORY https://github.com/google/benchmark.git
-        GIT_TAG v1.8.3
+        URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.tar.gz
+        URL_HASH SHA256=6bc180a57d23d4d9515519f92b0c83d61b05b5bab188961f36ac7b06b0d9e9ce
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "")
     # Pre-set benchmark try_compile results to prevent repeated checks
@@ -99,8 +104,9 @@ find_package(spdlog QUIET CONFIG)
 if(NOT spdlog_FOUND)
     FetchContent_Declare(
         spdlog
-        GIT_REPOSITORY https://github.com/gabime/spdlog.git
-        GIT_TAG v1.13.0
+        URL https://github.com/gabime/spdlog/archive/refs/tags/v1.13.0.tar.gz
+        URL_HASH SHA256=534f2ee1a4dcbeb22249856edfb2be76a1cf4f708a20b0ac2ed090ee24cfdbc9
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(spdlog)
 else()
@@ -112,8 +118,9 @@ find_package(nlohmann_json QUIET CONFIG)
 if(NOT nlohmann_json_FOUND)
     FetchContent_Declare(
         nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.11.3
+        URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+        URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     set(JSON_BuildTests OFF CACHE BOOL "")
     FetchContent_MakeAvailable(nlohmann_json)
@@ -127,8 +134,9 @@ if(ETIL_BUILD_EXAMPLES)
     if(NOT replxx_FOUND)
         FetchContent_Declare(
             replxx
-            GIT_REPOSITORY https://github.com/AmokHuginnsson/replxx.git
-            GIT_TAG release-0.0.4
+            URL https://github.com/AmokHuginnsson/replxx/archive/refs/tags/release-0.0.4.tar.gz
+            URL_HASH SHA256=a22988b2184e1d256e2d111b5749e16ffb1accbf757c7b248226d73c426844c4
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         )
         set(REPLXX_BUILD_EXAMPLES OFF CACHE BOOL "")
         FetchContent_MakeAvailable(replxx)
@@ -142,8 +150,9 @@ find_package(httplib QUIET CONFIG)
 if(NOT httplib_FOUND)
     FetchContent_Declare(
         httplib
-        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-        GIT_TAG v0.18.3
+        URL https://github.com/yhirose/cpp-httplib/archive/refs/tags/v0.18.3.tar.gz
+        URL_HASH SHA256=a0567bcd6c3fe5cef1b329b96245119047f876b49e06cc129a36a7a8dffe173e
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     set(HTTPLIB_COMPILE ON CACHE BOOL "")
     FetchContent_MakeAvailable(httplib)
@@ -157,8 +166,9 @@ if(ETIL_BUILD_JWT)
     if(NOT jwt-cpp_FOUND)
         FetchContent_Declare(
             jwt-cpp
-            GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
-            GIT_TAG v0.7.2
+            URL https://github.com/Thalhammer/jwt-cpp/archive/refs/tags/v0.7.2.tar.gz
+            URL_HASH SHA256=6e815d86c168eb521a27937d603747dec0ca3c39ffc12d6fa72e2cf78a5b02d2
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         )
         set(JWT_BUILD_EXAMPLES OFF CACHE BOOL "")
         set(JWT_BUILD_TESTS OFF CACHE BOOL "")
@@ -175,8 +185,9 @@ if(ETIL_BUILD_MONGODB)
         # mongo-c-driver (libbson + libmongoc)
         FetchContent_Declare(
             mongo-c-driver
-            GIT_REPOSITORY https://github.com/mongodb/mongo-c-driver.git
-            GIT_TAG 1.28.1
+            URL https://github.com/mongodb/mongo-c-driver/archive/refs/tags/1.28.1.tar.gz
+            URL_HASH SHA256=249fd66d8d12aac2aec7dea1456e1bf24908c87971016c391a1a82a636029a87
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
             EXCLUDE_FROM_ALL
         )
         set(ENABLE_TESTS OFF CACHE BOOL "")
@@ -201,10 +212,12 @@ if(ETIL_BUILD_MONGODB)
         # mongo-cxx-driver (mongocxx + bsoncxx)
         FetchContent_Declare(
             mongo-cxx-driver
-            GIT_REPOSITORY https://github.com/mongodb/mongo-cxx-driver.git
-            GIT_TAG r3.11.1
+            URL https://github.com/mongodb/mongo-cxx-driver/archive/refs/tags/r3.11.1.tar.gz
+            URL_HASH SHA256=a70451cd421685ea5c6db6cd392e13720826adbcf5861f86116830b945acaa06
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
             EXCLUDE_FROM_ALL
         )
+        set(BUILD_VERSION "3.11.1" CACHE STRING "")
         set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
         set(MONGOCXX_ENABLE_SSL ON CACHE BOOL "")
         set(BUILD_SHARED_AND_STATIC_LIBS OFF CACHE BOOL "")
@@ -236,8 +249,9 @@ if(libuv_FOUND)
 else()
     FetchContent_Declare(
         libuv
-        GIT_REPOSITORY https://github.com/libuv/libuv.git
-        GIT_TAG v1.48.0
+        URL https://github.com/libuv/libuv/archive/refs/tags/v1.48.0.tar.gz
+        URL_HASH SHA256=8c253adb0f800926a6cbd1c6576abae0bc8eb86a4f891049b72f9e5b7dc58f33
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     set(LIBUV_BUILD_TESTS OFF CACHE BOOL "")
     set(LIBUV_BUILD_BENCH OFF CACHE BOOL "")
@@ -251,8 +265,9 @@ if(ETIL_BUILD_LINALG)
     if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
         FetchContent_Declare(
             OpenBLAS
-            GIT_REPOSITORY https://github.com/OpenMathLib/OpenBLAS.git
-            GIT_TAG v0.3.28
+            URL https://github.com/OpenMathLib/OpenBLAS/archive/refs/tags/v0.3.28.tar.gz
+            URL_HASH SHA256=f1003466ad074e9b0c8d421a204121100b0751c96fc6fcf3d1456bd12f8a00a1
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         )
         set(NOFORTRAN ON CACHE BOOL "")
         set(BUILD_TESTING OFF CACHE BOOL "")

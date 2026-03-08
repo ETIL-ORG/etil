@@ -247,7 +247,8 @@ TEST_F(MatrixPrimitivesTest, MatSolve) {
     run("mat-solve");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
-    EXPECT_EQ(flag->as_int, 0);  // success
+    EXPECT_EQ(flag->type, Value::Type::Boolean);
+    EXPECT_TRUE(flag->as_bool());  // success
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* x = opt->as_matrix();
@@ -261,7 +262,8 @@ TEST_F(MatrixPrimitivesTest, MatInv) {
     run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-inv");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
-    EXPECT_EQ(flag->as_int, 0);
+    EXPECT_EQ(flag->type, Value::Type::Boolean);
+    EXPECT_TRUE(flag->as_bool());
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* inv = opt->as_matrix();
@@ -277,7 +279,8 @@ TEST_F(MatrixPrimitivesTest, MatDet) {
     run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-det");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
-    EXPECT_EQ(flag->as_int, 0);
+    EXPECT_EQ(flag->type, Value::Type::Boolean);
+    EXPECT_TRUE(flag->as_bool());
     auto det = ctx().data_stack().pop();
     ASSERT_TRUE(det.has_value());
     EXPECT_NEAR(det->as_float, -2.0, 1e-10);
@@ -292,7 +295,8 @@ TEST_F(MatrixPrimitivesTest, MatEigenSymmetric) {
     run("array-new 2.0 array-push 1.0 array-push 1.0 array-push 2.0 array-push 2 2 mat-from-array mat-eigen");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
-    EXPECT_EQ(flag->as_int, 0);
+    EXPECT_EQ(flag->type, Value::Type::Boolean);
+    EXPECT_TRUE(flag->as_bool());
     auto opt_evec = ctx().data_stack().pop();
     auto opt_eval = ctx().data_stack().pop();
     ASSERT_TRUE(opt_eval.has_value());
@@ -309,7 +313,8 @@ TEST_F(MatrixPrimitivesTest, MatSvd) {
     run("array-new 3.0 array-push 0.0 array-push 0.0 array-push 4.0 array-push 2 2 mat-from-array mat-svd");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
-    EXPECT_EQ(flag->as_int, 0);
+    EXPECT_EQ(flag->type, Value::Type::Boolean);
+    EXPECT_TRUE(flag->as_bool());
     auto opt_vt = ctx().data_stack().pop();
     auto opt_s = ctx().data_stack().pop();
     auto opt_u = ctx().data_stack().pop();
@@ -330,7 +335,8 @@ TEST_F(MatrixPrimitivesTest, MatLstsq) {
     run("mat-lstsq");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
-    EXPECT_EQ(flag->as_int, 0);
+    EXPECT_EQ(flag->type, Value::Type::Boolean);
+    EXPECT_TRUE(flag->as_bool());
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* x = opt->as_matrix();
@@ -383,7 +389,8 @@ TEST_F(MatrixPrimitivesTest, MatInvIdentity) {
     run("3 mat-eye mat-inv");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
-    EXPECT_EQ(flag->as_int, 0);
+    EXPECT_EQ(flag->type, Value::Type::Boolean);
+    EXPECT_TRUE(flag->as_bool());
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* inv = opt->as_matrix();

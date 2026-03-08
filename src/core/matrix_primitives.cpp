@@ -481,7 +481,7 @@ bool prim_mat_solve(ExecutionContext& ctx) {
     delete Acopy;
 
     ctx.data_stack().push(Value::from(x));
-    ctx.data_stack().push(Value(static_cast<int64_t>(info)));
+    ctx.data_stack().push(Value(info == 0));
     return true;
 }
 
@@ -506,7 +506,7 @@ bool prim_mat_inv(ExecutionContext& ctx) {
     }
 
     ctx.data_stack().push(Value::from(inv));
-    ctx.data_stack().push(Value(static_cast<int64_t>(info)));
+    ctx.data_stack().push(Value(info == 0));
     return true;
 }
 
@@ -538,7 +538,7 @@ bool prim_mat_det(ExecutionContext& ctx) {
     delete LU;
 
     ctx.data_stack().push(Value(det));
-    ctx.data_stack().push(Value(static_cast<int64_t>(info)));
+    ctx.data_stack().push(Value(info == 0));
     return true;
 }
 
@@ -585,7 +585,7 @@ bool prim_mat_eigen(ExecutionContext& ctx) {
 
         ctx.data_stack().push(Value::from(eval));
         ctx.data_stack().push(Value::from(evec));
-        ctx.data_stack().push(Value(static_cast<int64_t>(info)));
+        ctx.data_stack().push(Value(info == 0));
     } else {
         // General: DGEEV
         auto* Acopy = new HeapMatrix(n, n);
@@ -611,7 +611,7 @@ bool prim_mat_eigen(ExecutionContext& ctx) {
 
         ctx.data_stack().push(Value::from(eval));
         ctx.data_stack().push(Value::from(vr));
-        ctx.data_stack().push(Value(static_cast<int64_t>(info)));
+        ctx.data_stack().push(Value(info == 0));
     }
     return true;
 }
@@ -648,7 +648,7 @@ bool prim_mat_svd(ExecutionContext& ctx) {
     ctx.data_stack().push(Value::from(U));
     ctx.data_stack().push(Value::from(S));
     ctx.data_stack().push(Value::from(Vt));
-    ctx.data_stack().push(Value(static_cast<int64_t>(info)));
+    ctx.data_stack().push(Value(info == 0));
     return true;
 }
 
@@ -701,7 +701,7 @@ bool prim_mat_lstsq(ExecutionContext& ctx) {
     delete x;
 
     ctx.data_stack().push(Value::from(result));
-    ctx.data_stack().push(Value(static_cast<int64_t>(info)));
+    ctx.data_stack().push(Value(info == 0));
     return true;
 }
 
@@ -810,19 +810,19 @@ void register_matrix_primitives(Dictionary& dict) {
 
     // Solvers
     dict.register_word("mat-solve", make_word("prim_mat_solve", prim_mat_solve,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Integer}));
+        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
     dict.register_word("mat-inv", make_word("prim_mat_inv", prim_mat_inv,
-        {T::Unknown}, {T::Unknown, T::Integer}));
+        {T::Unknown}, {T::Unknown, T::Unknown}));
     dict.register_word("mat-det", make_word("prim_mat_det", prim_mat_det,
-        {T::Unknown}, {T::Float, T::Integer}));
+        {T::Unknown}, {T::Float, T::Unknown}));
 
     // Decompositions
     dict.register_word("mat-eigen", make_word("prim_mat_eigen", prim_mat_eigen,
-        {T::Unknown}, {T::Unknown, T::Unknown, T::Integer}));
+        {T::Unknown}, {T::Unknown, T::Unknown, T::Unknown}));
     dict.register_word("mat-svd", make_word("prim_mat_svd", prim_mat_svd,
-        {T::Unknown}, {T::Unknown, T::Unknown, T::Unknown, T::Integer}));
+        {T::Unknown}, {T::Unknown, T::Unknown, T::Unknown, T::Unknown}));
     dict.register_word("mat-lstsq", make_word("prim_mat_lstsq", prim_mat_lstsq,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Integer}));
+        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
 
     // Utilities
     dict.register_word("mat-norm", make_word("prim_mat_norm", prim_mat_norm,
