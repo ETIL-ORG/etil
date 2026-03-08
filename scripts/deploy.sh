@@ -483,10 +483,25 @@ else
         fi
     }
 
+    SMOKE_MAX_RETRIES=3
+    SMOKE_RETRY_DELAY=5
+
     if [ "$LOCAL_DEPLOY" = true ]; then
-        SMOKE_RESULT=$(_run_smoke_test)
+        SMOKE_PASSED=false
+        for attempt in $(seq 1 $SMOKE_MAX_RETRIES); do
+            if SMOKE_RESULT=$(_run_smoke_test 2>&1); then
+                SMOKE_PASSED=true
+                break
+            fi
+            if [ "$attempt" -lt "$SMOKE_MAX_RETRIES" ]; then
+                echo "  Smoke test attempt $attempt/$SMOKE_MAX_RETRIES failed, retrying in ${SMOKE_RETRY_DELAY}s..."
+                sleep "$SMOKE_RETRY_DELAY"
+            fi
+        done
     else
-        SMOKE_RESULT=$($SSH_CMD "bash -s" <<'SMOKE_TEST'
+        SMOKE_PASSED=false
+        for attempt in $(seq 1 $SMOKE_MAX_RETRIES); do
+            if SMOKE_RESULT=$($SSH_CMD "bash -s" <<'SMOKE_REMOTE'
 set -euo pipefail
 API_KEY=$(docker inspect etil-mcp-http --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ETIL_MCP_API_KEY | cut -d= -f2)
 URL="http://127.0.0.1:8080/mcp"
@@ -514,14 +529,22 @@ else
     echo "FAIL: expected 42 in output, got: $RESULT"
     exit 1
 fi
-SMOKE_TEST
-        )
+SMOKE_REMOTE
+            ); then
+                SMOKE_PASSED=true
+                break
+            fi
+            if [ "$attempt" -lt "$SMOKE_MAX_RETRIES" ]; then
+                echo "  Smoke test attempt $attempt/$SMOKE_MAX_RETRIES failed, retrying in ${SMOKE_RETRY_DELAY}s..."
+                sleep "$SMOKE_RETRY_DELAY"
+            fi
+        done
     fi
 
     echo "$SMOKE_RESULT"
-    if echo "$SMOKE_RESULT" | grep -q "FAIL"; then
+    if [ "$SMOKE_PASSED" = false ]; then
         echo ""
-        echo "ERROR: Smoke test failed"
+        echo "ERROR: Smoke test failed after $SMOKE_MAX_RETRIES attempts"
         exit 1
     fi
 fi
