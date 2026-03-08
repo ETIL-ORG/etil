@@ -484,7 +484,7 @@ else
     }
 
     SMOKE_MAX_RETRIES=3
-    SMOKE_RETRY_DELAY=5
+    SMOKE_RETRY_DELAY=10
 
     if [ "$LOCAL_DEPLOY" = true ]; then
         SMOKE_PASSED=false
