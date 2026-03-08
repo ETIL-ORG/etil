@@ -29,7 +29,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "$OUTPUT_DIR"
-DEB_FILE="$OUTPUT_DIR/${PKG_NAME}-${VERSION}-${ARCH}.deb"
+TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+DEB_FILE="$OUTPUT_DIR/${PKG_NAME}_${VERSION}+${TIMESTAMP}_${ARCH}.deb"
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 
