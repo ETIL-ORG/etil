@@ -421,7 +421,7 @@ if [ "$DRY_RUN" = true ]; then
     echo "[dry-run] Poll localhost:8080/mcp up to 30 times"
 else
     _curl_check() {
-        curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/mcp 2>/dev/null
+        curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/mcp 2>/dev/null || true
     }
 
     SERVER_READY=false
@@ -429,7 +429,7 @@ else
         if [ "$LOCAL_DEPLOY" = true ]; then
             HTTP_CODE=$(_curl_check)
         else
-            HTTP_CODE=$($SSH_CMD "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/mcp 2>/dev/null")
+            HTTP_CODE=$($SSH_CMD "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/mcp 2>/dev/null || true")
         fi
         if [ "$HTTP_CODE" != "000" ]; then
             echo "Server responding (HTTP $HTTP_CODE, attempt $i)"
