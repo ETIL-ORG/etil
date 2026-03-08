@@ -7,6 +7,7 @@
 #include "etil/core/dictionary.hpp"
 #include "etil/core/execution_context.hpp"
 #include "etil/core/heap_byte_array.hpp"
+#include "etil/core/heap_map.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/value_helpers.hpp"
@@ -34,6 +35,7 @@ struct HttpWorkData {
     std::string path;              // e.g. "/data/file.csv"
     int timeout_ms = 10'000;
     size_t max_response_bytes = 1 * 1024 * 1024;
+    httplib::Headers headers;      // extra HTTP headers from HeapMap
 
     // --- Output (set by worker, read by caller) ---
     std::vector<uint8_t> body;
@@ -62,6 +64,7 @@ void http_get_work(uv_work_t* req) {
         size_t received = 0;
         auto result = cli.Get(
             d->path,
+            d->headers,
             [&](const char* data, size_t len) -> bool {
                 if (d->cancelled.load(std::memory_order_relaxed)) return false;
                 if (received + len > d->max_response_bytes) return false;
@@ -82,36 +85,52 @@ void http_get_work(uv_work_t* req) {
 
 }  // namespace
 
-// http-get ( url-string -- bytes status-code flag )
+// http-get ( url headers-map -- bytes status-code flag )
 //
-// Perform an HTTP/HTTPS GET request.  Returns:
+// Perform an HTTP/HTTPS GET request with extra headers.  Returns:
 //   - Response body as HeapByteArray (opaque bytes, NOT a string)
 //   - HTTP status code (integer)
-//   - Success flag (-1 = success, 0 = failure)
-// On failure, pushes only flag=0.
+//   - Success flag (true = success, false = failure)
+// On failure, pushes only flag=false.
+// headers-map is a HeapMap of string key→string value pairs.
 static bool prim_http_get(etil::core::ExecutionContext& ctx) {
     using namespace etil::core;
 
+    // Pop headers map (TOS)
+    auto hdr_opt = ctx.data_stack().pop();
+    if (!hdr_opt) return false;
+    if (hdr_opt->type != Value::Type::Map || !hdr_opt->as_ptr) {
+        ctx.err() << "Error: http-get: expected Map for headers\n";
+        value_release(*hdr_opt);
+        return false;
+    }
+    auto* hdr_map = hdr_opt->as_map();
+
     // Pop URL string
     auto* hs = pop_string(ctx);
-    if (!hs) return false;
+    if (!hs) { hdr_map->release(); return false; }
     std::string url(hs->view());
     hs->release();
+
+    // Helper: release map and push failure flag
+    auto fail = [&](const char* msg) {
+        ctx.err() << msg;
+        hdr_map->release();
+        ctx.data_stack().push(Value(false));
+    };
 
     // Check net_client_allowed permission
     auto* perms = ctx.permissions();
     if (perms && !perms->net_client_allowed) {
-        ctx.err() << "Error: http-get: not permitted\n";
-        ctx.data_stack().push(Value(false));
+        fail("Error: http-get: not permitted\n");
         return true;
     }
 
     // Check HTTP client state
     auto* http_state = ctx.http_client_state();
     if (!http_state || !http_state->config || !http_state->config->enabled()) {
-        ctx.err() << "Error: http-get: HTTP client not configured "
-                  << "(set ETIL_HTTP_ALLOWLIST env var)\n";
-        ctx.data_stack().push(Value(false));
+        fail("Error: http-get: HTTP client not configured "
+             "(set ETIL_HTTP_ALLOWLIST env var)\n");
         return true;
     }
 
@@ -124,6 +143,7 @@ static bool prim_http_get(etil::core::ExecutionContext& ctx) {
                   << http_state->lifetime_fetches << "/"
                   << http_state->config->per_session_budget
                   << " lifetime)\n";
+        hdr_map->release();
         ctx.data_stack().push(Value(false));
         return true;
     }
@@ -133,6 +153,7 @@ static bool prim_http_get(etil::core::ExecutionContext& ctx) {
     std::string error;
     if (!validate_url(url, *http_state->config, parsed, error)) {
         ctx.err() << "Error: http-get: " << error << "\n";
+        hdr_map->release();
         ctx.data_stack().push(Value(false));
         return true;
     }
@@ -140,8 +161,7 @@ static bool prim_http_get(etil::core::ExecutionContext& ctx) {
     // Need UvSession for async execution
     auto* uv = ctx.uv_session();
     if (!uv) {
-        ctx.err() << "Error: http-get: no UvSession (async I/O not available)\n";
-        ctx.data_stack().push(Value(false));
+        fail("Error: http-get: no UvSession (async I/O not available)\n");
         return true;
     }
 
@@ -157,6 +177,14 @@ static bool prim_http_get(etil::core::ExecutionContext& ctx) {
     work_data.path = parsed.path;
     work_data.timeout_ms = http_state->config->request_timeout_ms;
     work_data.max_response_bytes = http_state->config->max_response_bytes;
+
+    // Convert HeapMap entries to httplib::Headers
+    for (const auto& [key, val] : hdr_map->entries()) {
+        if (val.type == Value::Type::String && val.as_ptr) {
+            work_data.headers.emplace(key, std::string(val.as_string()->view()));
+        }
+    }
+    hdr_map->release();
 
     // Submit to libuv thread pool
     etil::fileio::WorkRequest work_req;
@@ -214,7 +242,7 @@ void register_http_primitives(etil::core::Dictionary& dict) {
 
     dict.register_word("http-get",
         make_word("prim_http_get", prim_http_get,
-            {T::String}, {T::Unknown, T::Integer, T::Integer}));
+            {T::String, T::Unknown}, {T::Unknown, T::Integer, T::Integer}));
 }
 
 } // namespace etil::net

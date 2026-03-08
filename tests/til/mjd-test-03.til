@@ -9,7 +9,7 @@ s" https://www.google.com/" constant url
 variable content
 
 : load-content
-    http-get
+    map-new http-get
     if
         dup 200 =
         if

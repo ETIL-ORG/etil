@@ -53,6 +53,7 @@ gtest_discover_tests(etil_mcp_tests
 if(ETIL_BUILD_HTTP_CLIENT)
     add_executable(etil_http_client_tests
         unit/test_url_validation.cpp
+        unit/test_http_get.cpp
     )
 
     target_link_libraries(etil_http_client_tests

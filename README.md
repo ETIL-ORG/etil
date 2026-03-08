@@ -37,9 +37,9 @@ and inheritance capabilities.
 - **Interactive REPL**: Line editing, persistent history, tab-completion (via replxx)
 - **Container Security**: Docker sandbox with read-only filesystem, no-new-privileges, CPU/memory/PID limits.
   Optional runtime intrusion detection recommended (e.g., Falco eBPF)
-- **Outbound HTTP Client**: `http-get` word fetches data from external URLs with SSRF blocklist, domain allowlist,
-  per-session fetch budgets, response size limits, and opaque byte return (prevents code injection via `evaluate`).
-  HTTPS support via OpenSSL. Design doc: `docs/claude-knowledge/20260227-interpreter-outbound-network-access.md`
+- **Outbound HTTP Client**: `http-get` word fetches data from external URLs with custom headers (HeapMap),
+  SSRF blocklist, domain allowlist, per-session fetch budgets, response size limits, and opaque byte return
+  (prevents code injection via `evaluate`). HTTPS support via OpenSSL
 - **JWT Authentication**: JWT-based authentication with role-based access control (RBAC) -- per-user permissions for
   HTTP domains, instruction budgets, file I/O, and session limits. Dual-mode auth: JWT preferred, API key fallback
   for backward compatibility
@@ -825,8 +825,8 @@ Modern hardware capabilities:
   64KB default that killed large responses), 60s request timeout, CancelledError handling
 - LVFS (Little Virtual File System): Virtual filesystem with `/home` and `/library` under virtual root `/`, 6
   shell-like primitives (`cwd`, `cd`, `ls`, `ll`, `lr`, `cat`), per-session CWD, directory traversal protection
-- Outbound HTTP Client: `http-get` word with SSRF blocklist, domain allowlist, per-session fetch budgets, response
-  size limits, HTTPS via OpenSSL
+- Outbound HTTP Client: `http-get` word with custom headers, SSRF blocklist, domain allowlist, per-session fetch
+  budgets, response size limits, HTTPS via OpenSSL
 - JWT Authentication (Phase 1): RS256 JWT minting/validation via jwt-cpp, `AuthConfig` for role/permission/user
   mappings from JSON config (`ETIL_AUTH_CONFIG` env var), dual-mode auth (JWT preferred, API key fallback),
   per-role permission enforcement (HTTP domains, instruction budgets, file I/O, session limits). See

@@ -1306,10 +1306,10 @@ s" truncate" s" examples" s" code" s| s" /home/log.txt" truncate drop| meta! dro
 
 # --- HTTP Client (outbound network I/O) ---
 
-s" http-get" s" description" s" text" s" Perform an HTTP/HTTPS GET request. Returns response body as opaque bytes (HeapByteArray, not string), HTTP status code, and success flag. On failure pushes only flag=0. Domain must be in ETIL_HTTP_ALLOWLIST. Per-session and per-interpret fetch budgets enforced. SSRF protection blocks loopback, RFC1918, link-local, and cloud metadata IPs" meta! drop
-s" http-get" s" stack-effect" s" text" s" ( url -- bytes status-code flag )" meta! drop
+s" http-get" s" description" s" text" s" Perform an HTTP/HTTPS GET request with extra headers. The headers parameter is a HeapMap of string key-value pairs (use map-new for no extra headers). Returns response body as opaque bytes (HeapByteArray, not string), HTTP status code, and success flag. On failure pushes only flag=false. Domain must be in ETIL_HTTP_ALLOWLIST. Per-session and per-interpret fetch budgets enforced. SSRF protection blocks loopback, RFC1918, link-local, and cloud metadata IPs" meta! drop
+s" http-get" s" stack-effect" s" text" s" ( url headers-map -- bytes status-code flag )" meta! drop
 s" http-get" s" category" s" text" s" http" meta! drop
-s" http-get" s" examples" s" code" s| s" https://httpbin.org/get" http-get -rot 2drop . cr| meta! drop
+s" http-get" s" examples" s" code" s| s" https://httpbin.org/get" map-new http-get -rot 2drop . cr| meta! drop
 
 # --- MongoDB ---
 

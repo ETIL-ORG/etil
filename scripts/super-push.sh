@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Mark Deazley. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
-# Super Push: build → test → bump → commit → tag → push → deploy.
+# Super Push: build → test → bump → commit → tag → push.
+# Deployment is handled by CI on ap1000 (triggered by post-receive hook).
 #
-# Usage: super-push.sh --message "commit message" [--no-deploy] [--dry-run]
+# Usage: super-push.sh --message "commit message" [--dry-run]
 #   --message   Commit message (required)
-#   --no-deploy Skip deploy.sh
 #   --dry-run   Show plan without executing
 
 set -euo pipefail
@@ -20,7 +20,6 @@ etil_require_cmd ctest
 
 # --- Parse args ---
 MESSAGE=""
-NO_DEPLOY=false
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -31,14 +30,14 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             MESSAGE="$2"; shift 2 ;;
-        --no-deploy)  NO_DEPLOY=true; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
         --help|-h)
-            echo "Usage: $0 --message \"commit message\" [--no-deploy] [--dry-run]"
+            echo "Usage: $0 --message \"commit message\" [--dry-run]"
             echo ""
             echo "  --message   Commit message (required)"
-            echo "  --no-deploy Skip deploy.sh"
             echo "  --dry-run   Show plan without executing"
+            echo ""
+            echo "Deployment is handled by CI on ap1000 after push."
             exit 0
             ;;
         *)
@@ -199,20 +198,8 @@ step "Push"
 ETIL_GIT_REMOTE="${ETIL_GIT_REMOTE:-origin}"
 run git push "$ETIL_GIT_REMOTE" master --tags
 
-# --- Step 9: Deploy ---
-if [[ "$NO_DEPLOY" == true ]]; then
-    etil_log "Skipping deploy (--no-deploy)"
-else
-    step "Deploy"
-    if [[ "$DRY_RUN" == true ]]; then
-        run "$SCRIPT_DIR/deploy.sh" --dry-run
-    else
-        run "$SCRIPT_DIR/deploy.sh"
-    fi
-fi
-
 # --- Summary ---
 step "Super push complete"
 etil_log "Version: v$ETIL_VERSION"
 etil_log "Message: $MESSAGE"
-etil_log "Deploy:  $(if [[ "$NO_DEPLOY" == true ]]; then echo 'skipped'; else echo 'done'; fi)"
+etil_log "CI will build, test, and deploy on ap1000"
