@@ -234,7 +234,7 @@ if [ "$LOCAL_DEPLOY" = true ]; then
             --add-host host.docker.internal:host-gateway \
             -v etil-sessions:/data/sessions \
             -v etil-library:/data/library:ro \
-            -v /opt/etil/oauth:/etc/etil:ro \
+            -v /opt/etil/oauth:/etc/etil \
             -v /opt/mongodb/client-etil.pem:/etc/etil-mongo/client-etil.pem:ro \
             -v /opt/mongodb/ca.pem:/etc/etil-mongo/ca.pem:ro \
             --group-add "${ETIL_CERT_GID:-1006}" \
@@ -396,7 +396,7 @@ docker run -d --name "\$CONTAINER" --restart unless-stopped \
     --add-host host.docker.internal:host-gateway \
     -v etil-sessions:/data/sessions \
     -v etil-library:/data/library:ro \
-    -v /opt/etil/oauth:/etc/etil:ro \
+    -v /opt/etil/oauth:/etc/etil \
     -v /opt/mongodb/client-etil.pem:/etc/etil-mongo/client-etil.pem:ro \
     -v /opt/mongodb/ca.pem:/etc/etil-mongo/ca.pem:ro \
     --group-add "${ETIL_CERT_GID:-1006}" \

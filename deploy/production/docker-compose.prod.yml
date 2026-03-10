@@ -15,8 +15,8 @@ services:
       - ETIL_MONGODB_URI=${ETIL_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - ETIL_MONGODB_DATABASE=${ETIL_MONGODB_DATABASE:-etil}
     volumes:
-      # Auth config (roles, keys, users) — create these on your host
-      - /opt/etil/oauth:/etc/etil:ro
+      # Auth config (roles, keys, users) — read-write for admin tool persistence
+      - /opt/etil/oauth:/etc/etil
       # MongoDB TLS certs — uncomment and adjust paths for x.509 auth
       # - /path/to/client-cert.pem:/etc/etil-mongo/client.pem:ro
       # - /path/to/ca.pem:/etc/etil-mongo/ca.pem:ro
