@@ -236,7 +236,7 @@ TEST_F(McpServerTest, InvalidJsonRpc) {
 // ---------------------------------------------------------------------------
 
 TEST_F(McpServerTest, HasToolDefinitions) {
-    EXPECT_EQ(server.tools().size(), 21u);  // 10 base + list_sessions, kick_session, manage_allowlist + 8 admin tools
+    EXPECT_EQ(server.tools().size(), 22u);  // 10 base + list_sessions, kick_session, manage_allowlist + 9 admin tools
 }
 
 TEST_F(McpServerTest, HasResourceDefinitions) {

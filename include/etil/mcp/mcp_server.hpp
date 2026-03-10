@@ -261,6 +261,7 @@ private:
     nlohmann::json tool_admin_list_users(const nlohmann::json& params);
     nlohmann::json tool_admin_set_user_role(const nlohmann::json& params);
     nlohmann::json tool_admin_delete_user(const nlohmann::json& params);
+    nlohmann::json tool_admin_set_default_role(const nlohmann::json& params);
     nlohmann::json tool_admin_reload_config(const nlohmann::json& params);
 #endif
 

@@ -392,6 +392,22 @@ void McpServer::register_all_tools() {
     );
 
     register_tool(
+        "admin_set_default_role",
+        "Set the default role for new/unknown users",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"role", {{"type", "string"},
+                    {"description", "Role name to set as default (must exist)"}}}
+            }},
+            {"required", nlohmann::json::array({"role"})}
+        },
+        [this](const nlohmann::json& params) {
+            return tool_admin_set_default_role(params);
+        }
+    );
+
+    register_tool(
         "admin_reload_config",
         "Reload auth configuration from disk (roles.json, users.json)",
         {
@@ -1845,6 +1861,69 @@ nlohmann::json McpServer::tool_admin_delete_user(
             {"user_id", user_id},
             {"previous_role", old_role},
             {"now_defaults_to", new_config->default_role}
+        }).dump()}
+    });
+    return {{"content", content_array}};
+}
+
+nlohmann::json McpServer::tool_admin_set_default_role(
+    const nlohmann::json& params) {
+    auto& session = *current_session_;
+    auto denied = check_role_admin(session, auth_config_, "admin_set_default_role"
+#ifdef ETIL_MONGODB_ENABLED
+        , audit_log_.get()
+#endif
+    );
+    if (denied) return *denied;
+
+    if (!auth_config_ || auth_config_dir_.empty()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: no auth configuration loaded or directory not set"}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::string role_name = params.at("role").get<std::string>();
+
+    // Validate that the role exists
+    if (auth_config_->roles.find(role_name) == auth_config_->roles.end()) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", "Error: role not found: " + role_name}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    auto new_config = std::make_shared<AuthConfig>(*auth_config_);
+    std::string previous = new_config->default_role;
+    new_config->default_role = role_name;
+
+    try {
+        AuthConfig::write_json_atomic(
+            auth_config_dir_ + "/roles.json",
+            new_config->roles_to_json());
+    } catch (const std::exception& e) {
+        nlohmann::json content_array = nlohmann::json::array();
+        content_array.push_back({
+            {"type", "text"},
+            {"text", std::string("Error: failed to persist roles.json: ") +
+                     e.what()}
+        });
+        return {{"content", content_array}, {"isError", true}};
+    }
+
+    std::atomic_store(&auth_config_, std::shared_ptr<const AuthConfig>(new_config));
+
+    nlohmann::json content_array = nlohmann::json::array();
+    content_array.push_back({
+        {"type", "text"},
+        {"text", nlohmann::json({
+            {"action", "default_role_changed"},
+            {"previous", previous},
+            {"default_role", role_name}
         }).dump()}
     });
     return {{"content", content_array}};
