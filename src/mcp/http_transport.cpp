@@ -591,9 +591,9 @@ void HttpTransport::setup_session_routes() {
             }
 #endif
 
-            auto token = config_.jwt_auth->mint_token(
-                user_id, user_info->email);
             auto role = config_.auth_config->role_for(user_id);
+            auto token = config_.jwt_auth->mint_token(
+                user_id, user_info->email, role);
 
             nlohmann::json response = {
                 {"token", token},
@@ -676,9 +676,9 @@ void HttpTransport::setup_session_routes() {
             }
 #endif
 
-            auto token = config_.jwt_auth->mint_token(
-                user_id, user_info->email);
             auto role = config_.auth_config->role_for(user_id);
+            auto token = config_.jwt_auth->mint_token(
+                user_id, user_info->email, role);
 
             nlohmann::json response = {
                 {"token", token},

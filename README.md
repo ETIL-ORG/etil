@@ -408,7 +408,7 @@ For JWT auth with RBAC, mount an auth config directory:
 docker run -d --rm --read-only \
   -p 127.0.0.1:8080:8080 \
   -e ETIL_AUTH_CONFIG=/etc/etil \
-  -v /path/to/auth-config:/etc/etil:ro \
+  -v /path/to/auth-config:/etc/etil \
   --tmpfs /tmp:size=10M \
   etil-mcp --port 8080
 ```

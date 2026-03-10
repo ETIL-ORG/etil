@@ -55,7 +55,10 @@ McpServer::McpServer() {
                 AuthConfig::from_directory(auth_config_env));
             if (!auth_config_->jwt_private_key.empty() &&
                 !auth_config_->jwt_public_key.empty()) {
-                jwt_auth_ = std::make_unique<JwtAuth>(auth_config_.get());
+                jwt_auth_ = std::make_unique<JwtAuth>(
+                    auth_config_->jwt_private_key,
+                    auth_config_->jwt_public_key,
+                    auth_config_->jwt_ttl_seconds);
                 fprintf(stderr, "JWT authentication enabled (config: %s)\n",
                         auth_config_env);
             } else {

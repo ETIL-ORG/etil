@@ -11,8 +11,6 @@
 
 namespace etil::mcp {
 
-struct AuthConfig;
-
 /// Claims extracted from a validated ETIL JWT.
 struct JwtClaims {
     std::string sub;    // "github:12345"
@@ -22,21 +20,20 @@ struct JwtClaims {
 
 /// JWT minting and validation using jwt-cpp with RS256.
 ///
-/// All tokens are signed with the RS256 private key from AuthConfig
-/// and validated against the RS256 public key.  Tokens carry the
-/// standard claims (iss, sub, email, role, iat, exp).
+/// Owns copies of the PEM key material so it is independent of
+/// AuthConfig lifetime (admin config swaps must not invalidate JWT auth).
+/// Tokens carry the standard claims (iss, sub, email, role, iat, exp).
 class JwtAuth {
 public:
-    /// Construct from an AuthConfig.  The config must outlive JwtAuth.
-    /// config->jwt_private_key and jwt_public_key must be valid PEM.
-    explicit JwtAuth(const AuthConfig* config);
+    /// Construct with PEM key material and token TTL.
+    JwtAuth(std::string private_key_pem, std::string public_key_pem,
+            int ttl_seconds);
 
     /// Mint a new ETIL JWT for the given user.
-    ///
-    /// The role is resolved via config->role_for(user_id).
     /// Returns the signed JWT string.
     std::string mint_token(const std::string& user_id,
-                           const std::string& email) const;
+                           const std::string& email,
+                           const std::string& role) const;
 
     /// Validate a JWT string and extract claims.
     ///
@@ -48,7 +45,9 @@ public:
     static constexpr const char* ISSUER = "etil-mcp";
 
 private:
-    const AuthConfig* config_;
+    std::string private_key_;
+    std::string public_key_;
+    int ttl_seconds_;
 };
 
 } // namespace etil::mcp

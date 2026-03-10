@@ -80,7 +80,9 @@ protected:
         }
 
         config_ = AuthConfig::from_file(config_path_.string());
-        auth_ = std::make_unique<JwtAuth>(&config_);
+        auth_ = std::make_unique<JwtAuth>(
+            config_.jwt_private_key, config_.jwt_public_key,
+            config_.jwt_ttl_seconds);
     }
 
     void TearDown() override {
@@ -397,7 +399,7 @@ TEST_F(JwtAuthTest, AuthConfigNetClientInferredFromDomains) {
 TEST_F(JwtAuthTest, MintAndValidateRoundTrip) {
     if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
 
-    auto token = auth_->mint_token("github:12345", "admin@example.com");
+    auto token = auth_->mint_token("github:12345", "admin@example.com", "admin");
     ASSERT_FALSE(token.empty());
 
     auto claims = auth_->validate_token(token);
@@ -407,19 +409,19 @@ TEST_F(JwtAuthTest, MintAndValidateRoundTrip) {
     EXPECT_EQ(claims->role, "admin");
 }
 
-TEST_F(JwtAuthTest, MintUsesConfigRole) {
+TEST_F(JwtAuthTest, MintUsesProvidedRole) {
     if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
 
-    auto token = auth_->mint_token("github:67890", "researcher@example.com");
+    auto token = auth_->mint_token("github:67890", "researcher@example.com", "researcher");
     auto claims = auth_->validate_token(token);
     ASSERT_TRUE(claims.has_value());
     EXPECT_EQ(claims->role, "researcher");
 }
 
-TEST_F(JwtAuthTest, MintUnknownUserGetsDefaultRole) {
+TEST_F(JwtAuthTest, MintWithDefaultRole) {
     if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
 
-    auto token = auth_->mint_token("github:99999", "new@example.com");
+    auto token = auth_->mint_token("github:99999", "new@example.com", "beta-tester");
     auto claims = auth_->validate_token(token);
     ASSERT_TRUE(claims.has_value());
     EXPECT_EQ(claims->role, "beta-tester");
@@ -446,7 +448,7 @@ TEST_F(JwtAuthTest, ValidateExpiredToken) {
 TEST_F(JwtAuthTest, ValidateInvalidSignature) {
     if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
 
-    auto token = auth_->mint_token("github:12345", "test@example.com");
+    auto token = auth_->mint_token("github:12345", "test@example.com", "admin");
     ASSERT_FALSE(token.empty());
 
     // Tamper with the token (flip a character in the signature)

@@ -367,11 +367,13 @@ TEST_F(OAuthJwtMintTest, MintTokenForOAuthUser) {
     write_config(j);
 
     auto config = AuthConfig::from_file(config_path_.string());
-    JwtAuth auth(&config);
+    JwtAuth auth(config.jwt_private_key, config.jwt_public_key,
+                 config.jwt_ttl_seconds);
 
     // Simulate: provider returned user_id=12345, email=test@gh.com
     std::string user_id = "github:12345";
-    auto token = auth.mint_token(user_id, "test@gh.com");
+    auto role = config.role_for(user_id);
+    auto token = auth.mint_token(user_id, "test@gh.com", role);
     ASSERT_FALSE(token.empty());
 
     auto claims = auth.validate_token(token);
@@ -389,11 +391,13 @@ TEST_F(OAuthJwtMintTest, MintTokenForUnknownOAuthUser) {
     write_config(j);
 
     auto config = AuthConfig::from_file(config_path_.string());
-    JwtAuth auth(&config);
+    JwtAuth auth(config.jwt_private_key, config.jwt_public_key,
+                 config.jwt_ttl_seconds);
 
     // New OAuth user not in user_roles
     std::string user_id = "google:999999";
-    auto token = auth.mint_token(user_id, "new@google.com");
+    auto role = config.role_for(user_id);
+    auto token = auth.mint_token(user_id, "new@google.com", role);
     ASSERT_FALSE(token.empty());
 
     auto claims = auth.validate_token(token);
