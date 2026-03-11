@@ -16,26 +16,6 @@
 
 namespace etil::core {
 
-namespace {
-
-// Helper: pop a string key from the stack. Returns the string value.
-// On success, releases the HeapString ref and returns true.
-// On type mismatch, pushes the value back onto the stack.
-bool pop_string_key(ExecutionContext& ctx, std::string& out) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return false;
-    if (opt->type != Value::Type::String || !opt->as_ptr) {
-        ctx.data_stack().push(*opt);
-        return false;
-    }
-    auto* hs = opt->as_string();
-    out = std::string(hs->view());
-    hs->release();
-    return true;
-}
-
-} // anonymous namespace
-
 // map-new ( -- map )
 bool prim_map_new(ExecutionContext& ctx) {
     auto* m = new HeapMap();
@@ -66,9 +46,11 @@ bool prim_map_set(ExecutionContext& ctx) {
     key = std::string(hs->view());
     hs->release();
 
-    // Pop map
+    // Pop map — pop_map pushes back on type mismatch
     auto* m = pop_map(ctx);
     if (!m) {
+        // Reconstruct key and restore stack: ( <non-map pushed back> key val )
+        ctx.data_stack().push(Value::from(HeapString::create(key)));
         ctx.data_stack().push(*opt_val);
         return false;
     }
@@ -93,9 +75,11 @@ bool prim_map_get(ExecutionContext& ctx) {
     key = std::string(hs->view());
     hs->release();
 
-    // Pop map
+    // Pop map — pop_map pushes back on type mismatch
     auto* m = pop_map(ctx);
     if (!m) {
+        // Reconstruct key and restore stack: ( <non-map pushed back> key )
+        ctx.data_stack().push(Value::from(HeapString::create(key)));
         return false;
     }
 
@@ -127,9 +111,11 @@ bool prim_map_remove(ExecutionContext& ctx) {
     key = std::string(hs->view());
     hs->release();
 
-    // Pop map
+    // Pop map — pop_map pushes back on type mismatch
     auto* m = pop_map(ctx);
     if (!m) {
+        // Reconstruct key and restore stack: ( <non-map pushed back> key )
+        ctx.data_stack().push(Value::from(HeapString::create(key)));
         return false;
     }
 
@@ -200,9 +186,11 @@ bool prim_map_has(ExecutionContext& ctx) {
     key = std::string(hs->view());
     hs->release();
 
-    // Pop map
+    // Pop map — pop_map pushes back on type mismatch
     auto* m = pop_map(ctx);
     if (!m) {
+        // Reconstruct key and restore stack: ( <non-map pushed back> key )
+        ctx.data_stack().push(Value::from(HeapString::create(key)));
         return false;
     }
 

@@ -193,3 +193,111 @@ TEST_F(MapPrimitivesTest, MapUnderflow) {
     EXPECT_FALSE(prim_map_values(ctx()));
     EXPECT_FALSE(prim_map_has(ctx()));
 }
+
+// --- Type mismatch tests: non-map where map expected ---
+
+TEST_F(MapPrimitivesTest, MapSetNonMapRestoresStack) {
+    // Stack: ( string key val ) — string where map expected
+    auto* s = HeapString::create("not-a-map");
+    ctx().data_stack().push(Value::from(s));
+    ctx().data_stack().push(Value::from(HeapString::create("key")));
+    ctx().data_stack().push(Value(int64_t(42)));
+
+    size_t depth_before = ctx().data_stack().size();
+    EXPECT_FALSE(prim_map_set(ctx()));
+    // Stack fully restored: ( string key val )
+    EXPECT_EQ(ctx().data_stack().size(), depth_before);
+
+    auto opt_val = ctx().data_stack().pop();
+    EXPECT_EQ(opt_val->as_int, 42);
+    auto opt_key = ctx().data_stack().pop();
+    EXPECT_EQ(opt_key->type, Value::Type::String);
+    EXPECT_EQ(opt_key->as_string()->view(), "key");
+    opt_key->release();
+    auto opt_str = ctx().data_stack().pop();
+    EXPECT_EQ(opt_str->type, Value::Type::String);
+    EXPECT_EQ(opt_str->as_string()->view(), "not-a-map");
+    opt_str->release();
+}
+
+TEST_F(MapPrimitivesTest, MapGetNonMapRestoresStack) {
+    // Stack: ( integer key ) — integer where map expected
+    ctx().data_stack().push(Value(int64_t(99)));
+    ctx().data_stack().push(Value::from(HeapString::create("key")));
+
+    size_t depth_before = ctx().data_stack().size();
+    EXPECT_FALSE(prim_map_get(ctx()));
+    EXPECT_EQ(ctx().data_stack().size(), depth_before);
+
+    auto opt_key = ctx().data_stack().pop();
+    EXPECT_EQ(opt_key->type, Value::Type::String);
+    EXPECT_EQ(opt_key->as_string()->view(), "key");
+    opt_key->release();
+    auto opt_int = ctx().data_stack().pop();
+    EXPECT_EQ(opt_int->as_int, 99);
+}
+
+TEST_F(MapPrimitivesTest, MapRemoveNonMapRestoresStack) {
+    ctx().data_stack().push(Value(int64_t(77)));
+    ctx().data_stack().push(Value::from(HeapString::create("key")));
+
+    size_t depth_before = ctx().data_stack().size();
+    EXPECT_FALSE(prim_map_remove(ctx()));
+    EXPECT_EQ(ctx().data_stack().size(), depth_before);
+
+    auto opt_key = ctx().data_stack().pop();
+    EXPECT_EQ(opt_key->type, Value::Type::String);
+    opt_key->release();
+    auto opt_int = ctx().data_stack().pop();
+    EXPECT_EQ(opt_int->as_int, 77);
+}
+
+TEST_F(MapPrimitivesTest, MapHasNonMapRestoresStack) {
+    ctx().data_stack().push(Value(int64_t(55)));
+    ctx().data_stack().push(Value::from(HeapString::create("key")));
+
+    size_t depth_before = ctx().data_stack().size();
+    EXPECT_FALSE(prim_map_has(ctx()));
+    EXPECT_EQ(ctx().data_stack().size(), depth_before);
+
+    auto opt_key = ctx().data_stack().pop();
+    EXPECT_EQ(opt_key->type, Value::Type::String);
+    opt_key->release();
+    auto opt_int = ctx().data_stack().pop();
+    EXPECT_EQ(opt_int->as_int, 55);
+}
+
+TEST_F(MapPrimitivesTest, MapLengthNonMapRestoresStack) {
+    // pop_map now pushes back on type mismatch
+    ctx().data_stack().push(Value(int64_t(33)));
+
+    size_t depth_before = ctx().data_stack().size();
+    EXPECT_FALSE(prim_map_length(ctx()));
+    EXPECT_EQ(ctx().data_stack().size(), depth_before);
+
+    auto opt = ctx().data_stack().pop();
+    EXPECT_EQ(opt->as_int, 33);
+}
+
+TEST_F(MapPrimitivesTest, MapKeysNonMapRestoresStack) {
+    ctx().data_stack().push(Value::from(HeapString::create("not-a-map")));
+
+    size_t depth_before = ctx().data_stack().size();
+    EXPECT_FALSE(prim_map_keys(ctx()));
+    EXPECT_EQ(ctx().data_stack().size(), depth_before);
+
+    auto opt = ctx().data_stack().pop();
+    EXPECT_EQ(opt->type, Value::Type::String);
+    opt->release();
+}
+
+TEST_F(MapPrimitivesTest, MapValuesNonMapRestoresStack) {
+    ctx().data_stack().push(Value(true));
+
+    size_t depth_before = ctx().data_stack().size();
+    EXPECT_FALSE(prim_map_values(ctx()));
+    EXPECT_EQ(ctx().data_stack().size(), depth_before);
+
+    auto opt = ctx().data_stack().pop();
+    EXPECT_EQ(opt->type, Value::Type::Boolean);
+}
