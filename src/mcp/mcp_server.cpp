@@ -201,27 +201,18 @@ std::string McpServer::create_session(const std::string& user_id,
         session->user_id = user_id;
         session->email = email;
 
-#ifdef ETIL_MONGODB_ENABLED
-        // When MongoDB is active, resolve role dynamically from the database.
-        // This means role changes in MongoDB take effect on next session creation
-        // without waiting for JWT expiry.
-        std::string effective_role = role;
-        if (user_store_ && user_store_->available() && !email.empty()) {
-            auto db_role = user_store_->get_role(email);
-            if (!db_role.empty()) {
-                effective_role = db_role;
-            }
-        }
-        session->role = effective_role;
-#else
-        session->role = role;
-#endif
-
+        // Resolve role from file-based config (users.json).  This is the
+        // authoritative source — it drives both session->role (displayed by
+        // /whoami) and permission enforcement.  Falls back to JWT role if
+        // the user has no file-based mapping.
         if (auth_config_) {
+            session->role = auth_config_->role_for(user_id);
             auto* perms = auth_config_->permissions_for(user_id);
             if (perms) {
                 session->apply_role_permissions(*perms);
             }
+        } else {
+            session->role = role;  // JWT role as fallback
         }
     }
 #else
