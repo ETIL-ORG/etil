@@ -8,6 +8,7 @@
 #include "etil/core/version.hpp"
 
 #include "etil/mcp/http_transport.hpp"
+#include <spdlog/spdlog.h>
 
 #ifdef ETIL_JWT_ENABLED
 #include "etil/mcp/auth_config.hpp"
@@ -264,7 +265,26 @@ std::string McpServer::create_session(const std::string& user_id,
                 if (s->user_id == user_id) ++user_count;
             }
             if (user_count >= max_user) {
-                return {};  // per-user quota exceeded
+                // Evict the user's oldest session to make room.  This handles
+                // leaked sessions (TUI crash, network drop, sandbox not cleaned
+                // up) that would otherwise block the user until idle timeout.
+                std::string oldest_sid;
+                auto oldest_time = std::chrono::steady_clock::time_point::max();
+                for (const auto& [sid, s] : sessions_) {
+                    if (s->user_id == user_id &&
+                        s->last_activity < oldest_time) {
+                        oldest_time = s->last_activity;
+                        oldest_sid = sid;
+                    }
+                }
+                if (!oldest_sid.empty()) {
+                    spdlog::info("Evicting oldest session {} for user {} "
+                                 "(per-user quota {})",
+                                 oldest_sid, user_id, max_user);
+                    sessions_.erase(oldest_sid);
+                } else {
+                    return {};  // shouldn't happen, but fail safe
+                }
             }
         }
 #endif
