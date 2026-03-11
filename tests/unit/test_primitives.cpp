@@ -2666,7 +2666,7 @@ TEST_F(XtPrimitivesTest, DotSMixedTypes) {
     auto* hs = HeapString::create("hello");
     ctx.data_stack().push(Value::from(hs));
     ASSERT_TRUE(prim_dot_s(ctx));
-    EXPECT_EQ(out.str(), "<3> 42 3.14 <string>\n");
+    EXPECT_EQ(out.str(), "<3> 42 3.14 hello\n");
     EXPECT_EQ(ctx.data_stack().size(), 3u);
     // Clean up
     ctx.data_stack().pop()->release();

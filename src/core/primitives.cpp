@@ -719,13 +719,17 @@ bool prim_dot(ExecutionContext& ctx) {
     } else if (v.type == Value::Type::Boolean) {
         ctx.out() << (v.as_bool() ? "true" : "false") << " ";
     } else if (v.type == Value::Type::String) {
-        ctx.out() << "<string> ";
+        if (v.as_ptr) {
+            ctx.out() << v.as_string()->view() << " ";
+        } else {
+            ctx.out() << "<string:null> ";
+        }
     } else if (v.type == Value::Type::Array) {
-        ctx.out() << "<array> ";
+        ctx.out() << "<array:" << (v.as_ptr ? v.as_array()->length() : 0) << "> ";
     } else if (v.type == Value::Type::ByteArray) {
-        ctx.out() << "<bytes> ";
+        ctx.out() << "<bytes:" << (v.as_ptr ? v.as_byte_array()->length() : 0) << "> ";
     } else if (v.type == Value::Type::Map) {
-        ctx.out() << "<map> ";
+        ctx.out() << "<map:" << (v.as_ptr ? v.as_map()->size() : 0) << "> ";
     } else if (v.type == Value::Type::Matrix) {
         if (v.as_ptr) {
             auto* mat = v.as_matrix();
@@ -2375,13 +2379,22 @@ bool prim_dot_s(ExecutionContext& ctx) {
         } else if (v.type == Value::Type::Boolean) {
             ctx.out() << (v.as_bool() ? "true" : "false");
         } else if (v.type == Value::Type::String) {
-            ctx.out() << "<string>";
+            if (v.as_ptr) {
+                auto sv = v.as_string()->view();
+                if (sv.size() <= 64) {
+                    ctx.out() << sv;
+                } else {
+                    ctx.out() << sv.substr(0, 64) << "...";
+                }
+            } else {
+                ctx.out() << "<string:null>";
+            }
         } else if (v.type == Value::Type::Array) {
-            ctx.out() << "<array>";
+            ctx.out() << "<array:" << (v.as_ptr ? v.as_array()->length() : 0) << ">";
         } else if (v.type == Value::Type::ByteArray) {
-            ctx.out() << "<bytes>";
+            ctx.out() << "<bytes:" << (v.as_ptr ? v.as_byte_array()->length() : 0) << ">";
         } else if (v.type == Value::Type::Map) {
-            ctx.out() << "<map>";
+            ctx.out() << "<map:" << (v.as_ptr ? v.as_map()->size() : 0) << ">";
         } else if (v.type == Value::Type::Json) {
             ctx.out() << "<json>";
         } else if (v.type == Value::Type::Xt) {
