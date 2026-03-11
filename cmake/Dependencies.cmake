@@ -259,24 +259,22 @@ else()
 endif()
 
 # OpenBLAS/LAPACK for linear algebra (mat-* primitives)
-if(ETIL_BUILD_LINALG)
-    find_package(BLAS QUIET)
-    find_package(LAPACK QUIET)
-    if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
-        FetchContent_Declare(
-            OpenBLAS
-            URL https://github.com/OpenMathLib/OpenBLAS/archive/refs/tags/v0.3.28.tar.gz
-            URL_HASH SHA256=f1003466ad074e9b0c8d421a204121100b0751c96fc6fcf3d1456bd12f8a00a1
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        )
-        set(NOFORTRAN ON CACHE BOOL "")
-        set(BUILD_TESTING OFF CACHE BOOL "")
-        FetchContent_MakeAvailable(OpenBLAS)
-        set(BLAS_LIBRARIES openblas)
-        set(LAPACK_LIBRARIES openblas)
-    else()
-        message(STATUS "Using pre-built BLAS/LAPACK")
-    endif()
+find_package(BLAS QUIET)
+find_package(LAPACK QUIET)
+if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
+    FetchContent_Declare(
+        OpenBLAS
+        URL https://github.com/OpenMathLib/OpenBLAS/archive/refs/tags/v0.3.28.tar.gz
+        URL_HASH SHA256=f1003466ad074e9b0c8d421a204121100b0751c96fc6fcf3d1456bd12f8a00a1
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    set(NOFORTRAN ON CACHE BOOL "")
+    set(BUILD_TESTING OFF CACHE BOOL "")
+    FetchContent_MakeAvailable(OpenBLAS)
+    set(BLAS_LIBRARIES openblas)
+    set(LAPACK_LIBRARIES openblas)
+else()
+    message(STATUS "Using pre-built BLAS/LAPACK")
 endif()
 
 # Optional: jemalloc for better memory performance

@@ -104,7 +104,7 @@ copy overhead.
 | Conversion | `mat->json` `json->mat` `mat->array` |
 | TIL-level | `mat-xavier` `mat-he` `mat-mse` |
 
-Gated by `ETIL_BUILD_LINALG` (default ON). Requires OpenBLAS or compatible BLAS/LAPACK.
+Requires OpenBLAS or compatible BLAS/LAPACK (always compiled in).
 
 ### MongoDB
 
@@ -370,7 +370,6 @@ ninja
 |--------|---------|-------------|
 | `ETIL_BUILD_TESTS` | ON | Build unit and integration tests |
 | `ETIL_BUILD_EXAMPLES` | ON | Build REPL, MCP server, benchmarks |
-| `ETIL_BUILD_LINALG` | ON | Linear algebra (OpenBLAS/LAPACK) — 25 matrix words |
 | `ETIL_BUILD_HTTP_CLIENT` | OFF | HTTP client (`http-get`, `http-post`) — requires OpenSSL |
 | `ETIL_BUILD_JWT` | OFF | JWT authentication with RBAC |
 | `ETIL_BUILD_MONGODB` | OFF | MongoDB integration — requires `ETIL_BUILD_JWT` |
@@ -386,7 +385,7 @@ Fetched automatically by CMake (or resolved from a pre-built prefix via `CMAKE_P
 - [cpp-httplib](https://github.com/yhirose/cpp-httplib) — HTTP transport
 - [libuv](https://libuv.org/) — async file I/O
 - [Google Test](https://github.com/google/googletest) + [Google Benchmark](https://github.com/google/benchmark) — testing
-- [OpenBLAS](https://www.openblas.net/) — BLAS/LAPACK (when `ETIL_BUILD_LINALG=ON`)
+- [OpenBLAS](https://www.openblas.net/) — BLAS/LAPACK for linear algebra
 - [jwt-cpp](https://github.com/Thalhammer/jwt-cpp) + OpenSSL (when `ETIL_BUILD_JWT=ON`)
 - [mongocxx](https://www.mongodb.com/docs/drivers/cxx/) (when `ETIL_BUILD_MONGODB=ON`)
 

@@ -35,8 +35,7 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DETIL_BUILD_JWT=ON \
             -DETIL_BUILD_HTTP_CLIENT=ON \
-            -DETIL_BUILD_MONGODB=OFF \
-            -DETIL_BUILD_LINALG=ON
+            -DETIL_BUILD_MONGODB=OFF
 
       - name: Build
         run: ninja -C build

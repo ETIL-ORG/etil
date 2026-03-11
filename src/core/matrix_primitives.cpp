@@ -1,8 +1,6 @@
 // Copyright (c) 2026 Mark Deazley. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
-#ifdef ETIL_LINALG_ENABLED
-
 #include "etil/core/heap_primitives.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_array.hpp"
@@ -1258,5 +1256,3 @@ void register_matrix_primitives(Dictionary& dict) {
 }
 
 } // namespace etil::core
-
-#endif // ETIL_LINALG_ENABLED

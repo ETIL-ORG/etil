@@ -424,8 +424,6 @@ TEST_F(JsonPrimitivesTest, JsonToString) {
     opt->release();
 }
 
-#ifdef ETIL_LINALG_ENABLED
-
 TEST_F(JsonPrimitivesTest, MatToJson) {
     run("2 2 mat-eye mat->json");
     auto opt = ctx().data_stack().pop();
@@ -486,5 +484,3 @@ TEST_F(JsonPrimitivesTest, JsonToMatNotObject) {
     run("j| [1,2,3] | json->mat");
     EXPECT_EQ(ctx().data_stack().size(), 0u);
 }
-
-#endif // ETIL_LINALG_ENABLED

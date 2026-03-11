@@ -1,8 +1,6 @@
 // Copyright (c) 2026 Mark Deazley. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
-#ifdef ETIL_LINALG_ENABLED
-
 #include "etil/core/primitives.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_array.hpp"
@@ -778,5 +776,3 @@ TEST_F(MatrixPrimitivesTest, MatToArrayRoundTrip) {
     EXPECT_DOUBLE_EQ(mat->get(1, 2), 6.0);
     mat->release();
 }
-
-#endif // ETIL_LINALG_ENABLED

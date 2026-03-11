@@ -1411,7 +1411,6 @@ s" truncate-sync" s" category" s" text" s" file-io-sync" meta! drop
 s" truncate-sync" s" examples" s" code" s| s" /home/log.txt" truncate-sync drop| meta! drop
 
 # --- Matrix (Linear Algebra) ---
-# These words are only available when built with ETIL_BUILD_LINALG=ON
 
 s" mat-new" s" description" s" text" s" Create a zero-filled matrix" meta! drop
 s" mat-new" s" stack-effect" s" text" s" ( rows cols -- mat )" meta! drop

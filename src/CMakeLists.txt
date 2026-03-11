@@ -90,13 +90,10 @@ if(ETIL_BUILD_MONGODB)
 endif()
 
 # Linear algebra primitives (mat-new, mat*, mat-solve, etc.)
-if(ETIL_BUILD_LINALG)
-    target_sources(etil PRIVATE
-        core/matrix_primitives.cpp
-    )
-    target_link_libraries(etil PUBLIC ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} lapacke)
-    target_compile_definitions(etil PUBLIC ETIL_LINALG_ENABLED)
-endif()
+target_sources(etil PRIVATE
+    core/matrix_primitives.cpp
+)
+target_link_libraries(etil PUBLIC ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} lapacke)
 
 if(ETIL_USE_JEMALLOC AND JEMALLOC_FOUND)
     target_link_libraries(etil PUBLIC ${JEMALLOC_LIBRARIES})

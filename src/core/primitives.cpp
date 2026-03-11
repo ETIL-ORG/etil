@@ -2990,10 +2990,8 @@ void register_primitives(Dictionary& dict) {
     register_map_primitives(dict);
     register_json_primitives(dict);
 
-#ifdef ETIL_LINALG_ENABLED
     // Register matrix primitives (mat-new, mat*, mat-solve, etc.)
     register_matrix_primitives(dict);
-#endif
 
     // Register LVFS primitives (cwd, cd, ls, ll, lr, cat)
     etil::lvfs::register_lvfs_primitives(dict);

@@ -346,7 +346,6 @@ bool prim_json_to_array(ExecutionContext& ctx) {
     return true;
 }
 
-#ifdef ETIL_LINALG_ENABLED
 // mat->json ( mat -- json )
 bool prim_mat_to_json(ExecutionContext& ctx) {
     auto* mat = pop_matrix(ctx);
@@ -422,7 +421,6 @@ bool prim_json_to_mat(ExecutionContext& ctx) {
     ctx.data_stack().push(Value::from(mat));
     return true;
 }
-#endif // ETIL_LINALG_ENABLED
 
 // map->json ( map -- json )
 bool prim_map_to_json(ExecutionContext& ctx) {
@@ -509,7 +507,6 @@ void register_json_primitives(Dictionary& dict) {
         make_primitive("prim_json_to_value", prim_json_to_value,
             {T::Custom}, {T::Custom}));
 
-#ifdef ETIL_LINALG_ENABLED
     dict.register_word("mat->json",
         make_primitive("prim_mat_to_json", prim_mat_to_json,
             {T::Custom}, {T::Custom}));
@@ -517,7 +514,6 @@ void register_json_primitives(Dictionary& dict) {
     dict.register_word("json->mat",
         make_primitive("prim_json_to_mat", prim_json_to_mat,
             {T::Custom}, {T::Custom}));
-#endif
 }
 
 } // namespace etil::core
