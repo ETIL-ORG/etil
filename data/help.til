@@ -1516,3 +1516,89 @@ s" mat." s" description" s" text" s" Pretty-print matrix (consumes it)" meta! dr
 s" mat." s" stack-effect" s" text" s" ( mat -- )" meta! drop
 s" mat." s" category" s" text" s" matrix" meta! drop
 s" mat." s" examples" s" code" s" 3 mat-eye mat." meta! drop
+
+# --- Neural Network Primitives ---
+
+s" mat-relu" s" description" s" text" s" Element-wise ReLU activation: max(0, x)" meta! drop
+s" mat-relu" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-relu" s" category" s" text" s" matrix" meta! drop
+
+s" mat-sigmoid" s" description" s" text" s" Element-wise sigmoid activation: 1/(1+exp(-x))" meta! drop
+s" mat-sigmoid" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-sigmoid" s" category" s" text" s" matrix" meta! drop
+
+s" mat-tanh" s" description" s" text" s" Element-wise tanh activation" meta! drop
+s" mat-tanh" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-tanh" s" category" s" text" s" matrix" meta! drop
+
+s" mat-relu'" s" description" s" text" s" Element-wise ReLU derivative from pre-activation: x>0 ? 1 : 0" meta! drop
+s" mat-relu'" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-relu'" s" category" s" text" s" matrix" meta! drop
+
+s" mat-sigmoid'" s" description" s" text" s" Element-wise sigmoid derivative from pre-activation: s(x)*(1-s(x))" meta! drop
+s" mat-sigmoid'" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-sigmoid'" s" category" s" text" s" matrix" meta! drop
+
+s" mat-tanh'" s" description" s" text" s" Element-wise tanh derivative from pre-activation: 1-tanh(x)^2" meta! drop
+s" mat-tanh'" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-tanh'" s" category" s" text" s" matrix" meta! drop
+
+s" mat-hadamard" s" description" s" text" s" Element-wise matrix multiplication (Hadamard product)" meta! drop
+s" mat-hadamard" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
+s" mat-hadamard" s" category" s" text" s" matrix" meta! drop
+
+s" mat-add-col" s" description" s" text" s" Broadcast-add column vector to every column of matrix" meta! drop
+s" mat-add-col" s" stack-effect" s" text" s" ( mat col -- mat )" meta! drop
+s" mat-add-col" s" category" s" text" s" matrix" meta! drop
+
+s" mat-clip" s" description" s" text" s" Clamp matrix elements to [lo, hi]" meta! drop
+s" mat-clip" s" stack-effect" s" text" s" ( mat lo hi -- mat )" meta! drop
+s" mat-clip" s" category" s" text" s" matrix" meta! drop
+
+s" mat-randn" s" description" s" text" s" Create matrix with standard normal random values (Box-Muller)" meta! drop
+s" mat-randn" s" stack-effect" s" text" s" ( rows cols -- mat )" meta! drop
+s" mat-randn" s" category" s" text" s" matrix" meta! drop
+
+s" mat-sum" s" description" s" text" s" Sum all matrix elements" meta! drop
+s" mat-sum" s" stack-effect" s" text" s" ( mat -- scalar )" meta! drop
+s" mat-sum" s" category" s" text" s" matrix" meta! drop
+
+s" mat-col-sum" s" description" s" text" s" Sum across columns, producing a (rows x 1) column vector" meta! drop
+s" mat-col-sum" s" stack-effect" s" text" s" ( mat -- col_vec )" meta! drop
+s" mat-col-sum" s" category" s" text" s" matrix" meta! drop
+
+s" mat-mean" s" description" s" text" s" Mean of all matrix elements" meta! drop
+s" mat-mean" s" stack-effect" s" text" s" ( mat -- scalar )" meta! drop
+s" mat-mean" s" category" s" text" s" matrix" meta! drop
+
+s" mat-softmax" s" description" s" text" s" Column-wise softmax (numerically stable)" meta! drop
+s" mat-softmax" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
+s" mat-softmax" s" category" s" text" s" matrix" meta! drop
+
+s" mat-cross-entropy" s" description" s" text" s" Cross-entropy loss: -mean(actual * log(predicted + 1e-15))" meta! drop
+s" mat-cross-entropy" s" stack-effect" s" text" s" ( predicted actual -- scalar )" meta! drop
+s" mat-cross-entropy" s" category" s" text" s" matrix" meta! drop
+
+s" mat-apply" s" description" s" text" s" Apply execution token to each matrix element" meta! drop
+s" mat-apply" s" stack-effect" s" text" s" ( mat xt -- mat )" meta! drop
+s" mat-apply" s" category" s" text" s" matrix" meta! drop
+
+s" tanh" s" description" s" text" s" Scalar hyperbolic tangent" meta! drop
+s" tanh" s" stack-effect" s" text" s" ( x -- tanh(x) )" meta! drop
+s" tanh" s" category" s" text" s" math" meta! drop
+
+# --- MLP TIL-Level Words (examples, not C++ primitives) ---
+
+s" mat-randn" s" examples" s" code" s" 42 random-seed 3 4 mat-randn mat." meta! drop
+
+s" mat-apply" s" examples" s" code" s" : double-it 2.0 * ; array-new 1.0 array-push 2.0 array-push 3.0 array-push 1 3 mat-from-array ' double-it mat-apply mat." meta! drop
+
+s" mat-softmax" s" examples" s" code" s" array-new 1.0 array-push 2.0 array-push 3.0 array-push 3 1 mat-from-array mat-softmax mat." meta! drop
+
+: mat-xavier over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;
+: mat-he over over mat-randn -rot drop int->float sqrt 2.0 swap / mat-scale ;
+: mat-mse mat- dup mat-hadamard mat-mean ;
+
+s" mat-randn" s" examples" s" code" s" 42 random-seed  : mat-xavier over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;  3 2 mat-xavier mat." meta! drop
+
+s" mat-cross-entropy" s" examples" s" code" s" : mat-mse mat- dup mat-hadamard mat-mean ;" meta! drop

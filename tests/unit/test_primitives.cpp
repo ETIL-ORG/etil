@@ -984,9 +984,9 @@ TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
 #ifdef ETIL_LINALG_ENABLED
-    EXPECT_EQ(dict.concept_count(), 233u);  // +25 matrix primitives
+    EXPECT_EQ(dict.concept_count(), 250u);  // +25 matrix + 16 neural net primitives
 #else
-    EXPECT_EQ(dict.concept_count(), 208u);
+    EXPECT_EQ(dict.concept_count(), 209u);  // +1 tanh scalar
 #endif
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());

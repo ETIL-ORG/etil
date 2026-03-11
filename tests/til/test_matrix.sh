@@ -12,14 +12,7 @@ if [[ ! -x "$REPL" ]]; then
     exit 1
 fi
 
-# Check if linalg is enabled by testing for mat-new word
-OUTPUT=$(cd "$PROJECT_DIR" && echo "mat-new" | "$REPL" --quiet 2>&1) || true
-if echo "$OUTPUT" | grep -q "Unknown word"; then
-    echo "--- Skipping matrix tests (ETIL_BUILD_LINALG not enabled) ---"
-    exit 0
-fi
-
-OUTPUT=$(cd "$PROJECT_DIR" && "$REPL" --quiet 2>/dev/null <<'EOF'
+OUTPUT=$(cd "$PROJECT_DIR" && "$REPL" <<'EOF'
 include tests/til/test_matrix.til
 /quit
 EOF
@@ -28,13 +21,18 @@ EOF
 echo "$OUTPUT"
 
 if echo "$OUTPUT" | grep -q "FAIL"; then
-    echo "--- TIL MATRIX TEST FAILED ---"
+    echo "--- TIL TEST FAILED ---"
+    exit 1
+fi
+
+if echo "$OUTPUT" | grep -qi "error"; then
+    echo "--- TIL TEST ERROR ---"
     exit 1
 fi
 
 if ! echo "$OUTPUT" | grep -q "PASS"; then
-    echo "--- TIL MATRIX TEST: no PASS output ---"
+    echo "--- TIL TEST ERROR: no PASS output ---"
     exit 1
 fi
 
-echo "--- All matrix tests passed ---"
+echo "--- All til tests passed ---"

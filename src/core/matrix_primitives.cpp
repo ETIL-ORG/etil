@@ -10,6 +10,7 @@
 #include "etil/core/execution_context.hpp"
 #include "etil/core/dictionary.hpp"
 #include "etil/core/primitives.hpp"
+#include "etil/core/compiled_body.hpp"
 #include "etil/core/value_helpers.hpp"
 #include "etil/core/word_impl.hpp"
 
@@ -184,10 +185,9 @@ bool prim_mat_rand(ExecutionContext& ctx) {
         return false;
     }
     auto* mat = new HeapMatrix(rows, cols);
-    static thread_local std::mt19937_64 rng(std::random_device{}());
     std::uniform_real_distribution<double> dist(0.0, 1.0);
     for (size_t i = 0; i < mat->size(); ++i) {
-        mat->data()[i] = dist(rng);
+        mat->data()[i] = dist(prng_engine());
     }
     ctx.data_stack().push(Value::from(mat));
     return true;
@@ -758,6 +758,370 @@ bool prim_mat_print(ExecutionContext& ctx) {
 }
 
 // ---------------------------------------------------------------------------
+// Neural Network — Activation Functions
+// ---------------------------------------------------------------------------
+
+// mat-relu ( mat -- mat )
+bool prim_mat_relu(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        C->data()[i] = std::max(0.0, A->data()[i]);
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-sigmoid ( mat -- mat )
+bool prim_mat_sigmoid(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        C->data()[i] = 1.0 / (1.0 + std::exp(-A->data()[i]));
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-tanh ( mat -- mat )
+bool prim_mat_tanh(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        C->data()[i] = std::tanh(A->data()[i]);
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-relu' ( mat -- mat ) — derivative: x > 0 ? 1.0 : 0.0
+bool prim_mat_relu_prime(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        C->data()[i] = A->data()[i] > 0.0 ? 1.0 : 0.0;
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-sigmoid' ( mat -- mat ) — derivative from pre-activation: s(x)*(1-s(x))
+bool prim_mat_sigmoid_prime(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        double s = 1.0 / (1.0 + std::exp(-A->data()[i]));
+        C->data()[i] = s * (1.0 - s);
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-tanh' ( mat -- mat ) — derivative from pre-activation: 1 - tanh(x)^2
+bool prim_mat_tanh_prime(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        double t = std::tanh(A->data()[i]);
+        C->data()[i] = 1.0 - t * t;
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Neural Network — Element-wise and Broadcasting
+// ---------------------------------------------------------------------------
+
+// mat-hadamard ( mat1 mat2 -- mat ) — element-wise multiply
+bool prim_mat_hadamard(ExecutionContext& ctx) {
+    auto* B = pop_matrix(ctx);
+    if (!B) return false;
+    auto* A = pop_matrix(ctx);
+    if (!A) {
+        ctx.data_stack().push(Value::from(B));
+        return false;
+    }
+    if (A->rows() != B->rows() || A->cols() != B->cols()) {
+        ctx.err() << "Error: mat-hadamard dimension mismatch\n";
+        A->release();
+        B->release();
+        return false;
+    }
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        C->data()[i] = A->data()[i] * B->data()[i];
+    }
+    A->release();
+    B->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-add-col ( mat col -- mat ) — broadcast-add column vector to every column
+bool prim_mat_add_col(ExecutionContext& ctx) {
+    auto* col = pop_matrix(ctx);
+    if (!col) return false;
+    auto* A = pop_matrix(ctx);
+    if (!A) {
+        ctx.data_stack().push(Value::from(col));
+        return false;
+    }
+    if (col->cols() != 1 || col->rows() != A->rows()) {
+        ctx.err() << "Error: mat-add-col requires col to be " << A->rows()
+                  << "x1, got " << col->rows() << "x" << col->cols() << "\n";
+        A->release();
+        col->release();
+        return false;
+    }
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    int64_t rows = A->rows();
+    int64_t cols = A->cols();
+    for (int64_t c = 0; c < cols; ++c) {
+        for (int64_t r = 0; r < rows; ++r) {
+            C->data()[r + c * rows] = A->data()[r + c * rows] + col->data()[r];
+        }
+    }
+    A->release();
+    col->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-clip ( mat lo hi -- mat ) — clamp elements to [lo, hi]
+bool prim_mat_clip(ExecutionContext& ctx) {
+    double hi;
+    if (!pop_double(ctx, hi)) return false;
+    double lo;
+    if (!pop_double(ctx, lo)) {
+        ctx.data_stack().push(Value(hi));
+        return false;
+    }
+    auto* A = pop_matrix(ctx);
+    if (!A) {
+        ctx.data_stack().push(Value(lo));
+        ctx.data_stack().push(Value(hi));
+        return false;
+    }
+    if (lo > hi) {
+        ctx.err() << "Error: mat-clip lo (" << lo << ") > hi (" << hi << ")\n";
+        A->release();
+        return false;
+    }
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    for (size_t i = 0; i < C->size(); ++i) {
+        C->data()[i] = std::clamp(A->data()[i], lo, hi);
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Neural Network — Random Initialization
+// ---------------------------------------------------------------------------
+
+// mat-randn ( rows cols -- mat ) — standard normal distribution (Box-Muller)
+bool prim_mat_randn(ExecutionContext& ctx) {
+    int64_t cols, rows;
+    if (!pop_int(ctx, cols)) return false;
+    if (!pop_int(ctx, rows)) {
+        ctx.data_stack().push(Value(cols));
+        return false;
+    }
+    if (rows <= 0 || cols <= 0) {
+        ctx.err() << "Error: mat-randn requires positive dimensions\n";
+        return false;
+    }
+    auto* mat = new HeapMatrix(rows, cols);
+    std::normal_distribution<double> dist(0.0, 1.0);
+    for (size_t i = 0; i < mat->size(); ++i) {
+        mat->data()[i] = dist(prng_engine());
+    }
+    ctx.data_stack().push(Value::from(mat));
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Neural Network — Reduction Operations
+// ---------------------------------------------------------------------------
+
+// mat-sum ( mat -- scalar ) — sum all elements
+bool prim_mat_sum(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    double sum = 0.0;
+    for (size_t i = 0; i < A->size(); ++i) {
+        sum += A->data()[i];
+    }
+    A->release();
+    ctx.data_stack().push(Value(sum));
+    return true;
+}
+
+// mat-col-sum ( mat -- col_vec ) — sum across columns → (rows x 1)
+bool prim_mat_col_sum(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    int64_t rows = A->rows();
+    int64_t cols = A->cols();
+    auto* C = new HeapMatrix(rows, 1);
+    for (int64_t r = 0; r < rows; ++r) {
+        double sum = 0.0;
+        for (int64_t c = 0; c < cols; ++c) {
+            sum += A->data()[r + c * rows];
+        }
+        C->data()[r] = sum;
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-mean ( mat -- scalar ) — mean of all elements
+bool prim_mat_mean(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    size_t n = A->size();
+    double sum = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        sum += A->data()[i];
+    }
+    A->release();
+    ctx.data_stack().push(Value(sum / static_cast<double>(n)));
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Neural Network — Classification
+// ---------------------------------------------------------------------------
+
+// mat-softmax ( mat -- mat ) — column-wise softmax (numerically stable)
+bool prim_mat_softmax(ExecutionContext& ctx) {
+    auto* A = pop_matrix(ctx);
+    if (!A) return false;
+    int64_t rows = A->rows();
+    int64_t cols = A->cols();
+    auto* C = new HeapMatrix(rows, cols);
+    for (int64_t c = 0; c < cols; ++c) {
+        // Find column max for numerical stability
+        double max_val = A->data()[0 + c * rows];
+        for (int64_t r = 1; r < rows; ++r) {
+            max_val = std::max(max_val, A->data()[r + c * rows]);
+        }
+        // Compute exp(x - max) and column sum
+        double col_sum = 0.0;
+        for (int64_t r = 0; r < rows; ++r) {
+            double e = std::exp(A->data()[r + c * rows] - max_val);
+            C->data()[r + c * rows] = e;
+            col_sum += e;
+        }
+        // Normalize
+        for (int64_t r = 0; r < rows; ++r) {
+            C->data()[r + c * rows] /= col_sum;
+        }
+    }
+    A->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// mat-cross-entropy ( predicted actual -- scalar ) — cross-entropy loss
+bool prim_mat_cross_entropy(ExecutionContext& ctx) {
+    auto* actual = pop_matrix(ctx);
+    if (!actual) return false;
+    auto* pred = pop_matrix(ctx);
+    if (!pred) {
+        ctx.data_stack().push(Value::from(actual));
+        return false;
+    }
+    if (pred->rows() != actual->rows() || pred->cols() != actual->cols()) {
+        ctx.err() << "Error: mat-cross-entropy dimension mismatch\n";
+        pred->release();
+        actual->release();
+        return false;
+    }
+    double sum = 0.0;
+    for (size_t i = 0; i < pred->size(); ++i) {
+        sum -= actual->data()[i] * std::log(pred->data()[i] + 1e-15);
+    }
+    double loss = sum / static_cast<double>(pred->size());
+    pred->release();
+    actual->release();
+    ctx.data_stack().push(Value(loss));
+    return true;
+}
+
+// mat-apply ( mat xt -- mat ) — apply xt to each element
+bool prim_mat_apply(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt) {
+        ctx.err() << "Error: mat-apply requires an execution token\n";
+        ctx.data_stack().push(*xt_val);
+        return false;
+    }
+    auto* A = pop_matrix(ctx);
+    if (!A) {
+        ctx.data_stack().push(*xt_val);
+        return false;
+    }
+    auto* impl = xt_val->as_xt_impl();
+    auto* C = new HeapMatrix(A->rows(), A->cols());
+    bool ok = true;
+    for (size_t i = 0; i < A->size(); ++i) {
+        ctx.data_stack().push(Value(A->data()[i]));
+        if (impl->native_code()) {
+            ok = impl->native_code()(ctx);
+        } else if (impl->bytecode()) {
+            ok = execute_compiled(*impl->bytecode(), ctx);
+        } else {
+            ctx.err() << "Error: mat-apply xt has no implementation\n";
+            ok = false;
+        }
+        if (!ok) {
+            A->release();
+            delete C;
+            xt_val->release();
+            return false;
+        }
+        auto result = ctx.data_stack().pop();
+        if (!result) {
+            ctx.err() << "Error: mat-apply xt did not leave a result\n";
+            A->release();
+            delete C;
+            xt_val->release();
+            return false;
+        }
+        double val = 0.0;
+        if (!value_as_double(*result, val)) {
+            ctx.err() << "Error: mat-apply xt must return a number\n";
+            A->release();
+            delete C;
+            xt_val->release();
+            return false;
+        }
+        C->data()[i] = val;
+    }
+    A->release();
+    xt_val->release();
+    ctx.data_stack().push(Value::from(C));
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -831,6 +1195,48 @@ void register_matrix_primitives(Dictionary& dict) {
         {T::Unknown}, {T::Float}));
     dict.register_word("mat.", make_word("prim_mat_print", prim_mat_print,
         {T::Unknown}, {}));
+
+    // Neural Network — Activation Functions
+    dict.register_word("mat-relu", make_word("prim_mat_relu", prim_mat_relu,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-sigmoid", make_word("prim_mat_sigmoid", prim_mat_sigmoid,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-tanh", make_word("prim_mat_tanh", prim_mat_tanh,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-relu'", make_word("prim_mat_relu_prime", prim_mat_relu_prime,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-sigmoid'", make_word("prim_mat_sigmoid_prime", prim_mat_sigmoid_prime,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-tanh'", make_word("prim_mat_tanh_prime", prim_mat_tanh_prime,
+        {T::Unknown}, {T::Unknown}));
+
+    // Neural Network — Element-wise and Broadcasting
+    dict.register_word("mat-hadamard", make_word("prim_mat_hadamard", prim_mat_hadamard,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-add-col", make_word("prim_mat_add_col", prim_mat_add_col,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-clip", make_word("prim_mat_clip", prim_mat_clip,
+        {T::Unknown, T::Float, T::Float}, {T::Unknown}));
+
+    // Neural Network — Random Initialization
+    dict.register_word("mat-randn", make_word("prim_mat_randn", prim_mat_randn,
+        {T::Integer, T::Integer}, {T::Unknown}));
+
+    // Neural Network — Reduction Operations
+    dict.register_word("mat-sum", make_word("prim_mat_sum", prim_mat_sum,
+        {T::Unknown}, {T::Float}));
+    dict.register_word("mat-col-sum", make_word("prim_mat_col_sum", prim_mat_col_sum,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-mean", make_word("prim_mat_mean", prim_mat_mean,
+        {T::Unknown}, {T::Float}));
+
+    // Neural Network — Classification
+    dict.register_word("mat-softmax", make_word("prim_mat_softmax", prim_mat_softmax,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("mat-cross-entropy", make_word("prim_mat_cross_entropy", prim_mat_cross_entropy,
+        {T::Unknown, T::Unknown}, {T::Float}));
+    dict.register_word("mat-apply", make_word("prim_mat_apply", prim_mat_apply,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
 }
 
 } // namespace etil::core

@@ -90,12 +90,18 @@ copy overhead.
 
 | Category | Words |
 |----------|-------|
-| Constructors | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` |
+| Constructors | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` `mat-randn` |
 | Accessors | `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` |
-| Arithmetic | `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` |
+| Arithmetic | `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-hadamard` `mat-add-col` `mat-clip` |
+| Activations | `mat-relu` `mat-sigmoid` `mat-tanh` |
+| Derivatives | `mat-relu'` `mat-sigmoid'` `mat-tanh'` |
+| Reductions | `mat-sum` `mat-col-sum` `mat-mean` |
+| Classification | `mat-softmax` `mat-cross-entropy` |
+| Extensibility | `mat-apply` (execute xt per element) |
 | Solvers | `mat-solve` (DGESV) `mat-inv` (DGETRF+DGETRI) `mat-det` (LU) |
 | Decompositions | `mat-eigen` (DSYEV/DGEEV) `mat-svd` (DGESVD) `mat-lstsq` (DGELS) |
 | Utilities | `mat-norm` `mat-trace` `mat.` |
+| TIL-level | `mat-xavier` `mat-he` `mat-mse` |
 
 Gated by `ETIL_BUILD_LINALG` (default ON). Requires OpenBLAS or compatible BLAS/LAPACK.
 
@@ -322,7 +328,7 @@ LITE
 | ByteArray | `bytes-new` `bytes-get` `bytes-set` `bytes-length` `bytes-resize` `bytes->string` `string->bytes` |
 | Map | `map-new` `map-set` `map-get` `map-remove` `map-length` `map-keys` `map-values` `map-has?` |
 | JSON | `json-parse` `json-dump` `json-pretty` `json-get` `json-length` `json-type` `json-keys` `json->map` `json->array` `map->json` `array->json` `json->value` |
-| Matrix | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-solve` `mat-inv` `mat-det` `mat-eigen` `mat-svd` `mat-lstsq` `mat-norm` `mat-trace` `mat.` |
+| Matrix | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` `mat-randn` `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-hadamard` `mat-add-col` `mat-clip` `mat-relu` `mat-sigmoid` `mat-tanh` `mat-relu'` `mat-sigmoid'` `mat-tanh'` `mat-sum` `mat-col-sum` `mat-mean` `mat-softmax` `mat-cross-entropy` `mat-apply` `mat-solve` `mat-inv` `mat-det` `mat-eigen` `mat-svd` `mat-lstsq` `mat-norm` `mat-trace` `mat.` |
 | LVFS | `cwd` `cd` `ls` `ll` `lr` `cat` |
 | System | `sys-semver` `sys-timestamp` `sys-datafields` `sys-notification` `user-notification` `abort` |
 | Time | `time-us` `us->iso` `us->iso-us` `us->jd` `jd->us` `us->mjd` `mjd->us` `sleep` |

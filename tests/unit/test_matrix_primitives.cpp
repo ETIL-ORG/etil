@@ -433,4 +433,312 @@ TEST_F(MatrixPrimitivesTest, FormatValue) {
     opt->release();
 }
 
+// ---------------------------------------------------------------------------
+// Neural Network — Activation Functions (Stage 1)
+// ---------------------------------------------------------------------------
+
+TEST_F(MatrixPrimitivesTest, MatRelu) {
+    run("array-new -2.0 array-push 0.0 array-push 3.0 array-push 1 3 mat-from-array mat-relu");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 0.0);  // max(0, -2) = 0
+    EXPECT_DOUBLE_EQ(mat->get(0, 1), 0.0);  // max(0, 0) = 0
+    EXPECT_DOUBLE_EQ(mat->get(0, 2), 3.0);  // max(0, 3) = 3
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatSigmoid) {
+    run("array-new 0.0 array-push 1 1 mat-from-array mat-sigmoid");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_NEAR(mat->get(0, 0), 0.5, 1e-10);  // sigmoid(0) = 0.5
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatSigmoidLargePos) {
+    run("array-new 100.0 array-push 1 1 mat-from-array mat-sigmoid");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_NEAR(mat->get(0, 0), 1.0, 1e-10);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatTanh) {
+    run("array-new 0.0 array-push 1 1 mat-from-array mat-tanh");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_NEAR(mat->get(0, 0), 0.0, 1e-10);  // tanh(0) = 0
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatHadamard) {
+    run("array-new 2.0 array-push 3.0 array-push 1 2 mat-from-array");
+    run("array-new 4.0 array-push 5.0 array-push 1 2 mat-from-array");
+    run("mat-hadamard");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 8.0);   // 2*4
+    EXPECT_DOUBLE_EQ(mat->get(0, 1), 15.0);  // 3*5
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatHadamardDimensionMismatch) {
+    run("2 3 mat-new 3 2 mat-new mat-hadamard");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+TEST_F(MatrixPrimitivesTest, MatAddCol) {
+    // mat = [1 2; 3 4], col = [10; 20]
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array");
+    run("array-new 10.0 array-push 20.0 array-push 2 1 mat-from-array");
+    run("mat-add-col");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 11.0);  // 1+10
+    EXPECT_DOUBLE_EQ(mat->get(1, 0), 23.0);  // 3+20
+    EXPECT_DOUBLE_EQ(mat->get(0, 1), 12.0);  // 2+10
+    EXPECT_DOUBLE_EQ(mat->get(1, 1), 24.0);  // 4+20
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatAddColDimensionMismatch) {
+    run("2 2 mat-new 3 1 mat-new mat-add-col");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+TEST_F(MatrixPrimitivesTest, MatRandn) {
+    run("42 random-seed 3 4 mat-randn");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 3);
+    EXPECT_EQ(mat->cols(), 4);
+    // Normal distribution — values can be negative (unlike mat-rand)
+    bool has_negative = false;
+    for (size_t i = 0; i < mat->size(); ++i) {
+        if (mat->data()[i] < 0.0) has_negative = true;
+    }
+    // With 12 samples from N(0,1), extremely unlikely all are non-negative
+    EXPECT_TRUE(has_negative);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatRandnReproducible) {
+    run("42 random-seed 2 2 mat-randn");
+    auto opt1 = ctx().data_stack().pop();
+    ASSERT_TRUE(opt1.has_value());
+    auto* m1 = opt1->as_matrix();
+    double v00 = m1->get(0, 0);
+    m1->release();
+
+    run("42 random-seed 2 2 mat-randn");
+    auto opt2 = ctx().data_stack().pop();
+    ASSERT_TRUE(opt2.has_value());
+    auto* m2 = opt2->as_matrix();
+    EXPECT_DOUBLE_EQ(m2->get(0, 0), v00);
+    m2->release();
+}
+
+// ---------------------------------------------------------------------------
+// Neural Network — Backpropagation (Stage 2)
+// ---------------------------------------------------------------------------
+
+TEST_F(MatrixPrimitivesTest, MatReluPrime) {
+    run("array-new -1.0 array-push 0.0 array-push 2.0 array-push 1 3 mat-from-array mat-relu'");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 0.0);  // -1 <= 0
+    EXPECT_DOUBLE_EQ(mat->get(0, 1), 0.0);  // 0 <= 0
+    EXPECT_DOUBLE_EQ(mat->get(0, 2), 1.0);  // 2 > 0
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatSigmoidPrime) {
+    run("array-new 0.0 array-push 1 1 mat-from-array mat-sigmoid'");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    // sigmoid'(0) = sigmoid(0) * (1 - sigmoid(0)) = 0.5 * 0.5 = 0.25
+    EXPECT_NEAR(mat->get(0, 0), 0.25, 1e-10);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatTanhPrime) {
+    run("array-new 0.0 array-push 1 1 mat-from-array mat-tanh'");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    // tanh'(0) = 1 - tanh(0)^2 = 1 - 0 = 1
+    EXPECT_NEAR(mat->get(0, 0), 1.0, 1e-10);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatSum) {
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-sum");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_NEAR(opt->as_float, 10.0, 1e-10);
+}
+
+TEST_F(MatrixPrimitivesTest, MatColSum) {
+    // [1 2; 3 4] → col-sum = [1+2; 3+4] = [3; 7]
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-col-sum");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 2);
+    EXPECT_EQ(mat->cols(), 1);
+    EXPECT_NEAR(mat->get(0, 0), 3.0, 1e-10);
+    EXPECT_NEAR(mat->get(1, 0), 7.0, 1e-10);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatMean) {
+    run("array-new 2.0 array-push 4.0 array-push 6.0 array-push 8.0 array-push 2 2 mat-from-array mat-mean");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_NEAR(opt->as_float, 5.0, 1e-10);
+}
+
+TEST_F(MatrixPrimitivesTest, MatClip) {
+    run("array-new -5.0 array-push 0.5 array-push 10.0 array-push 1 3 mat-from-array 0.0 1.0 mat-clip");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 0.0);   // clamped from -5
+    EXPECT_DOUBLE_EQ(mat->get(0, 1), 0.5);   // within range
+    EXPECT_DOUBLE_EQ(mat->get(0, 2), 1.0);   // clamped from 10
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatClipLoGtHi) {
+    run("array-new 1.0 array-push 1 1 mat-from-array 5.0 1.0 mat-clip");
+    // lo > hi → error, matrix consumed, stack empty
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+
+TEST_F(MatrixPrimitivesTest, ScalarTanh) {
+    run("0.0 tanh");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_NEAR(opt->as_float, 0.0, 1e-10);
+}
+
+TEST_F(MatrixPrimitivesTest, ScalarTanhNonZero) {
+    run("1.0 tanh");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_NEAR(opt->as_float, std::tanh(1.0), 1e-10);
+}
+
+// ---------------------------------------------------------------------------
+// Neural Network — Classification (Stage 3)
+// ---------------------------------------------------------------------------
+
+TEST_F(MatrixPrimitivesTest, MatSoftmax) {
+    // Single column [1; 2; 3] → softmax
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 3 1 mat-from-array mat-softmax");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 3);
+    EXPECT_EQ(mat->cols(), 1);
+    // Should sum to 1
+    double sum = mat->get(0, 0) + mat->get(1, 0) + mat->get(2, 0);
+    EXPECT_NEAR(sum, 1.0, 1e-10);
+    // Should be monotonic (softmax preserves order)
+    EXPECT_LT(mat->get(0, 0), mat->get(1, 0));
+    EXPECT_LT(mat->get(1, 0), mat->get(2, 0));
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatSoftmaxNumericalStability) {
+    // Large values shouldn't overflow
+    run("array-new 1000.0 array-push 1001.0 array-push 2 1 mat-from-array mat-softmax");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    double sum = mat->get(0, 0) + mat->get(1, 0);
+    EXPECT_NEAR(sum, 1.0, 1e-10);
+    EXPECT_FALSE(std::isnan(mat->get(0, 0)));
+    EXPECT_FALSE(std::isinf(mat->get(0, 0)));
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatCrossEntropy) {
+    // Perfect prediction: pred = actual = [1 0; 0 1]
+    // Cross-entropy should be very close to 0
+    run("array-new 0.999 array-push 0.001 array-push 0.001 array-push 0.999 array-push 2 2 mat-from-array");
+    run("array-new 1.0 array-push 0.0 array-push 0.0 array-push 1.0 array-push 2 2 mat-from-array");
+    run("mat-cross-entropy");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_LT(opt->as_float, 0.01);  // Near-perfect prediction → small loss
+}
+
+TEST_F(MatrixPrimitivesTest, MatCrossEntropyDimensionMismatch) {
+    run("2 2 mat-new 3 3 mat-new mat-cross-entropy");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+TEST_F(MatrixPrimitivesTest, MatApplyDouble) {
+    // Apply a word that doubles each element
+    run(": double-it 2.0 * ;");
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 1 3 mat-from-array ' double-it mat-apply");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 2.0);
+    EXPECT_DOUBLE_EQ(mat->get(0, 1), 4.0);
+    EXPECT_DOUBLE_EQ(mat->get(0, 2), 6.0);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatApplyNative) {
+    // Apply a native primitive (negate)
+    run("array-new 1.0 array-push -2.0 array-push 3.0 array-push 1 3 mat-from-array ' negate mat-apply");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), -1.0);
+    EXPECT_DOUBLE_EQ(mat->get(0, 1), 2.0);
+    EXPECT_DOUBLE_EQ(mat->get(0, 2), -3.0);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatApplyNotXt) {
+    run("2 2 mat-new 42 mat-apply");
+    // Should fail — 42 is not an xt. 42 pushed back, matrix still below it
+    EXPECT_EQ(ctx().data_stack().size(), 2u);
+    // Clean up
+    auto v1 = ctx().data_stack().pop();
+    auto v2 = ctx().data_stack().pop();
+    if (v2) v2->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatRandUsesSeededPRNG) {
+    // Verify mat-rand now uses prng_engine (controlled by random-seed)
+    run("42 random-seed 2 2 mat-rand");
+    auto opt1 = ctx().data_stack().pop();
+    ASSERT_TRUE(opt1.has_value());
+    auto* m1 = opt1->as_matrix();
+    double v00 = m1->get(0, 0);
+    m1->release();
+
+    run("42 random-seed 2 2 mat-rand");
+    auto opt2 = ctx().data_stack().pop();
+    ASSERT_TRUE(opt2.has_value());
+    auto* m2 = opt2->as_matrix();
+    EXPECT_DOUBLE_EQ(m2->get(0, 0), v00);
+    m2->release();
+}
+
 #endif // ETIL_LINALG_ENABLED

@@ -6,6 +6,8 @@
 
 #include "etil/core/dictionary.hpp"
 
+#include <random>
+
 namespace etil::core {
 
 class ExecutionContext;
@@ -120,6 +122,7 @@ bool prim_trunc(ExecutionContext& ctx);
 bool prim_fmin(ExecutionContext& ctx);    // ( a b -- min(a,b) )
 bool prim_fmax(ExecutionContext& ctx);    // ( a b -- max(a,b) )
 bool prim_pi(ExecutionContext& ctx);      // ( -- pi )
+bool prim_tanh(ExecutionContext& ctx);    // ( x -- tanh(x) )
 
 // Float comparison
 bool prim_fapprox(ExecutionContext& ctx); // f~ ( r1 r2 r3 -- flag )
@@ -128,6 +131,9 @@ bool prim_fapprox(ExecutionContext& ctx); // f~ ( r1 r2 r3 -- flag )
 bool prim_random(ExecutionContext& ctx);        // ( -- f ) pseudo-random float [0,1)
 bool prim_random_seed(ExecutionContext& ctx);   // ( n -- ) seed the PRNG
 bool prim_random_range(ExecutionContext& ctx);  // ( lo hi -- n ) random integer [lo,hi)
+
+/// Access the thread-local PRNG engine (shared by random, random-seed, mat-randn, etc.)
+std::mt19937_64& prng_engine();
 
 // System primitives
 bool prim_sys_semver(ExecutionContext& ctx);        // sys-semver — print project SEMVER

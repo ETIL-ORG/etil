@@ -1026,6 +1026,13 @@ bool prim_pi(ExecutionContext& ctx) {
     return true;
 }
 
+bool prim_tanh(ExecutionContext& ctx) {
+    double x;
+    if (!pop_as_double(ctx, x)) return false;
+    ctx.data_stack().push(Value(std::tanh(x)));
+    return true;
+}
+
 bool prim_fapprox(ExecutionContext& ctx) {
     double r3; if (!pop_as_double(ctx, r3)) return false;
     double r1, r2;
@@ -2816,6 +2823,9 @@ void register_primitives(Dictionary& dict) {
 
     dict.register_word("pi", make_word("prim_pi", prim_pi,
         {}, {T::Float}));
+
+    dict.register_word("tanh", make_word("prim_tanh", prim_tanh,
+        {T::Unknown}, {T::Float}));
 
     dict.register_word("f~", make_word("prim_fapprox", prim_fapprox,
         {T::Unknown, T::Unknown, T::Unknown}, {T::Integer}));
