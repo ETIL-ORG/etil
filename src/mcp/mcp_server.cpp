@@ -564,6 +564,15 @@ nlohmann::json McpServer::handle_initialize(const nlohmann::json& id,
             {"version", etil::core::ETIL_VERSION}
         }}
     };
+
+#ifdef ETIL_JWT_ENABLED
+    // Include the server-resolved role so the client can display the
+    // authoritative role (from users.json) instead of the JWT-baked role.
+    if (current_session_ && !current_session_->role.empty()) {
+        result["_meta"] = {{"role", current_session_->role}};
+    }
+#endif
+
     return make_response(id, result);
 }
 
