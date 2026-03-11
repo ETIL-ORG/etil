@@ -141,6 +141,7 @@ private:
     std::string library_dir_;  // Actual filesystem path for library
     etil::lvfs::Lvfs* lvfs_ = nullptr;  // Non-owning, set by Session
     bool compiling_ = false;
+    bool line_had_error_ = false;  // Set by interpret_line, read by load_file
     std::string compiling_word_name_;
     size_t compiling_start_line_ = 0;
     std::shared_ptr<ByteCode> current_bytecode_;

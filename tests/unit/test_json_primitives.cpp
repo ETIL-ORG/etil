@@ -8,6 +8,7 @@
 #include "etil/core/heap_string.hpp"
 #include "etil/core/heap_array.hpp"
 #include "etil/core/heap_map.hpp"
+#include "etil/core/heap_matrix.hpp"
 #include "etil/core/execution_context.hpp"
 #include "etil/core/dictionary.hpp"
 #include "etil/core/interpreter.hpp"
@@ -422,3 +423,68 @@ TEST_F(JsonPrimitivesTest, JsonToString) {
     EXPECT_TRUE(s.find("\"a\"") != std::string::npos);
     opt->release();
 }
+
+#ifdef ETIL_LINALG_ENABLED
+
+TEST_F(JsonPrimitivesTest, MatToJson) {
+    run("2 2 mat-eye mat->json");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->type, Value::Type::Json);
+    const auto& j = opt->as_json()->json();
+    EXPECT_EQ(j["rows"].get<int64_t>(), 2);
+    EXPECT_EQ(j["cols"].get<int64_t>(), 2);
+    EXPECT_EQ(j["data"].size(), 2u);
+    EXPECT_DOUBLE_EQ(j["data"][0][0].get<double>(), 1.0);
+    EXPECT_DOUBLE_EQ(j["data"][0][1].get<double>(), 0.0);
+    EXPECT_DOUBLE_EQ(j["data"][1][0].get<double>(), 0.0);
+    EXPECT_DOUBLE_EQ(j["data"][1][1].get<double>(), 1.0);
+    EXPECT_FALSE(j.contains("type"));
+    opt->release();
+}
+
+TEST_F(JsonPrimitivesTest, MatJsonRoundTrip) {
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push "
+        "4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array "
+        "mat->json json->mat");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->type, Value::Type::Matrix);
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 2);
+    EXPECT_EQ(mat->cols(), 3);
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mat->get(0, 2), 3.0);
+    EXPECT_DOUBLE_EQ(mat->get(1, 0), 4.0);
+    EXPECT_DOUBLE_EQ(mat->get(1, 2), 6.0);
+    mat->release();
+}
+
+TEST_F(JsonPrimitivesTest, JsonToMatValid) {
+    run("j| {\"rows\":2, \"cols\":2, \"data\":[[1,0],[0,1]]} | json->mat");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->type, Value::Type::Matrix);
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 2);
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mat->get(1, 1), 1.0);
+    mat->release();
+}
+
+TEST_F(JsonPrimitivesTest, JsonToMatMissingKey) {
+    run("j| {\"rows\":2, \"cols\":2} | json->mat");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+TEST_F(JsonPrimitivesTest, JsonToMatDimensionMismatch) {
+    run("j| {\"rows\":2, \"cols\":2, \"data\":[[1,2]]} | json->mat");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+TEST_F(JsonPrimitivesTest, JsonToMatNotObject) {
+    run("j| [1,2,3] | json->mat");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+#endif // ETIL_LINALG_ENABLED

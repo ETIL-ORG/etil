@@ -43,7 +43,7 @@ script execution, and session logging.
 
 ### Language
 
-- **240 primitive words** across 30 categories — arithmetic, stack, comparison, logic, I/O,
+- **243 primitive words** across 30 categories — arithmetic, stack, comparison, logic, I/O,
   math, strings, arrays, maps, JSON, file I/O, linear algebra, HTTP, MongoDB, and more
 - **Colon definitions** — `: name ... ;` compiles to bytecode, executed by an inner interpreter
 - **Full control flow** — `if`/`else`/`then`, `do`/`loop`/`+loop`/`i`/`j`/`leave`,
@@ -101,6 +101,7 @@ copy overhead.
 | Solvers | `mat-solve` (DGESV) `mat-inv` (DGETRF+DGETRI) `mat-det` (LU) |
 | Decompositions | `mat-eigen` (DSYEV/DGEEV) `mat-svd` (DGESVD) `mat-lstsq` (DGELS) |
 | Utilities | `mat-norm` `mat-trace` `mat.` |
+| Conversion | `mat->json` `json->mat` `mat->array` |
 | TIL-level | `mat-xavier` `mat-he` `mat-mse` |
 
 Gated by `ETIL_BUILD_LINALG` (default ON). Requires OpenBLAS or compatible BLAS/LAPACK.
@@ -229,7 +230,7 @@ OAuth login, script execution (`--exec`/`--execux`), and session logging.
 ### Introspection & Help
 
 - **`help <word>`** — description, stack effect, category, and examples for any word
-  (all 240+ words documented in `data/help.til`)
+  (all 243 words documented in `data/help.til`)
 - **`dump`** — deep-inspect TOS without consuming it (recursive, with truncation)
 - **`see <word>`** — decompile word definitions showing bytecode, primitives, or handler status
 - **Word metadata** — attach text, markdown, HTML, code, JSON, or JSONL to word concepts
@@ -312,7 +313,7 @@ LITE
 7. **MCP Server** — `etil_mcp` library with JSON-RPC 2.0, HTTP Streamable Transport,
    per-session profiling, dual-mode auth (JWT/API key)
 
-### Implemented Primitives (240 words)
+### Implemented Primitives (243 words)
 
 | Category | Words |
 |----------|-------|
@@ -328,7 +329,7 @@ LITE
 | ByteArray | `bytes-new` `bytes-get` `bytes-set` `bytes-length` `bytes-resize` `bytes->string` `string->bytes` |
 | Map | `map-new` `map-set` `map-get` `map-remove` `map-length` `map-keys` `map-values` `map-has?` |
 | JSON | `json-parse` `json-dump` `json-pretty` `json-get` `json-length` `json-type` `json-keys` `json->map` `json->array` `map->json` `array->json` `json->value` |
-| Matrix | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` `mat-randn` `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-hadamard` `mat-add-col` `mat-clip` `mat-relu` `mat-sigmoid` `mat-tanh` `mat-relu'` `mat-sigmoid'` `mat-tanh'` `mat-sum` `mat-col-sum` `mat-mean` `mat-softmax` `mat-cross-entropy` `mat-apply` `mat-solve` `mat-inv` `mat-det` `mat-eigen` `mat-svd` `mat-lstsq` `mat-norm` `mat-trace` `mat.` |
+| Matrix | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` `mat-randn` `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-hadamard` `mat-add-col` `mat-clip` `mat-relu` `mat-sigmoid` `mat-tanh` `mat-relu'` `mat-sigmoid'` `mat-tanh'` `mat-sum` `mat-col-sum` `mat-mean` `mat-softmax` `mat-cross-entropy` `mat-apply` `mat-solve` `mat-inv` `mat-det` `mat-eigen` `mat-svd` `mat-lstsq` `mat-norm` `mat-trace` `mat.` `mat->json` `json->mat` `mat->array` |
 | LVFS | `cwd` `cd` `ls` `ll` `lr` `cat` |
 | System | `sys-semver` `sys-timestamp` `sys-datafields` `sys-notification` `user-notification` `abort` |
 | Time | `time-us` `us->iso` `us->iso-us` `us->jd` `jd->us` `us->mjd` `mjd->us` `sleep` |

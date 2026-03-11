@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Mark Deazley. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 # Super Push: build → test → bump → commit → tag → push.
-# Deployment is handled by CI on ap1000 (triggered by post-receive hook).
+# Deployment is handled by CI (triggered by post-receive hook).
 #
 # Usage: super-push.sh --message "commit message" [--dry-run]
 #   --message   Commit message (required)
@@ -37,7 +37,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --message   Commit message (required)"
             echo "  --dry-run   Show plan without executing"
             echo ""
-            echo "Deployment is handled by CI on ap1000 after push."
+            echo "Deployment is handled by CI after push."
             exit 0
             ;;
         *)
@@ -194,4 +194,4 @@ run git push "$ETIL_GIT_REMOTE" master --tags
 step "Super push complete"
 etil_log "Version: v$ETIL_VERSION"
 etil_log "Message: $MESSAGE"
-etil_log "CI will build, test, and deploy on ap1000"
+etil_log "CI will build, test, and deploy on the production server"

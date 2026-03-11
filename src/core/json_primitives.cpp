@@ -346,6 +346,84 @@ bool prim_json_to_array(ExecutionContext& ctx) {
     return true;
 }
 
+#ifdef ETIL_LINALG_ENABLED
+// mat->json ( mat -- json )
+bool prim_mat_to_json(ExecutionContext& ctx) {
+    auto* mat = pop_matrix(ctx);
+    if (!mat) return false;
+    nlohmann::json data = nlohmann::json::array();
+    for (int64_t r = 0; r < mat->rows(); ++r) {
+        nlohmann::json row = nlohmann::json::array();
+        for (int64_t c = 0; c < mat->cols(); ++c) {
+            row.push_back(mat->get(r, c));
+        }
+        data.push_back(row);
+    }
+    auto j = nlohmann::json{{"rows", mat->rows()}, {"cols", mat->cols()}, {"data", data}};
+    mat->release();
+    ctx.data_stack().push(Value::from(new HeapJson(std::move(j))));
+    return true;
+}
+
+// json->mat ( json -- mat )
+bool prim_json_to_mat(ExecutionContext& ctx) {
+    auto* hj = pop_json(ctx);
+    if (!hj) return false;
+    const auto& j = hj->json();
+    if (!j.is_object()) {
+        ctx.err() << "Error: json->mat: not an object\n";
+        hj->release();
+        return false;
+    }
+    if (!j.contains("rows") || !j.contains("cols") || !j.contains("data")) {
+        ctx.err() << "Error: json->mat: missing rows, cols, or data key\n";
+        hj->release();
+        return false;
+    }
+    if (!j["rows"].is_number_integer() || !j["cols"].is_number_integer()) {
+        ctx.err() << "Error: json->mat: rows and cols must be integers\n";
+        hj->release();
+        return false;
+    }
+    int64_t rows = j["rows"].get<int64_t>();
+    int64_t cols = j["cols"].get<int64_t>();
+    if (rows <= 0 || cols <= 0) {
+        ctx.err() << "Error: json->mat: rows and cols must be positive\n";
+        hj->release();
+        return false;
+    }
+    const auto& data = j["data"];
+    if (!data.is_array() || static_cast<int64_t>(data.size()) != rows) {
+        ctx.err() << "Error: json->mat: data must be an array of " << rows << " rows\n";
+        hj->release();
+        return false;
+    }
+    auto* mat = new HeapMatrix(rows, cols);
+    for (int64_t r = 0; r < rows; ++r) {
+        const auto& row = data[static_cast<size_t>(r)];
+        if (!row.is_array() || static_cast<int64_t>(row.size()) != cols) {
+            ctx.err() << "Error: json->mat: row " << r << " must have " << cols << " elements\n";
+            mat->release();
+            hj->release();
+            return false;
+        }
+        for (int64_t c = 0; c < cols; ++c) {
+            const auto& elem = row[static_cast<size_t>(c)];
+            if (!elem.is_number()) {
+                ctx.err() << "Error: json->mat: non-numeric value at [" << r << "][" << c << "]\n";
+                mat->release();
+                hj->release();
+                return false;
+            }
+            mat->set(r, c, elem.get<double>());
+        }
+    }
+    hj->release();
+    ctx.data_stack().push(Value::from(mat));
+    return true;
+}
+#endif // ETIL_LINALG_ENABLED
+
 // map->json ( map -- json )
 bool prim_map_to_json(ExecutionContext& ctx) {
     auto* m = pop_map(ctx);
@@ -430,6 +508,16 @@ void register_json_primitives(Dictionary& dict) {
     dict.register_word("json->value",
         make_primitive("prim_json_to_value", prim_json_to_value,
             {T::Custom}, {T::Custom}));
+
+#ifdef ETIL_LINALG_ENABLED
+    dict.register_word("mat->json",
+        make_primitive("prim_mat_to_json", prim_mat_to_json,
+            {T::Custom}, {T::Custom}));
+
+    dict.register_word("json->mat",
+        make_primitive("prim_json_to_mat", prim_json_to_mat,
+            {T::Custom}, {T::Custom}));
+#endif
 }
 
 } // namespace etil::core

@@ -741,4 +741,42 @@ TEST_F(MatrixPrimitivesTest, MatRandUsesSeededPRNG) {
     m2->release();
 }
 
+// --- mat->array ---
+
+TEST_F(MatrixPrimitivesTest, MatToArray) {
+    // 2x3 matrix with known values
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push "
+        "4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array mat->array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->type, Value::Type::Array);
+    auto* arr = opt->as_array();
+    EXPECT_EQ(arr->length(), 6u);
+    // Row-major: [1,2,3, 4,5,6]
+    Value v;
+    arr->get(0, v); EXPECT_DOUBLE_EQ(v.as_float, 1.0);
+    arr->get(1, v); EXPECT_DOUBLE_EQ(v.as_float, 2.0);
+    arr->get(2, v); EXPECT_DOUBLE_EQ(v.as_float, 3.0);
+    arr->get(3, v); EXPECT_DOUBLE_EQ(v.as_float, 4.0);
+    arr->get(4, v); EXPECT_DOUBLE_EQ(v.as_float, 5.0);
+    arr->get(5, v); EXPECT_DOUBLE_EQ(v.as_float, 6.0);
+    arr->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatToArrayRoundTrip) {
+    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push "
+        "4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array "
+        "mat->array 2 3 mat-from-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 2);
+    EXPECT_EQ(mat->cols(), 3);
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mat->get(0, 2), 3.0);
+    EXPECT_DOUBLE_EQ(mat->get(1, 0), 4.0);
+    EXPECT_DOUBLE_EQ(mat->get(1, 2), 6.0);
+    mat->release();
+}
+
 #endif // ETIL_LINALG_ENABLED

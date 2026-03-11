@@ -104,6 +104,22 @@ bool prim_mat_eye(ExecutionContext& ctx) {
     return true;
 }
 
+// mat->array ( mat -- array )
+bool prim_mat_to_array(ExecutionContext& ctx) {
+    auto* mat = pop_matrix(ctx);
+    if (!mat) return false;
+    auto* arr = new HeapArray();
+    // Row-major order to match mat-from-array
+    for (int64_t r = 0; r < mat->rows(); ++r) {
+        for (int64_t c = 0; c < mat->cols(); ++c) {
+            arr->push_back(Value(mat->get(r, c)));
+        }
+    }
+    mat->release();
+    ctx.data_stack().push(Value::from(arr));
+    return true;
+}
+
 // mat-from-array ( array rows cols -- mat )
 bool prim_mat_from_array(ExecutionContext& ctx) {
     int64_t cols, rows;
@@ -1141,6 +1157,8 @@ void register_matrix_primitives(Dictionary& dict) {
         {T::Integer}, {T::Unknown}));
     dict.register_word("mat-from-array", make_word("prim_mat_from_array", prim_mat_from_array,
         {T::Array, T::Integer, T::Integer}, {T::Unknown}));
+    dict.register_word("mat->array", make_word("prim_mat_to_array", prim_mat_to_array,
+        {T::Unknown}, {T::Array}));
     dict.register_word("mat-diag", make_word("prim_mat_diag", prim_mat_diag,
         {T::Array}, {T::Unknown}));
     dict.register_word("mat-rand", make_word("prim_mat_rand", prim_mat_rand,

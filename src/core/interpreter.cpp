@@ -129,11 +129,13 @@ void Interpreter::interpret_line(const std::string& raw_line) {
     std::istringstream iss(raw_line);
     ctx_.set_input_stream(&iss);
     std::string word;
+    line_had_error_ = false;
 
     while (iss >> word) {
         if (!ctx_.tick()) {
             if (!ctx_.abort_requested())
                 err_ << "Error: execution limit reached\n";
+            line_had_error_ = true;
             break;
         }
         // '#' starts a line comment — skip rest of line
@@ -143,10 +145,12 @@ void Interpreter::interpret_line(const std::string& raw_line) {
         if (word == ":") {
             if (compiling_) {
                 err_ << "Error: nested colon definitions not allowed\n";
+                line_had_error_ = true;
                 continue;
             }
             if (!(iss >> compiling_word_name_)) {
                 err_ << "Error: missing word name after ':'\n";
+                line_had_error_ = true;
                 continue;
             }
             compiling_ = true;
@@ -157,9 +161,11 @@ void Interpreter::interpret_line(const std::string& raw_line) {
         }
 
         if (compiling_) {
-            compile_token(word, iss);
+            if (!compile_token(word, iss))
+                line_had_error_ = true;
         } else {
-            interpret_token(word, iss);
+            if (!interpret_token(word, iss))
+                line_had_error_ = true;
         }
     }
 
@@ -219,7 +225,17 @@ bool Interpreter::load_file(const std::string& path) {
     std::string line;
     while (std::getline(file, line)) {
         ++source_line_;
+        size_t depth_before = ctx_.data_stack().size();
         interpret_line(line);
+        // If any token on this line failed and orphaned heap values on the
+        // stack (e.g., s" pushed strings for a meta! that never executed),
+        // release them so they don't leak or corrupt subsequent lines.
+        if (line_had_error_ && ctx_.data_stack().size() > depth_before) {
+            while (ctx_.data_stack().size() > depth_before) {
+                auto v = ctx_.data_stack().pop();
+                if (v) v->release();
+            }
+        }
     }
 
     if (compiling_) {

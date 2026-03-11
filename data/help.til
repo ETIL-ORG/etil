@@ -830,8 +830,8 @@ s" ssplit" s" examples" s" code" s" s| a,b,c| s| ,| ssplit 1 array-get type\n=> 
 s" sjoin" s" examples" s" code" s" s| a,b,c| s| ,| ssplit s| -| sjoin type\n=> a-b-c" meta! drop
 s" sregex-find" s" examples" s" code" s" s| abc123def| s| [0-9]+| sregex-find .| match at index | .\n=> match at index 3 " meta! drop
 s" sregex-replace" s" examples" s" code" s" s| abc123| s| [0-9]| s| X| sregex-replace type\n=> abcXXX" meta! drop
-s" sregex-search" s" examples" s" code" s| s" hello 42 world" s" (\d+)" sregex-search if 0 array-get type then\n=> 42| meta! drop
-s" sregex-match" s" examples" s" code" s| s" 2026-03-02" s" (\d{4})-(\d{2})-(\d{2})" sregex-match if 1 array-get type then\n=> 2026| meta! drop
+s" sregex-search" s" examples" s" code" s| s" hello 42 world" s" (\\d+)" sregex-search if 0 array-get type then\n=> 42| meta! drop
+s" sregex-match" s" examples" s" code" s| s" 2026-03-02" s" (\\d{4})-(\\d{2})-(\\d{2})" sregex-match if 1 array-get type then\n=> 2026| meta! drop
 
 s" sprintf" s" description" s" text" s" C-style formatted string (supports %d %f %s %x %o %e %g %c %%)" meta! drop
 s" sprintf" s" stack-effect" s" text" s" ( arg1 ... argN fmt -- string )" meta! drop
@@ -1594,6 +1594,21 @@ s" mat-randn" s" examples" s" code" s" 42 random-seed 3 4 mat-randn mat." meta! 
 s" mat-apply" s" examples" s" code" s" : double-it 2.0 * ; array-new 1.0 array-push 2.0 array-push 3.0 array-push 1 3 mat-from-array ' double-it mat-apply mat." meta! drop
 
 s" mat-softmax" s" examples" s" code" s" array-new 1.0 array-push 2.0 array-push 3.0 array-push 3 1 mat-from-array mat-softmax mat." meta! drop
+
+s" mat->json" s" description" s" text" s" Convert matrix to JSON object with rows, cols, and data keys" meta! drop
+s" mat->json" s" stack-effect" s" text" s" ( mat -- json )" meta! drop
+s" mat->json" s" category" s" text" s" matrix" meta! drop
+s" mat->json" s" examples" s" code" s" 2 2 mat-eye mat->json json-pretty type" meta! drop
+
+s" json->mat" s" description" s" text" s" Convert JSON object with rows, cols, data keys to matrix" meta! drop
+s" json->mat" s" stack-effect" s" text" s" ( json -- mat )" meta! drop
+s" json->mat" s" category" s" text" s" matrix" meta! drop
+s" json->mat" s" examples" s" code" s" 2 2 mat-eye mat->json json->mat mat." meta! drop
+
+s" mat->array" s" description" s" text" s" Convert matrix to flat array of floats in row-major order" meta! drop
+s" mat->array" s" stack-effect" s" text" s" ( mat -- array )" meta! drop
+s" mat->array" s" category" s" text" s" matrix" meta! drop
+s" mat->array" s" examples" s" code" s" array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat->array array-length ." meta! drop
 
 : mat-xavier over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;
 : mat-he over over mat-randn -rot drop int->float sqrt 2.0 swap / mat-scale ;
