@@ -188,7 +188,8 @@ Bidirectional conversion between JSON, Map, and Array (`json->map`, `json->array
 ```
 
 - Custom headers via `HeapMap` — set Content-Type, Authorization, etc.
-- SSRF blocklist — blocks loopback, RFC 1918, link-local, IPv6 private ranges
+- SSRF blocklist — blocks loopback, RFC 1918, link-local, IPv6 private ranges,
+  and internal/local/localhost domains
 - Domain allowlist — configurable via `ETIL_HTTP_ALLOWLIST` env var
 - Per-session budgets — 10 fetches per interpret call, 100 per session lifetime
 - Opaque byte return — response body is `HeapByteArray`, not a string (prevents
@@ -236,7 +237,8 @@ OAuth login, script execution (`--exec`/`--execux`), and session logging.
 
 ### Authentication & Authorization
 
-- **JWT with RBAC** — RS256 JWTs with per-role permissions: HTTP domain allowlists,
+- **JWT with RBAC** — RS256 JWTs with clock-skew tolerance, issued-at validation,
+  type-safe claim extraction, and per-role permissions: HTTP domain allowlists,
   instruction budgets, file I/O gates, MongoDB access, session quotas
 - **OAuth Device Flow** — GitHub + Google via RFC 8628. Three endpoints: `/auth/device`,
   `/auth/poll`, `/auth/token`. Stateless — provider tokens used once then discarded

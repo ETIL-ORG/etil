@@ -525,6 +525,96 @@ TEST_F(JwtAuthTest, ValidateWrongKey) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 4.1: JWT validation hardening tests
+// ---------------------------------------------------------------------------
+
+TEST_F(JwtAuthTest, ValidateRejectsEmptySubject) {
+    if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
+
+    auto now = std::chrono::system_clock::now();
+    auto token = jwt::create()
+        .set_issuer(JwtAuth::ISSUER)
+        .set_subject("")
+        .set_issued_at(now)
+        .set_expires_at(now + std::chrono::hours(1))
+        .set_payload_claim("role", jwt::claim(std::string("admin")))
+        .sign(jwt::algorithm::rs256("", private_key_, "", ""));
+
+    auto claims = auth_->validate_token(token);
+    EXPECT_FALSE(claims.has_value());
+}
+
+TEST_F(JwtAuthTest, ValidateRejectsFutureIat) {
+    if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
+
+    // Token issued 5 minutes in the future (beyond 60s leeway)
+    auto now = std::chrono::system_clock::now();
+    auto token = jwt::create()
+        .set_issuer(JwtAuth::ISSUER)
+        .set_subject("github:12345")
+        .set_issued_at(now + std::chrono::minutes(5))
+        .set_expires_at(now + std::chrono::hours(2))
+        .set_payload_claim("role", jwt::claim(std::string("admin")))
+        .sign(jwt::algorithm::rs256("", private_key_, "", ""));
+
+    auto claims = auth_->validate_token(token);
+    EXPECT_FALSE(claims.has_value());
+}
+
+TEST_F(JwtAuthTest, ValidateAcceptsSlightClockSkew) {
+    if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
+
+    // Token expired 30 seconds ago — should be accepted with 60s leeway
+    auto now = std::chrono::system_clock::now();
+    auto token = jwt::create()
+        .set_issuer(JwtAuth::ISSUER)
+        .set_subject("github:12345")
+        .set_issued_at(now - std::chrono::hours(1))
+        .set_expires_at(now - std::chrono::seconds(30))
+        .set_payload_claim("email", jwt::claim(std::string("test@example.com")))
+        .set_payload_claim("role", jwt::claim(std::string("admin")))
+        .sign(jwt::algorithm::rs256("", private_key_, "", ""));
+
+    auto claims = auth_->validate_token(token);
+    ASSERT_TRUE(claims.has_value());
+    EXPECT_EQ(claims->sub, "github:12345");
+}
+
+TEST_F(JwtAuthTest, ValidateRejectsNonStringEmail) {
+    if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
+
+    auto now = std::chrono::system_clock::now();
+    auto token = jwt::create()
+        .set_issuer(JwtAuth::ISSUER)
+        .set_subject("github:12345")
+        .set_issued_at(now)
+        .set_expires_at(now + std::chrono::hours(1))
+        .set_payload_claim("email", jwt::claim(int64_t(42)))
+        .set_payload_claim("role", jwt::claim(std::string("admin")))
+        .sign(jwt::algorithm::rs256("", private_key_, "", ""));
+
+    auto claims = auth_->validate_token(token);
+    EXPECT_FALSE(claims.has_value());
+}
+
+TEST_F(JwtAuthTest, ValidateRejectsNonStringRole) {
+    if (private_key_.empty()) GTEST_SKIP() << "OpenSSL not available";
+
+    auto now = std::chrono::system_clock::now();
+    auto token = jwt::create()
+        .set_issuer(JwtAuth::ISSUER)
+        .set_subject("github:12345")
+        .set_issued_at(now)
+        .set_expires_at(now + std::chrono::hours(1))
+        .set_payload_claim("email", jwt::claim(std::string("test@example.com")))
+        .set_payload_claim("role", jwt::claim(int64_t(99)))
+        .sign(jwt::algorithm::rs256("", private_key_, "", ""));
+
+    auto claims = auth_->validate_token(token);
+    EXPECT_FALSE(claims.has_value());
+}
+
+// ---------------------------------------------------------------------------
 // from_directory() tests
 // ---------------------------------------------------------------------------
 

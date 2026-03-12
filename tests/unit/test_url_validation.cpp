@@ -211,6 +211,40 @@ TEST(DomainAllowlist, MultiplePatterns) {
     EXPECT_FALSE(is_domain_allowed("evil.com", allowed));
 }
 
+// ── SSRF Domain Blocklist ─────────────────────────────────────────────────
+
+TEST(SsrfDomainBlocklist, BlocksLocalhost) {
+    EXPECT_TRUE(is_domain_ssrf_blocked("localhost"));
+}
+
+TEST(SsrfDomainBlocklist, BlocksLocalhostLocaldomain) {
+    EXPECT_TRUE(is_domain_ssrf_blocked("localhost.localdomain"));
+}
+
+TEST(SsrfDomainBlocklist, BlocksInternal) {
+    EXPECT_TRUE(is_domain_ssrf_blocked("internal"));
+    EXPECT_TRUE(is_domain_ssrf_blocked("metadata.internal"));
+    EXPECT_TRUE(is_domain_ssrf_blocked("corp.internal"));
+}
+
+TEST(SsrfDomainBlocklist, BlocksLocal) {
+    EXPECT_TRUE(is_domain_ssrf_blocked("local"));
+    EXPECT_TRUE(is_domain_ssrf_blocked("printer.local"));
+    EXPECT_TRUE(is_domain_ssrf_blocked("myhost.local"));
+}
+
+TEST(SsrfDomainBlocklist, BlocksDotLocalhost) {
+    EXPECT_TRUE(is_domain_ssrf_blocked("anything.localhost"));
+    EXPECT_TRUE(is_domain_ssrf_blocked("sub.domain.localhost"));
+}
+
+TEST(SsrfDomainBlocklist, AllowsPublicDomains) {
+    EXPECT_FALSE(is_domain_ssrf_blocked("example.com"));
+    EXPECT_FALSE(is_domain_ssrf_blocked("api.github.com"));
+    EXPECT_FALSE(is_domain_ssrf_blocked("internal.example.com"));
+    EXPECT_FALSE(is_domain_ssrf_blocked("my-localhost.com"));
+}
+
 // ── DNS Resolution + SSRF ────────────────────────────────────────────────
 
 TEST(ResolveSsrf, BlocksLocalhostResolution) {

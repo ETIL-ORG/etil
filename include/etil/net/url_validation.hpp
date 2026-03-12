@@ -76,6 +76,13 @@ bool resolve_and_check_ssrf(const std::string& hostname,
 bool is_domain_allowed(const std::string& domain,
                        const std::vector<std::string>& allowed_domains);
 
+/// Check whether a domain name is in the SSRF blocklist.
+///
+/// Blocked (regardless of allowlist):
+///   - localhost, internal, local
+///   - *.internal, *.local, *.localhost
+bool is_domain_ssrf_blocked(const std::string& domain);
+
 /// Full URL validation against config.  Checks:
 ///   1. URL parsing (scheme, host, port, path)
 ///   2. Scheme policy (https required unless allow_http)

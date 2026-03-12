@@ -231,6 +231,32 @@ bool is_domain_allowed(const std::string& domain,
     return false;
 }
 
+bool is_domain_ssrf_blocked(const std::string& domain) {
+    // Block well-known internal/local TLDs that may resolve to internal IPs.
+    // Checked before the allowlist so even a wildcard '*' allowlist can't
+    // bypass these.
+
+    auto ends_with = [&](const std::string& suffix) {
+        if (domain.size() < suffix.size()) return false;
+        return domain.compare(domain.size() - suffix.size(),
+                              suffix.size(), suffix) == 0;
+    };
+
+    // Exact matches
+    if (domain == "localhost" || domain == "internal" ||
+        domain == "local" || domain == "localhost.localdomain") {
+        return true;
+    }
+
+    // Suffix matches (*.internal, *.local, *.localhost)
+    if (ends_with(".internal") || ends_with(".local") ||
+        ends_with(".localhost")) {
+        return true;
+    }
+
+    return false;
+}
+
 bool validate_url(const std::string& url,
                   const HttpClientConfig& config,
                   ParsedUrl& parsed,
@@ -247,13 +273,20 @@ bool validate_url(const std::string& url,
         return false;
     }
 
-    // 3. Domain allowlist
+    // 3. Domain SSRF blocklist (checked before allowlist)
+    if (is_domain_ssrf_blocked(parsed.host)) {
+        error = "Domain '" + parsed.host +
+                "' is blocked (internal/local/localhost)";
+        return false;
+    }
+
+    // 4. Domain allowlist
     if (!is_domain_allowed(parsed.host, config.allowed_domains)) {
         error = "Domain '" + parsed.host + "' is not in the allowlist";
         return false;
     }
 
-    // 4. DNS resolution + SSRF blocklist
+    // 5. DNS resolution + SSRF blocklist
     //    Resolves once and captures the safe IP so callers can connect
     //    by IP (preventing DNS rebinding / TOCTOU attacks).
     if (!resolve_and_check_ssrf(parsed.host, parsed.resolved_ip, error)) {

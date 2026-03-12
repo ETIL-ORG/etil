@@ -38,6 +38,9 @@ HttpTransport::~HttpTransport() {
     shutdown();
 }
 
+/// Maximum pending notifications per request before dropping.
+static constexpr size_t MAX_PENDING_NOTIFICATIONS = 1000;
+
 void HttpTransport::send(const nlohmann::json& message) {
     if (active_sink) {
         // Streaming mode: write SSE event directly to the response sink.
@@ -45,7 +48,10 @@ void HttpTransport::send(const nlohmann::json& message) {
         active_sink->write(event.c_str(), event.size());
     } else {
         // Fallback: buffer for batch response (non-streaming callers).
-        pending_notifications_.push_back(message);
+        // Cap to prevent unbounded memory growth from notification floods.
+        if (pending_notifications_.size() < MAX_PENDING_NOTIFICATIONS) {
+            pending_notifications_.push_back(message);
+        }
     }
 }
 

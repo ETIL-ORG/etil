@@ -634,6 +634,12 @@ nlohmann::json McpServer::handle_resources_read(const nlohmann::json& id,
 
     std::string uri = params["uri"].get<std::string>();
 
+    // Cap URI length to prevent abuse (1 KB)
+    if (uri.size() > 1024) {
+        return make_error(id, JsonRpcError::InvalidParams,
+                          "Resource URI too long (max 1024 bytes)");
+    }
+
     // Find the resource by URI (exact match or template match)
     for (size_t i = 0; i < resources_.size(); ++i) {
         const auto& r = resources_[i];

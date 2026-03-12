@@ -42,7 +42,7 @@ JwtAuth::validate_token(const std::string& token) const {
             .allow_algorithm(jwt::algorithm::rs256(public_key_,
                                                    "", "", ""))
             .with_issuer(ISSUER)
-            .leeway(0);
+            .leeway(60);  // 60s clock skew tolerance
 
         auto decoded = jwt::decode(token);
         verifier.verify(decoded);
@@ -50,11 +50,30 @@ JwtAuth::validate_token(const std::string& token) const {
         JwtClaims claims;
         claims.sub = decoded.get_subject();
 
+        // Reject empty subject — user identity is required
+        if (claims.sub.empty()) return std::nullopt;
+
+        // Validate iat: reject tokens issued in the future (beyond leeway)
+        if (decoded.has_payload_claim("iat")) {
+            auto iat = decoded.get_issued_at();
+            auto now = std::chrono::system_clock::now();
+            if (iat > now + std::chrono::seconds(60)) {
+                return std::nullopt;  // token from the future
+            }
+        }
+
+        // Type-safe claim extraction — reject non-string claims
         if (decoded.has_payload_claim("email")) {
-            claims.email = decoded.get_payload_claim("email").as_string();
+            auto claim = decoded.get_payload_claim("email");
+            if (claim.get_type() != jwt::json::type::string)
+                return std::nullopt;
+            claims.email = claim.as_string();
         }
         if (decoded.has_payload_claim("role")) {
-            claims.role = decoded.get_payload_claim("role").as_string();
+            auto claim = decoded.get_payload_claim("role");
+            if (claim.get_type() != jwt::json::type::string)
+                return std::nullopt;
+            claims.role = claim.as_string();
         }
 
         return claims;

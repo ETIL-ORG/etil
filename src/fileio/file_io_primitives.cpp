@@ -288,6 +288,14 @@ bool prim_mkdir_tmp_sync(ExecutionContext& ctx) {
     std::string prefix(hs->view());
     hs->release();
 
+    // Reject path separators and traversal in prefix
+    if (prefix.find('/') != std::string::npos ||
+        prefix.find("..") != std::string::npos) {
+        ctx.err() << "Error: mkdir-tmp prefix must not contain '/' or '..'\n";
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
     auto* lvfs = ctx.lvfs();
     if (!lvfs) {
         ctx.data_stack().push(Value(false));
