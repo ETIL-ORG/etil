@@ -204,26 +204,22 @@ void register_map_primitives(Dictionary& dict) {
     using TS = TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
-    dict.register_word("map-new", make_word("prim_map_new", prim_map_new,
+    dict.register_word("map-new", make_primitive("map-new", prim_map_new,
         {}, {T::Unknown}));
-    dict.register_word("map-set", make_word("prim_map_set", prim_map_set,
+    dict.register_word("map-set", make_primitive("map-set", prim_map_set,
         {T::Unknown, T::String, T::Unknown}, {T::Unknown}));
-    dict.register_word("map-get", make_word("prim_map_get", prim_map_get,
+    dict.register_word("map-get", make_primitive("map-get", prim_map_get,
         {T::Unknown, T::String}, {T::Unknown}));
-    dict.register_word("map-remove", make_word("prim_map_remove", prim_map_remove,
+    dict.register_word("map-remove", make_primitive("map-remove", prim_map_remove,
         {T::Unknown, T::String}, {T::Unknown}));
-    dict.register_word("map-length", make_word("prim_map_length", prim_map_length,
+    dict.register_word("map-length", make_primitive("map-length", prim_map_length,
         {T::Unknown}, {T::Integer}));
-    dict.register_word("map-keys", make_word("prim_map_keys", prim_map_keys,
+    dict.register_word("map-keys", make_primitive("map-keys", prim_map_keys,
         {T::Unknown}, {T::Array}));
-    dict.register_word("map-values", make_word("prim_map_values", prim_map_values,
+    dict.register_word("map-values", make_primitive("map-values", prim_map_values,
         {T::Unknown}, {T::Array}));
-    dict.register_word("map-has?", make_word("prim_map_has", prim_map_has,
+    dict.register_word("map-has?", make_primitive("map-has?", prim_map_has,
         {T::Unknown, T::String}, {T::Integer}));
 }
 

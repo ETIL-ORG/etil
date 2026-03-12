@@ -1066,115 +1066,111 @@ void register_matrix_primitives(Dictionary& dict) {
     using TS = TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
     // Constructors
-    dict.register_word("mat-new", make_word("prim_mat_new", prim_mat_new,
+    dict.register_word("mat-new", make_primitive("mat-new", prim_mat_new,
         {T::Integer, T::Integer}, {T::Unknown}));
-    dict.register_word("mat-eye", make_word("prim_mat_eye", prim_mat_eye,
+    dict.register_word("mat-eye", make_primitive("mat-eye", prim_mat_eye,
         {T::Integer}, {T::Unknown}));
-    dict.register_word("mat-from-array", make_word("prim_mat_from_array", prim_mat_from_array,
+    dict.register_word("mat-from-array", make_primitive("mat-from-array", prim_mat_from_array,
         {T::Array, T::Integer, T::Integer}, {T::Unknown}));
-    dict.register_word("mat->array", make_word("prim_mat_to_array", prim_mat_to_array,
+    dict.register_word("mat->array", make_primitive("mat->array", prim_mat_to_array,
         {T::Unknown}, {T::Array}));
-    dict.register_word("mat-diag", make_word("prim_mat_diag", prim_mat_diag,
+    dict.register_word("mat-diag", make_primitive("mat-diag", prim_mat_diag,
         {T::Array}, {T::Unknown}));
-    dict.register_word("mat-rand", make_word("prim_mat_rand", prim_mat_rand,
+    dict.register_word("mat-rand", make_primitive("mat-rand", prim_mat_rand,
         {T::Integer, T::Integer}, {T::Unknown}));
 
     // Accessors
-    dict.register_word("mat-get", make_word("prim_mat_get", prim_mat_get,
+    dict.register_word("mat-get", make_primitive("mat-get", prim_mat_get,
         {T::Unknown, T::Integer, T::Integer}, {T::Float}));
-    dict.register_word("mat-set", make_word("prim_mat_set", prim_mat_set,
+    dict.register_word("mat-set", make_primitive("mat-set", prim_mat_set,
         {T::Unknown, T::Integer, T::Integer, T::Float}, {T::Unknown}));
-    dict.register_word("mat-rows", make_word("prim_mat_rows", prim_mat_rows,
+    dict.register_word("mat-rows", make_primitive("mat-rows", prim_mat_rows,
         {T::Unknown}, {T::Integer}));
-    dict.register_word("mat-cols", make_word("prim_mat_cols", prim_mat_cols,
+    dict.register_word("mat-cols", make_primitive("mat-cols", prim_mat_cols,
         {T::Unknown}, {T::Integer}));
-    dict.register_word("mat-row", make_word("prim_mat_row", prim_mat_row,
+    dict.register_word("mat-row", make_primitive("mat-row", prim_mat_row,
         {T::Unknown, T::Integer}, {T::Array}));
-    dict.register_word("mat-col", make_word("prim_mat_col", prim_mat_col,
+    dict.register_word("mat-col", make_primitive("mat-col", prim_mat_col,
         {T::Unknown, T::Integer}, {T::Array}));
 
     // Arithmetic
-    dict.register_word("mat*", make_word("prim_mat_mul", prim_mat_mul,
+    dict.register_word("mat*", make_primitive("mat*", prim_mat_mul,
         {T::Unknown, T::Unknown}, {T::Unknown}));
-    dict.register_word("mat+", make_word("prim_mat_add", prim_mat_add,
+    dict.register_word("mat+", make_primitive("mat+", prim_mat_add,
         {T::Unknown, T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-", make_word("prim_mat_sub", prim_mat_sub,
+    dict.register_word("mat-", make_primitive("mat-", prim_mat_sub,
         {T::Unknown, T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-scale", make_word("prim_mat_scale", prim_mat_scale,
+    dict.register_word("mat-scale", make_primitive("mat-scale", prim_mat_scale,
         {T::Unknown, T::Float}, {T::Unknown}));
-    dict.register_word("mat-transpose", make_word("prim_mat_transpose", prim_mat_transpose,
+    dict.register_word("mat-transpose", make_primitive("mat-transpose", prim_mat_transpose,
         {T::Unknown}, {T::Unknown}));
 
     // Solvers
-    dict.register_word("mat-solve", make_word("prim_mat_solve", prim_mat_solve,
+    dict.register_word("mat-solve", make_primitive("mat-solve", prim_mat_solve,
         {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
-    dict.register_word("mat-inv", make_word("prim_mat_inv", prim_mat_inv,
+    dict.register_word("mat-inv", make_primitive("mat-inv", prim_mat_inv,
         {T::Unknown}, {T::Unknown, T::Unknown}));
-    dict.register_word("mat-det", make_word("prim_mat_det", prim_mat_det,
+    dict.register_word("mat-det", make_primitive("mat-det", prim_mat_det,
         {T::Unknown}, {T::Float, T::Unknown}));
 
     // Decompositions
-    dict.register_word("mat-eigen", make_word("prim_mat_eigen", prim_mat_eigen,
+    dict.register_word("mat-eigen", make_primitive("mat-eigen", prim_mat_eigen,
         {T::Unknown}, {T::Unknown, T::Unknown, T::Unknown}));
-    dict.register_word("mat-svd", make_word("prim_mat_svd", prim_mat_svd,
+    dict.register_word("mat-svd", make_primitive("mat-svd", prim_mat_svd,
         {T::Unknown}, {T::Unknown, T::Unknown, T::Unknown, T::Unknown}));
-    dict.register_word("mat-lstsq", make_word("prim_mat_lstsq", prim_mat_lstsq,
+    dict.register_word("mat-lstsq", make_primitive("mat-lstsq", prim_mat_lstsq,
         {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
 
     // Utilities
-    dict.register_word("mat-norm", make_word("prim_mat_norm", prim_mat_norm,
+    dict.register_word("mat-norm", make_primitive("mat-norm", prim_mat_norm,
         {T::Unknown}, {T::Float}));
-    dict.register_word("mat-trace", make_word("prim_mat_trace", prim_mat_trace,
+    dict.register_word("mat-trace", make_primitive("mat-trace", prim_mat_trace,
         {T::Unknown}, {T::Float}));
-    dict.register_word("mat.", make_word("prim_mat_print", prim_mat_print,
+    dict.register_word("mat.", make_primitive("mat.", prim_mat_print,
         {T::Unknown}, {}));
 
     // Neural Network — Activation Functions
-    dict.register_word("mat-relu", make_word("prim_mat_relu", prim_mat_relu,
+    dict.register_word("mat-relu", make_primitive("mat-relu", prim_mat_relu,
         {T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-sigmoid", make_word("prim_mat_sigmoid", prim_mat_sigmoid,
+    dict.register_word("mat-sigmoid", make_primitive("mat-sigmoid", prim_mat_sigmoid,
         {T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-tanh", make_word("prim_mat_tanh", prim_mat_tanh,
+    dict.register_word("mat-tanh", make_primitive("mat-tanh", prim_mat_tanh,
         {T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-relu'", make_word("prim_mat_relu_prime", prim_mat_relu_prime,
+    dict.register_word("mat-relu'", make_primitive("mat-relu'", prim_mat_relu_prime,
         {T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-sigmoid'", make_word("prim_mat_sigmoid_prime", prim_mat_sigmoid_prime,
+    dict.register_word("mat-sigmoid'", make_primitive("mat-sigmoid'", prim_mat_sigmoid_prime,
         {T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-tanh'", make_word("prim_mat_tanh_prime", prim_mat_tanh_prime,
+    dict.register_word("mat-tanh'", make_primitive("mat-tanh'", prim_mat_tanh_prime,
         {T::Unknown}, {T::Unknown}));
 
     // Neural Network — Element-wise and Broadcasting
-    dict.register_word("mat-hadamard", make_word("prim_mat_hadamard", prim_mat_hadamard,
+    dict.register_word("mat-hadamard", make_primitive("mat-hadamard", prim_mat_hadamard,
         {T::Unknown, T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-add-col", make_word("prim_mat_add_col", prim_mat_add_col,
+    dict.register_word("mat-add-col", make_primitive("mat-add-col", prim_mat_add_col,
         {T::Unknown, T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-clip", make_word("prim_mat_clip", prim_mat_clip,
+    dict.register_word("mat-clip", make_primitive("mat-clip", prim_mat_clip,
         {T::Unknown, T::Float, T::Float}, {T::Unknown}));
 
     // Neural Network — Random Initialization
-    dict.register_word("mat-randn", make_word("prim_mat_randn", prim_mat_randn,
+    dict.register_word("mat-randn", make_primitive("mat-randn", prim_mat_randn,
         {T::Integer, T::Integer}, {T::Unknown}));
 
     // Neural Network — Reduction Operations
-    dict.register_word("mat-sum", make_word("prim_mat_sum", prim_mat_sum,
+    dict.register_word("mat-sum", make_primitive("mat-sum", prim_mat_sum,
         {T::Unknown}, {T::Float}));
-    dict.register_word("mat-col-sum", make_word("prim_mat_col_sum", prim_mat_col_sum,
+    dict.register_word("mat-col-sum", make_primitive("mat-col-sum", prim_mat_col_sum,
         {T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-mean", make_word("prim_mat_mean", prim_mat_mean,
+    dict.register_word("mat-mean", make_primitive("mat-mean", prim_mat_mean,
         {T::Unknown}, {T::Float}));
 
     // Neural Network — Classification
-    dict.register_word("mat-softmax", make_word("prim_mat_softmax", prim_mat_softmax,
+    dict.register_word("mat-softmax", make_primitive("mat-softmax", prim_mat_softmax,
         {T::Unknown}, {T::Unknown}));
-    dict.register_word("mat-cross-entropy", make_word("prim_mat_cross_entropy", prim_mat_cross_entropy,
+    dict.register_word("mat-cross-entropy", make_primitive("mat-cross-entropy", prim_mat_cross_entropy,
         {T::Unknown, T::Unknown}, {T::Float}));
-    dict.register_word("mat-apply", make_word("prim_mat_apply", prim_mat_apply,
+    dict.register_word("mat-apply", make_primitive("mat-apply", prim_mat_apply,
         {T::Unknown, T::Unknown}, {T::Unknown}));
 }
 

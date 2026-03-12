@@ -304,38 +304,34 @@ void register_array_primitives(Dictionary& dict) {
     using TS = TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
-    dict.register_word("array-new", make_word("prim_array_new", prim_array_new,
+    dict.register_word("array-new", make_primitive("array-new", prim_array_new,
         {}, {T::Array}));
-    dict.register_word("array-push", make_word("prim_array_push", prim_array_push,
+    dict.register_word("array-push", make_primitive("array-push", prim_array_push,
         {T::Array, T::Unknown}, {T::Array}));
-    dict.register_word("array-pop", make_word("prim_array_pop", prim_array_pop,
+    dict.register_word("array-pop", make_primitive("array-pop", prim_array_pop,
         {T::Array}, {T::Array, T::Unknown}));
-    dict.register_word("array-get", make_word("prim_array_get", prim_array_get,
+    dict.register_word("array-get", make_primitive("array-get", prim_array_get,
         {T::Array, T::Integer}, {T::Unknown}));
-    dict.register_word("array-set", make_word("prim_array_set", prim_array_set,
+    dict.register_word("array-set", make_primitive("array-set", prim_array_set,
         {T::Array, T::Integer, T::Unknown}, {T::Array}));
-    dict.register_word("array-length", make_word("prim_array_length", prim_array_length,
+    dict.register_word("array-length", make_primitive("array-length", prim_array_length,
         {T::Array}, {T::Array, T::Integer}));
-    dict.register_word("array-shift", make_word("prim_array_shift", prim_array_shift,
+    dict.register_word("array-shift", make_primitive("array-shift", prim_array_shift,
         {T::Array}, {T::Array, T::Unknown}));
-    dict.register_word("array-unshift", make_word("prim_array_unshift", prim_array_unshift,
+    dict.register_word("array-unshift", make_primitive("array-unshift", prim_array_unshift,
         {T::Array, T::Unknown}, {T::Array}));
-    dict.register_word("array-compact", make_word("prim_array_compact", prim_array_compact,
+    dict.register_word("array-compact", make_primitive("array-compact", prim_array_compact,
         {T::Array}, {T::Array}));
-    dict.register_word("array-reverse", make_word("prim_array_reverse", prim_array_reverse,
+    dict.register_word("array-reverse", make_primitive("array-reverse", prim_array_reverse,
         {T::Array}, {T::Array}));
-    dict.register_word("array-each", make_word("prim_array_each", prim_array_each,
+    dict.register_word("array-each", make_primitive("array-each", prim_array_each,
         {T::Array, T::Unknown}, {}));
-    dict.register_word("array-map", make_word("prim_array_map", prim_array_map,
+    dict.register_word("array-map", make_primitive("array-map", prim_array_map,
         {T::Array, T::Unknown}, {T::Array}));
-    dict.register_word("array-filter", make_word("prim_array_filter", prim_array_filter,
+    dict.register_word("array-filter", make_primitive("array-filter", prim_array_filter,
         {T::Array, T::Unknown}, {T::Array}));
-    dict.register_word("array-reduce", make_word("prim_array_reduce", prim_array_reduce,
+    dict.register_word("array-reduce", make_primitive("array-reduce", prim_array_reduce,
         {T::Array, T::Unknown, T::Unknown}, {T::Unknown}));
 }
 

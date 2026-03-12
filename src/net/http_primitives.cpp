@@ -451,17 +451,13 @@ void register_http_primitives(etil::core::Dictionary& dict) {
     using TS = TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
     dict.register_word("http-get",
-        make_word("prim_http_get", prim_http_get,
+        make_primitive("http-get", prim_http_get,
             {T::String, T::Unknown}, {T::Unknown, T::Integer, T::Integer}));
 
     dict.register_word("http-post",
-        make_word("prim_http_post", prim_http_post,
+        make_primitive("http-post", prim_http_post,
             {T::String, T::Unknown, T::Unknown},
             {T::Unknown, T::Integer, T::Integer}));
 }

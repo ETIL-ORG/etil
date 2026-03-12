@@ -33,6 +33,7 @@ using etil::core::HeapArray;
 using etil::core::HeapObject;
 using etil::core::make_heap_value;
 using etil::core::pop_string;
+using etil::core::make_primitive;
 using etil::lvfs::Lvfs;
 
 namespace {
@@ -937,61 +938,57 @@ void register_async_file_io_primitives(etil::core::Dictionary& dict) {
     using TS = etil::core::TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, etil::core::WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return etil::core::make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
     dict.register_word("exists?",
-        make_word("prim_exists", prim_exists,
+        make_primitive("exists?", prim_exists,
             {T::String}, {T::Integer}));
 
     dict.register_word("read-file",
-        make_word("prim_read_file", prim_read_file,
+        make_primitive("read-file", prim_read_file,
             {T::String}, {T::String, T::Integer}));
 
     dict.register_word("write-file",
-        make_word("prim_write_file", prim_write_file,
+        make_primitive("write-file", prim_write_file,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("append-file",
-        make_word("prim_append_file", prim_append_file,
+        make_primitive("append-file", prim_append_file,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("copy-file",
-        make_word("prim_copy_file", prim_copy_file,
+        make_primitive("copy-file", prim_copy_file,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("rename-file",
-        make_word("prim_rename_file", prim_rename_file,
+        make_primitive("rename-file", prim_rename_file,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("lstat",
-        make_word("prim_lstat", prim_lstat,
+        make_primitive("lstat", prim_lstat,
             {T::String}, {T::Array, T::Integer}));
 
     dict.register_word("readdir",
-        make_word("prim_readdir", prim_readdir,
+        make_primitive("readdir", prim_readdir,
             {T::String}, {T::Array, T::Integer}));
 
     dict.register_word("mkdir",
-        make_word("prim_mkdir", prim_mkdir,
+        make_primitive("mkdir", prim_mkdir,
             {T::String}, {T::Integer}));
 
     dict.register_word("mkdir-tmp",
-        make_word("prim_mkdir_tmp", prim_mkdir_tmp,
+        make_primitive("mkdir-tmp", prim_mkdir_tmp,
             {T::String}, {T::String, T::Integer}));
 
     dict.register_word("rmdir",
-        make_word("prim_rmdir", prim_rmdir,
+        make_primitive("rmdir", prim_rmdir,
             {T::String}, {T::Integer}));
 
     dict.register_word("rm",
-        make_word("prim_rm", prim_rm,
+        make_primitive("rm", prim_rm,
             {T::String}, {T::Integer}));
 
     dict.register_word("truncate",
-        make_word("prim_truncate", prim_truncate,
+        make_primitive("truncate", prim_truncate,
             {T::String}, {T::Integer}));
 }
 

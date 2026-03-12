@@ -33,86 +33,6 @@ namespace {
 
 // (FORTH_TRUE/FORTH_FALSE removed — Boolean type used instead)
 
-// Helper: pop a value and convert it to a std::string.
-// Strings are returned as-is (ref released). Non-string types are coerced.
-std::optional<std::string> pop_as_string(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return std::nullopt;
-    switch (opt->type) {
-    case Value::Type::String: {
-        if (!opt->as_ptr) return std::nullopt;
-        auto* hs = opt->as_string();
-        std::string result(hs->view());
-        hs->release();
-        return result;
-    }
-    case Value::Type::Integer:
-        return std::to_string(opt->as_int);
-    case Value::Type::Float: {
-        std::ostringstream oss;
-        oss << opt->as_float;
-        return oss.str();
-    }
-    case Value::Type::Boolean:
-        return std::string(opt->as_bool() ? "true" : "false");
-    case Value::Type::Array: {
-        auto* arr = opt->as_array();
-        auto len = arr ? arr->length() : 0;
-        if (arr) arr->release();
-        return "array(" + std::to_string(len) + ")";
-    }
-    case Value::Type::ByteArray: {
-        auto* ba = opt->as_byte_array();
-        auto len = ba ? ba->length() : 0;
-        if (ba) ba->release();
-        return "bytearray(" + std::to_string(len) + ")";
-    }
-    case Value::Type::Map: {
-        auto* m = opt->as_map();
-        auto len = m ? m->size() : 0;
-        if (m) m->release();
-        return "map(" + std::to_string(len) + ")";
-    }
-    case Value::Type::Matrix: {
-        auto* mat = opt->as_matrix();
-        auto r = mat ? mat->rows() : 0;
-        auto c = mat ? mat->cols() : 0;
-        if (mat) mat->release();
-        return "matrix(" + std::to_string(r) + "x" + std::to_string(c) + ")";
-    }
-    case Value::Type::Json: {
-        if (opt->as_ptr) {
-            auto* hj = opt->as_json();
-            std::string result = hj->dump();
-            hj->release();
-            return result;
-        }
-        return std::string("null");
-    }
-    case Value::Type::Observable: {
-        if (opt->as_ptr) {
-            auto* obs = opt->as_observable();
-            std::string result = "observable(" + std::string(obs->kind_name()) + ")";
-            obs->release();
-            return result;
-        }
-        return std::string("observable");
-    }
-    case Value::Type::Xt: {
-        if (opt->as_ptr) {
-            auto* impl = opt->as_xt_impl();
-            std::string result = "xt(" + impl->name() + ")";
-            impl->release();
-            return result;
-        }
-        return std::string("xt(?)");
-    }
-    case Value::Type::DataRef:
-        return std::string("dataref");
-    }
-    return std::nullopt; // unreachable
-}
-
 /// A string value with its taint bit preserved.
 struct TaintedString {
     std::string str;
@@ -159,6 +79,13 @@ std::optional<TaintedString> pop_as_tainted_string(ExecutionContext& ctx) {
         if (m) m->release();
         return TaintedString{"map(" + std::to_string(len) + ")", false};
     }
+    case Value::Type::Matrix: {
+        auto* mat = opt->as_matrix();
+        auto r = mat ? mat->rows() : 0;
+        auto c = mat ? mat->cols() : 0;
+        if (mat) mat->release();
+        return TaintedString{"matrix(" + std::to_string(r) + "x" + std::to_string(c) + ")", false};
+    }
     case Value::Type::Json: {
         if (opt->as_ptr) {
             auto* hj = opt->as_json();
@@ -167,6 +94,15 @@ std::optional<TaintedString> pop_as_tainted_string(ExecutionContext& ctx) {
             return TaintedString{std::move(r), false};
         }
         return TaintedString{"null", false};
+    }
+    case Value::Type::Observable: {
+        if (opt->as_ptr) {
+            auto* obs = opt->as_observable();
+            std::string r = "observable(" + std::string(obs->kind_name()) + ")";
+            obs->release();
+            return TaintedString{std::move(r), false};
+        }
+        return TaintedString{"observable", false};
     }
     case Value::Type::Xt: {
         if (opt->as_ptr) {
@@ -946,46 +882,42 @@ void register_string_primitives(Dictionary& dict) {
     using TS = TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
-    dict.register_word("type", make_word("prim_type", prim_type,
+    dict.register_word("type", make_primitive("type", prim_type,
         {T::String}, {}));
-    dict.register_word("s+", make_word("prim_splus", prim_splus,
+    dict.register_word("s+", make_primitive("s+", prim_splus,
         {T::String, T::String}, {T::String}));
-    dict.register_word("s=", make_word("prim_seq", prim_seq,
+    dict.register_word("s=", make_primitive("s=", prim_seq,
         {T::String, T::String}, {T::Integer}));
-    dict.register_word("s<>", make_word("prim_sneq", prim_sneq,
+    dict.register_word("s<>", make_primitive("s<>", prim_sneq,
         {T::String, T::String}, {T::Integer}));
-    dict.register_word("slength", make_word("prim_slength", prim_slength,
+    dict.register_word("slength", make_primitive("slength", prim_slength,
         {T::String}, {T::Integer}));
-    dict.register_word("substr", make_word("prim_substr", prim_substr,
+    dict.register_word("substr", make_primitive("substr", prim_substr,
         {T::String, T::Integer, T::Integer}, {T::String}));
-    dict.register_word("strim", make_word("prim_strim", prim_strim,
+    dict.register_word("strim", make_primitive("strim", prim_strim,
         {T::String}, {T::String}));
-    dict.register_word("sfind", make_word("prim_sfind", prim_sfind,
+    dict.register_word("sfind", make_primitive("sfind", prim_sfind,
         {T::String, T::String}, {T::Integer}));
-    dict.register_word("sreplace", make_word("prim_sreplace", prim_sreplace,
+    dict.register_word("sreplace", make_primitive("sreplace", prim_sreplace,
         {T::String, T::String, T::String}, {T::String}));
-    dict.register_word("ssplit", make_word("prim_ssplit", prim_ssplit,
+    dict.register_word("ssplit", make_primitive("ssplit", prim_ssplit,
         {T::String, T::String}, {T::Array}));
-    dict.register_word("sjoin", make_word("prim_sjoin", prim_sjoin,
+    dict.register_word("sjoin", make_primitive("sjoin", prim_sjoin,
         {T::Array, T::String}, {T::String}));
-    dict.register_word("sregex-find", make_word("prim_sregex_find", prim_sregex_find,
+    dict.register_word("sregex-find", make_primitive("sregex-find", prim_sregex_find,
         {T::String, T::String}, {T::Integer}));
-    dict.register_word("sregex-replace", make_word("prim_sregex_replace", prim_sregex_replace,
+    dict.register_word("sregex-replace", make_primitive("sregex-replace", prim_sregex_replace,
         {T::String, T::String, T::String}, {T::String}));
-    dict.register_word("sregex-search", make_word("prim_sregex_search", prim_sregex_search,
+    dict.register_word("sregex-search", make_primitive("sregex-search", prim_sregex_search,
         {T::String, T::String}, {T::Array, T::Integer}));
-    dict.register_word("sregex-match", make_word("prim_sregex_match", prim_sregex_match,
+    dict.register_word("sregex-match", make_primitive("sregex-match", prim_sregex_match,
         {T::String, T::String}, {T::Array, T::Integer}));
-    dict.register_word("s.", make_word("prim_sdot", prim_sdot,
+    dict.register_word("s.", make_primitive("s.", prim_sdot,
         {T::String}, {}));
-    dict.register_word("sprintf", make_word("prim_sprintf", prim_sprintf,
+    dict.register_word("sprintf", make_primitive("sprintf", prim_sprintf,
         {T::String}, {T::String}));
-    dict.register_word("staint", make_word("prim_staint", prim_staint,
+    dict.register_word("staint", make_primitive("staint", prim_staint,
         {T::String}, {T::Integer}));
 }
 

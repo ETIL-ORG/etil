@@ -1846,7 +1846,7 @@ TEST_F(NewPrimitivesTest, SeeNativePrimitive) {
     ASSERT_TRUE(prim_see(ctx()));
     std::string output = out.str();
     EXPECT_NE(output.find("primitive"), std::string::npos);
-    EXPECT_NE(output.find("prim_dup"), std::string::npos);
+    EXPECT_NE(output.find("dup"), std::string::npos);
     ctx().set_input_stream(nullptr);
 }
 
@@ -2506,7 +2506,7 @@ TEST_F(XtPrimitivesTest, TickPushesXt) {
     EXPECT_EQ(result->type, Value::Type::Xt);
     EXPECT_NE(result->as_ptr, nullptr);
     auto* impl = result->as_xt_impl();
-    EXPECT_EQ(impl->name(), "prim_dup");
+    EXPECT_EQ(impl->name(), "dup");
     result->release();
     ctx.set_input_stream(nullptr);
 }
@@ -2592,7 +2592,7 @@ TEST_F(XtPrimitivesTest, XtToNameReturnsString) {
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->type, Value::Type::String);
     auto* hs = result->as_string();
-    EXPECT_EQ(std::string(hs->view()), "prim_dup");
+    EXPECT_EQ(std::string(hs->view()), "dup");
     result->release();
 }
 

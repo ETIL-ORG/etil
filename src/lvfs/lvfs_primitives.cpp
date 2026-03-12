@@ -203,17 +203,13 @@ void register_lvfs_primitives(etil::core::Dictionary& dict) {
     using TS = etil::core::TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, etil::core::WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return etil::core::make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
-    dict.register_word("cwd", make_word("prim_cwd", prim_cwd, {}, {}));
-    dict.register_word("cd", make_word("prim_cd", prim_cd, {}, {}));
-    dict.register_word("ls", make_word("prim_ls", prim_ls, {}, {}));
-    dict.register_word("ll", make_word("prim_ll", prim_ll, {}, {}));
-    dict.register_word("lr", make_word("prim_lr", prim_lr, {}, {}));
-    dict.register_word("cat", make_word("prim_cat", prim_cat, {}, {}));
+    dict.register_word("cwd", etil::core::make_primitive("cwd", prim_cwd, {}, {}));
+    dict.register_word("cd", etil::core::make_primitive("cd", prim_cd, {}, {}));
+    dict.register_word("ls", etil::core::make_primitive("ls", prim_ls, {}, {}));
+    dict.register_word("ll", etil::core::make_primitive("ll", prim_ll, {}, {}));
+    dict.register_word("lr", etil::core::make_primitive("lr", prim_lr, {}, {}));
+    dict.register_word("cat", etil::core::make_primitive("cat", prim_cat, {}, {}));
 }
 
 } // namespace etil::lvfs

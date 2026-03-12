@@ -137,24 +137,20 @@ void register_byte_primitives(Dictionary& dict) {
     using TS = TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
-    dict.register_word("bytes-new", make_word("prim_bytes_new", prim_bytes_new,
+    dict.register_word("bytes-new", make_primitive("bytes-new", prim_bytes_new,
         {T::Integer}, {T::Unknown}));
-    dict.register_word("bytes-get", make_word("prim_bytes_get", prim_bytes_get,
+    dict.register_word("bytes-get", make_primitive("bytes-get", prim_bytes_get,
         {T::Unknown, T::Integer}, {T::Integer}));
-    dict.register_word("bytes-set", make_word("prim_bytes_set", prim_bytes_set,
+    dict.register_word("bytes-set", make_primitive("bytes-set", prim_bytes_set,
         {T::Unknown, T::Integer, T::Integer}, {T::Unknown}));
-    dict.register_word("bytes-length", make_word("prim_bytes_length", prim_bytes_length,
+    dict.register_word("bytes-length", make_primitive("bytes-length", prim_bytes_length,
         {T::Unknown}, {T::Unknown, T::Integer}));
-    dict.register_word("bytes-resize", make_word("prim_bytes_resize", prim_bytes_resize,
+    dict.register_word("bytes-resize", make_primitive("bytes-resize", prim_bytes_resize,
         {T::Unknown, T::Integer}, {T::Unknown}));
-    dict.register_word("bytes->string", make_word("prim_bytes_to_string", prim_bytes_to_string,
+    dict.register_word("bytes->string", make_primitive("bytes->string", prim_bytes_to_string,
         {T::Unknown}, {T::String}));
-    dict.register_word("string->bytes", make_word("prim_string_to_bytes", prim_string_to_bytes,
+    dict.register_word("string->bytes", make_primitive("string->bytes", prim_string_to_bytes,
         {T::String}, {T::Unknown}));
 }
 

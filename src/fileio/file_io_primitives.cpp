@@ -27,6 +27,7 @@ using etil::core::HeapArray;
 using etil::core::HeapObject;
 using etil::core::make_heap_value;
 using etil::core::pop_string;
+using etil::core::make_primitive;
 using etil::lvfs::Lvfs;
 
 namespace {
@@ -692,61 +693,57 @@ void register_file_io_primitives(etil::core::Dictionary& dict) {
     using TS = etil::core::TypeSignature;
     using T = TS::Type;
 
-    auto make_word = [](const char* name, etil::core::WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return etil::core::make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
 
     dict.register_word("exists-sync",
-        make_word("prim_exists_sync", prim_exists_sync,
+        make_primitive("exists-sync", prim_exists_sync,
             {T::String}, {T::Integer}));
 
     dict.register_word("read-file-sync",
-        make_word("prim_read_file_sync", prim_read_file_sync,
+        make_primitive("read-file-sync", prim_read_file_sync,
             {T::String}, {T::String, T::Integer}));
 
     dict.register_word("write-file-sync",
-        make_word("prim_write_file_sync", prim_write_file_sync,
+        make_primitive("write-file-sync", prim_write_file_sync,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("append-file-sync",
-        make_word("prim_append_file_sync", prim_append_file_sync,
+        make_primitive("append-file-sync", prim_append_file_sync,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("copy-file-sync",
-        make_word("prim_copy_file_sync", prim_copy_file_sync,
+        make_primitive("copy-file-sync", prim_copy_file_sync,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("rename-sync",
-        make_word("prim_rename_sync", prim_rename_sync,
+        make_primitive("rename-sync", prim_rename_sync,
             {T::String, T::String}, {T::Integer}));
 
     dict.register_word("lstat-sync",
-        make_word("prim_lstat_sync", prim_lstat_sync,
+        make_primitive("lstat-sync", prim_lstat_sync,
             {T::String}, {T::Array, T::Integer}));
 
     dict.register_word("readdir-sync",
-        make_word("prim_readdir_sync", prim_readdir_sync,
+        make_primitive("readdir-sync", prim_readdir_sync,
             {T::String}, {T::Array, T::Integer}));
 
     dict.register_word("mkdir-sync",
-        make_word("prim_mkdir_sync", prim_mkdir_sync,
+        make_primitive("mkdir-sync", prim_mkdir_sync,
             {T::String}, {T::Integer}));
 
     dict.register_word("mkdir-tmp-sync",
-        make_word("prim_mkdir_tmp_sync", prim_mkdir_tmp_sync,
+        make_primitive("mkdir-tmp-sync", prim_mkdir_tmp_sync,
             {T::String}, {T::String, T::Integer}));
 
     dict.register_word("rmdir-sync",
-        make_word("prim_rmdir_sync", prim_rmdir_sync,
+        make_primitive("rmdir-sync", prim_rmdir_sync,
             {T::String}, {T::Integer}));
 
     dict.register_word("rm-sync",
-        make_word("prim_rm_sync", prim_rm_sync,
+        make_primitive("rm-sync", prim_rm_sync,
             {T::String}, {T::Integer}));
 
     dict.register_word("truncate-sync",
-        make_word("prim_truncate_sync", prim_truncate_sync,
+        make_primitive("truncate-sync", prim_truncate_sync,
             {T::String}, {T::Integer}));
 }
 

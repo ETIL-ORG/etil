@@ -268,7 +268,7 @@ bool prim_abs(ExecutionContext& ctx) {
     return true;
 }
 
-bool prim_max(ExecutionContext& ctx) {
+static bool prim_minmax(ExecutionContext& ctx, bool want_max) {
     auto opt_b = ctx.data_stack().pop();
     if (!opt_b) return false;
     auto opt_a = ctx.data_stack().pop();
@@ -276,27 +276,16 @@ bool prim_max(ExecutionContext& ctx) {
     if (opt_a->type == Value::Type::Float || opt_b->type == Value::Type::Float) {
         double a = (opt_a->type == Value::Type::Float) ? opt_a->as_float : static_cast<double>(opt_a->as_int);
         double b = (opt_b->type == Value::Type::Float) ? opt_b->as_float : static_cast<double>(opt_b->as_int);
-        ctx.data_stack().push(Value(a >= b ? a : b));
+        bool pick_a = want_max ? (a >= b) : (a <= b);
+        ctx.data_stack().push(Value(pick_a ? a : b));
     } else {
-        ctx.data_stack().push(Value(opt_a->as_int >= opt_b->as_int ? opt_a->as_int : opt_b->as_int));
+        bool pick_a = want_max ? (opt_a->as_int >= opt_b->as_int) : (opt_a->as_int <= opt_b->as_int);
+        ctx.data_stack().push(Value(pick_a ? opt_a->as_int : opt_b->as_int));
     }
     return true;
 }
-
-bool prim_min(ExecutionContext& ctx) {
-    auto opt_b = ctx.data_stack().pop();
-    if (!opt_b) return false;
-    auto opt_a = ctx.data_stack().pop();
-    if (!opt_a) { ctx.data_stack().push(*opt_b); return false; }
-    if (opt_a->type == Value::Type::Float || opt_b->type == Value::Type::Float) {
-        double a = (opt_a->type == Value::Type::Float) ? opt_a->as_float : static_cast<double>(opt_a->as_int);
-        double b = (opt_b->type == Value::Type::Float) ? opt_b->as_float : static_cast<double>(opt_b->as_int);
-        ctx.data_stack().push(Value(a <= b ? a : b));
-    } else {
-        ctx.data_stack().push(Value(opt_a->as_int <= opt_b->as_int ? opt_a->as_int : opt_b->as_int));
-    }
-    return true;
-}
+bool prim_max(ExecutionContext& ctx) { return prim_minmax(ctx, true); }
+bool prim_min(ExecutionContext& ctx) { return prim_minmax(ctx, false); }
 
 // --- Stack manipulation primitives ---
 
@@ -649,63 +638,28 @@ bool prim_rshift(ExecutionContext& ctx) {
     return true;
 }
 
-bool prim_lroll(ExecutionContext& ctx) {
+static bool prim_rotate(ExecutionContext& ctx, bool left) {
     auto opt_count = ctx.data_stack().pop();
     if (!opt_count) return false;
     auto opt_val = ctx.data_stack().pop();
     if (!opt_val) { ctx.data_stack().push(*opt_count); return false; }
     int64_t count = opt_count->as_int;
     uint64_t val = static_cast<uint64_t>(opt_val->as_int);
-    // Negative count → rotate in opposite direction
-    if (count < 0) {
-        count = -count;
-        int n = static_cast<int>(static_cast<uint64_t>(count) % 64);
-        if (n == 0) {
-            ctx.data_stack().push(Value(static_cast<int64_t>(val)));
-        } else {
-            ctx.data_stack().push(Value(static_cast<int64_t>(
-                (val >> n) | (val << (64 - n)))));
-        }
+    // Negative count reverses direction
+    bool effective_left = (count >= 0) ? left : !left;
+    if (count < 0) count = -count;
+    int n = static_cast<int>(static_cast<uint64_t>(count) % 64);
+    if (n == 0) {
+        ctx.data_stack().push(Value(static_cast<int64_t>(val)));
+    } else if (effective_left) {
+        ctx.data_stack().push(Value(static_cast<int64_t>((val << n) | (val >> (64 - n)))));
     } else {
-        int n = static_cast<int>(static_cast<uint64_t>(count) % 64);
-        if (n == 0) {
-            ctx.data_stack().push(Value(static_cast<int64_t>(val)));
-        } else {
-            ctx.data_stack().push(Value(static_cast<int64_t>(
-                (val << n) | (val >> (64 - n)))));
-        }
+        ctx.data_stack().push(Value(static_cast<int64_t>((val >> n) | (val << (64 - n)))));
     }
     return true;
 }
-
-bool prim_rroll(ExecutionContext& ctx) {
-    auto opt_count = ctx.data_stack().pop();
-    if (!opt_count) return false;
-    auto opt_val = ctx.data_stack().pop();
-    if (!opt_val) { ctx.data_stack().push(*opt_count); return false; }
-    int64_t count = opt_count->as_int;
-    uint64_t val = static_cast<uint64_t>(opt_val->as_int);
-    // Negative count → rotate in opposite direction
-    if (count < 0) {
-        count = -count;
-        int n = static_cast<int>(static_cast<uint64_t>(count) % 64);
-        if (n == 0) {
-            ctx.data_stack().push(Value(static_cast<int64_t>(val)));
-        } else {
-            ctx.data_stack().push(Value(static_cast<int64_t>(
-                (val << n) | (val >> (64 - n)))));
-        }
-    } else {
-        int n = static_cast<int>(static_cast<uint64_t>(count) % 64);
-        if (n == 0) {
-            ctx.data_stack().push(Value(static_cast<int64_t>(val)));
-        } else {
-            ctx.data_stack().push(Value(static_cast<int64_t>(
-                (val >> n) | (val << (64 - n)))));
-        }
-    }
-    return true;
-}
+bool prim_lroll(ExecutionContext& ctx) { return prim_rotate(ctx, true); }
+bool prim_rroll(ExecutionContext& ctx) { return prim_rotate(ctx, false); }
 
 // --- I/O primitives ---
 
@@ -1240,47 +1194,52 @@ bool prim_library(ExecutionContext& ctx) {
 
 // --- Metadata primitives (stack-based) ---
 
-bool prim_dict_meta_set(ExecutionContext& ctx) {
-    // Stack: word-str key-str fmt-str content-str (TOS)
+// Shared helper: pop and validate 4 string args for meta-set operations.
+// Returns 1 on success (params filled), 0 on type/format error (caller pushes false),
+// -1 on underflow (caller returns false).
+struct MetaSetParams {
+    std::string word_name, key, content;
+    MetadataFormat fmt;
+};
+static int pop_meta_set_params(ExecutionContext& ctx, MetaSetParams& p) {
     auto opt_content = ctx.data_stack().pop();
-    if (!opt_content) return false;
+    if (!opt_content) return -1;
     auto opt_fmt = ctx.data_stack().pop();
-    if (!opt_fmt) { ctx.data_stack().push(*opt_content); return false; }
+    if (!opt_fmt) { ctx.data_stack().push(*opt_content); return -1; }
     auto opt_key = ctx.data_stack().pop();
-    if (!opt_key) { ctx.data_stack().push(*opt_fmt); ctx.data_stack().push(*opt_content); return false; }
+    if (!opt_key) { ctx.data_stack().push(*opt_fmt); ctx.data_stack().push(*opt_content); return -1; }
     auto opt_word = ctx.data_stack().pop();
-    if (!opt_word) { ctx.data_stack().push(*opt_key); ctx.data_stack().push(*opt_fmt); ctx.data_stack().push(*opt_content); return false; }
+    if (!opt_word) { ctx.data_stack().push(*opt_key); ctx.data_stack().push(*opt_fmt); ctx.data_stack().push(*opt_content); return -1; }
 
-    // Validate all are strings
     if (opt_word->type != Value::Type::String || !opt_word->as_ptr ||
         opt_key->type != Value::Type::String || !opt_key->as_ptr ||
         opt_fmt->type != Value::Type::String || !opt_fmt->as_ptr ||
         opt_content->type != Value::Type::String || !opt_content->as_ptr) {
-        opt_word->release();
-        opt_key->release();
-        opt_fmt->release();
-        opt_content->release();
-        ctx.data_stack().push(Value(false));
-        return true;
+        opt_word->release(); opt_key->release();
+        opt_fmt->release(); opt_content->release();
+        return 0;
     }
 
-    std::string word_name(opt_word->as_string()->view());
-    std::string key(opt_key->as_string()->view());
     std::string fmt_str(opt_fmt->as_string()->view());
-    std::string content(opt_content->as_string()->view());
-    opt_word->release();
-    opt_key->release();
-    opt_fmt->release();
-    opt_content->release();
+    p.word_name = std::string(opt_word->as_string()->view());
+    p.key = std::string(opt_key->as_string()->view());
+    p.content = std::string(opt_content->as_string()->view());
+    opt_word->release(); opt_key->release();
+    opt_fmt->release(); opt_content->release();
 
     auto fmt = parse_metadata_format(fmt_str);
-    if (!fmt) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    if (!fmt) return 0;
+    p.fmt = *fmt;
+    return 1;
+}
 
+bool prim_dict_meta_set(ExecutionContext& ctx) {
+    MetaSetParams p;
+    int r = pop_meta_set_params(ctx, p);
+    if (r < 0) return false;
+    if (r == 0) { ctx.data_stack().push(Value(false)); return true; }
     auto* dict = ctx.dictionary();
-    if (!dict || !dict->set_concept_metadata(word_name, key, *fmt, std::move(content))) {
+    if (!dict || !dict->set_concept_metadata(p.word_name, p.key, p.fmt, std::move(p.content))) {
         ctx.data_stack().push(Value(false));
     } else {
         ctx.data_stack().push(Value(true));
@@ -1288,28 +1247,31 @@ bool prim_dict_meta_set(ExecutionContext& ctx) {
     return true;
 }
 
-bool prim_dict_meta_get(ExecutionContext& ctx) {
-    // Stack: word-str key-str (TOS)
+// Shared helper: pop and validate 2 string args for meta-get operations.
+struct MetaGetParams { std::string word_name, key; };
+static int pop_meta_get_params(ExecutionContext& ctx, MetaGetParams& p) {
     auto opt_key = ctx.data_stack().pop();
-    if (!opt_key) return false;
+    if (!opt_key) return -1;
     auto opt_word = ctx.data_stack().pop();
-    if (!opt_word) { ctx.data_stack().push(*opt_key); return false; }
-
+    if (!opt_word) { ctx.data_stack().push(*opt_key); return -1; }
     if (opt_word->type != Value::Type::String || !opt_word->as_ptr ||
         opt_key->type != Value::Type::String || !opt_key->as_ptr) {
-        opt_word->release();
-        opt_key->release();
-        ctx.data_stack().push(Value(false));
-        return true;
+        opt_word->release(); opt_key->release();
+        return 0;
     }
+    p.word_name = std::string(opt_word->as_string()->view());
+    p.key = std::string(opt_key->as_string()->view());
+    opt_word->release(); opt_key->release();
+    return 1;
+}
 
-    std::string word_name(opt_word->as_string()->view());
-    std::string key(opt_key->as_string()->view());
-    opt_word->release();
-    opt_key->release();
-
+bool prim_dict_meta_get(ExecutionContext& ctx) {
+    MetaGetParams p;
+    int r = pop_meta_get_params(ctx, p);
+    if (r < 0) return false;
+    if (r == 0) { ctx.data_stack().push(Value(false)); return true; }
     auto* dict = ctx.dictionary();
-    auto entry = dict->get_concept_metadata(word_name, key);
+    auto entry = dict->get_concept_metadata(p.word_name, p.key);
     if (entry) {
         ctx.data_stack().push(Value::from(HeapString::create(entry->content)));
         ctx.data_stack().push(Value(true));
@@ -1372,80 +1334,27 @@ bool prim_dict_meta_keys(ExecutionContext& ctx) {
 }
 
 bool prim_impl_meta_set(ExecutionContext& ctx) {
-    // Stack: word-str key-str fmt-str content-str (TOS)
-    auto opt_content = ctx.data_stack().pop();
-    if (!opt_content) return false;
-    auto opt_fmt = ctx.data_stack().pop();
-    if (!opt_fmt) { ctx.data_stack().push(*opt_content); return false; }
-    auto opt_key = ctx.data_stack().pop();
-    if (!opt_key) { ctx.data_stack().push(*opt_fmt); ctx.data_stack().push(*opt_content); return false; }
-    auto opt_word = ctx.data_stack().pop();
-    if (!opt_word) { ctx.data_stack().push(*opt_key); ctx.data_stack().push(*opt_fmt); ctx.data_stack().push(*opt_content); return false; }
-
-    if (opt_word->type != Value::Type::String || !opt_word->as_ptr ||
-        opt_key->type != Value::Type::String || !opt_key->as_ptr ||
-        opt_fmt->type != Value::Type::String || !opt_fmt->as_ptr ||
-        opt_content->type != Value::Type::String || !opt_content->as_ptr) {
-        opt_word->release();
-        opt_key->release();
-        opt_fmt->release();
-        opt_content->release();
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string word_name(opt_word->as_string()->view());
-    std::string key(opt_key->as_string()->view());
-    std::string fmt_str(opt_fmt->as_string()->view());
-    std::string content(opt_content->as_string()->view());
-    opt_word->release();
-    opt_key->release();
-    opt_fmt->release();
-    opt_content->release();
-
-    auto fmt = parse_metadata_format(fmt_str);
-    if (!fmt) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
+    MetaSetParams p;
+    int r = pop_meta_set_params(ctx, p);
+    if (r < 0) return false;
+    if (r == 0) { ctx.data_stack().push(Value(false)); return true; }
     auto* dict = ctx.dictionary();
-    auto impl = dict->lookup(word_name);
-    if (!impl) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-    (*impl)->metadata().set(key, *fmt, std::move(content));
+    auto impl = dict->lookup(p.word_name);
+    if (!impl) { ctx.data_stack().push(Value(false)); return true; }
+    (*impl)->metadata().set(p.key, p.fmt, std::move(p.content));
     ctx.data_stack().push(Value(true));
     return true;
 }
 
 bool prim_impl_meta_get(ExecutionContext& ctx) {
-    auto opt_key = ctx.data_stack().pop();
-    if (!opt_key) return false;
-    auto opt_word = ctx.data_stack().pop();
-    if (!opt_word) { ctx.data_stack().push(*opt_key); return false; }
-
-    if (opt_word->type != Value::Type::String || !opt_word->as_ptr ||
-        opt_key->type != Value::Type::String || !opt_key->as_ptr) {
-        opt_word->release();
-        opt_key->release();
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string word_name(opt_word->as_string()->view());
-    std::string key(opt_key->as_string()->view());
-    opt_word->release();
-    opt_key->release();
-
+    MetaGetParams p;
+    int r = pop_meta_get_params(ctx, p);
+    if (r < 0) return false;
+    if (r == 0) { ctx.data_stack().push(Value(false)); return true; }
     auto* dict = ctx.dictionary();
-    auto impl = dict->lookup(word_name);
-    if (!impl) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-    auto entry = (*impl)->metadata().get(key);
+    auto impl = dict->lookup(p.word_name);
+    if (!impl) { ctx.data_stack().push(Value(false)); return true; }
+    auto entry = (*impl)->metadata().get(p.key);
     if (entry) {
         ctx.data_stack().push(Value::from(HeapString::create(entry->content)));
         ctx.data_stack().push(Value(true));
@@ -1941,63 +1850,38 @@ constexpr double US_PER_DAY = 86400000000.0;   // microseconds per day
 
 } // anonymous namespace
 
-bool prim_us_to_jd(ExecutionContext& ctx) {
+// Shared helpers for JD/MJD conversions (differ only in epoch constant)
+static bool prim_us_to_epoch(ExecutionContext& ctx, double epoch) {
     auto opt = ctx.data_stack().pop();
     if (!opt) return false;
     if (opt->type != Value::Type::Integer) {
         ctx.data_stack().push(*opt);
         return false;
     }
-    double jd = (static_cast<double>(opt->as_int) / US_PER_DAY) + JD_UNIX_EPOCH;
-    ctx.data_stack().push(Value(jd));
+    double result = (static_cast<double>(opt->as_int) / US_PER_DAY) + epoch;
+    ctx.data_stack().push(Value(result));
     return true;
 }
-
-bool prim_jd_to_us(ExecutionContext& ctx) {
+static bool prim_epoch_to_us(ExecutionContext& ctx, double epoch) {
     auto opt = ctx.data_stack().pop();
     if (!opt) return false;
-    double jd;
+    double val;
     if (opt->type == Value::Type::Float) {
-        jd = opt->as_float;
+        val = opt->as_float;
     } else if (opt->type == Value::Type::Integer) {
-        jd = static_cast<double>(opt->as_int);
+        val = static_cast<double>(opt->as_int);
     } else {
         ctx.data_stack().push(*opt);
         return false;
     }
-    auto us = static_cast<int64_t>((jd - JD_UNIX_EPOCH) * US_PER_DAY);
+    auto us = static_cast<int64_t>((val - epoch) * US_PER_DAY);
     ctx.data_stack().push(Value(us));
     return true;
 }
-
-bool prim_us_to_mjd(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return false;
-    if (opt->type != Value::Type::Integer) {
-        ctx.data_stack().push(*opt);
-        return false;
-    }
-    double mjd = (static_cast<double>(opt->as_int) / US_PER_DAY) + MJD_UNIX_EPOCH;
-    ctx.data_stack().push(Value(mjd));
-    return true;
-}
-
-bool prim_mjd_to_us(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return false;
-    double mjd;
-    if (opt->type == Value::Type::Float) {
-        mjd = opt->as_float;
-    } else if (opt->type == Value::Type::Integer) {
-        mjd = static_cast<double>(opt->as_int);
-    } else {
-        ctx.data_stack().push(*opt);
-        return false;
-    }
-    auto us = static_cast<int64_t>((mjd - MJD_UNIX_EPOCH) * US_PER_DAY);
-    ctx.data_stack().push(Value(us));
-    return true;
-}
+bool prim_us_to_jd(ExecutionContext& ctx)  { return prim_us_to_epoch(ctx, JD_UNIX_EPOCH); }
+bool prim_jd_to_us(ExecutionContext& ctx)  { return prim_epoch_to_us(ctx, JD_UNIX_EPOCH); }
+bool prim_us_to_mjd(ExecutionContext& ctx) { return prim_us_to_epoch(ctx, MJD_UNIX_EPOCH); }
+bool prim_mjd_to_us(ExecutionContext& ctx) { return prim_epoch_to_us(ctx, MJD_UNIX_EPOCH); }
 
 bool prim_sleep(ExecutionContext& ctx) {
     auto opt = ctx.data_stack().pop();
@@ -2544,419 +2428,187 @@ WordImplPtr make_primitive(const char* name, WordImpl::FunctionPtr fn,
     return WordImplPtr(impl);
 }
 
-void register_primitives(Dictionary& dict) {
-    using TS = TypeSignature;
-    using T = TS::Type;
+// --- Table-driven primitive registration ---
 
-    auto make_word = [](const char* name, WordImpl::FunctionPtr fn,
-                        std::vector<T> inputs, std::vector<T> outputs) {
-        return make_primitive(name, fn, std::move(inputs), std::move(outputs));
-    };
+using T = TypeSignature::Type;
 
-    dict.register_word("+", make_word("prim_add", prim_add,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+// Sentinel marking the end of a type list in fixed-size arrays.
+constexpr auto N = static_cast<T>(255);
 
-    dict.register_word("-", make_word("prim_sub", prim_sub,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+struct PrimEntry {
+    const char* word_name;
+    WordImpl::FunctionPtr fn;
+    uint8_t n_in;
+    uint8_t n_out;
+    T in[4];
+    T out[3];
+};
 
-    dict.register_word("*", make_word("prim_mul", prim_mul,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("/", make_word("prim_div", prim_div,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("mod", make_word("prim_mod", prim_mod,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("/mod", make_word("prim_divmod", prim_divmod,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
-
-    dict.register_word("negate", make_word("prim_negate", prim_negate,
-        {T::Unknown}, {T::Unknown}));
-
-    dict.register_word("abs", make_word("prim_abs", prim_abs,
-        {T::Unknown}, {T::Unknown}));
-
-    dict.register_word("max", make_word("prim_max", prim_max,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("min", make_word("prim_min", prim_min,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("dup", make_word("prim_dup", prim_dup,
-        {T::Unknown}, {T::Unknown, T::Unknown}));
-
-    dict.register_word("drop", make_word("prim_drop", prim_drop,
-        {T::Unknown}, {}));
-
-    dict.register_word("swap", make_word("prim_swap", prim_swap,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
-
-    dict.register_word("over", make_word("prim_over", prim_over,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown, T::Unknown}));
-
-    dict.register_word("rot", make_word("prim_rot", prim_rot,
-        {T::Unknown, T::Unknown, T::Unknown}, {T::Unknown, T::Unknown, T::Unknown}));
-
-    dict.register_word("pick", make_word("prim_pick", prim_pick,
-        {T::Integer}, {}));
-
-    dict.register_word("nip", make_word("prim_nip", prim_nip,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("tuck", make_word("prim_tuck", prim_tuck,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown, T::Unknown}));
-
-    dict.register_word("depth", make_word("prim_depth", prim_depth,
-        {}, {T::Integer}));
-
-    dict.register_word("?dup", make_word("prim_qdup", prim_qdup,
-        {T::Unknown}, {}));
-
-    dict.register_word("roll", make_word("prim_roll", prim_roll,
-        {T::Integer}, {}));
-
+// clang-format off
+static const PrimEntry prim_table[] = {
+    // Arithmetic
+    {"+",       prim_add,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"-",       prim_sub,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"*",       prim_mul,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"/",       prim_div,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"mod",     prim_mod,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"/mod",    prim_divmod,  2, 2, {T::Unknown, T::Unknown},           {T::Unknown, T::Unknown}},
+    {"negate",  prim_negate,  1, 1, {T::Unknown},                       {T::Unknown}},
+    {"abs",     prim_abs,     1, 1, {T::Unknown},                       {T::Unknown}},
+    {"max",     prim_max,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"min",     prim_min,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    // Stack
+    {"dup",     prim_dup,     1, 2, {T::Unknown},                       {T::Unknown, T::Unknown}},
+    {"drop",    prim_drop,    1, 0, {T::Unknown},                       {}},
+    {"swap",    prim_swap,    2, 2, {T::Unknown, T::Unknown},           {T::Unknown, T::Unknown}},
+    {"over",    prim_over,    2, 3, {T::Unknown, T::Unknown},           {T::Unknown, T::Unknown, T::Unknown}},
+    {"rot",     prim_rot,     3, 3, {T::Unknown, T::Unknown, T::Unknown},{T::Unknown, T::Unknown, T::Unknown}},
+    {"pick",    prim_pick,    1, 0, {T::Integer},                       {}},
+    {"nip",     prim_nip,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"tuck",    prim_tuck,    2, 3, {T::Unknown, T::Unknown},           {T::Unknown, T::Unknown, T::Unknown}},
+    {"depth",   prim_depth,   0, 1, {},                                 {T::Integer}},
+    {"?dup",    prim_qdup,    1, 0, {T::Unknown},                       {}},
+    {"roll",    prim_roll,    1, 0, {T::Integer},                       {}},
     // Comparison
-    dict.register_word("=", make_word("prim_eq", prim_eq,
-        {T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word("<>", make_word("prim_neq", prim_neq,
-        {T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word("<", make_word("prim_lt", prim_lt,
-        {T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word(">", make_word("prim_gt", prim_gt,
-        {T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word("<=", make_word("prim_le", prim_le,
-        {T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word(">=", make_word("prim_ge", prim_ge,
-        {T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word("0=", make_word("prim_zero_eq", prim_zero_eq,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word("0<", make_word("prim_zero_lt", prim_zero_lt,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word("0>", make_word("prim_zero_gt", prim_zero_gt,
-        {T::Unknown}, {T::Integer}));
-
+    {"=",       prim_eq,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
+    {"<>",      prim_neq,     2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
+    {"<",       prim_lt,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
+    {">",       prim_gt,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
+    {"<=",      prim_le,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
+    {">=",      prim_ge,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
+    {"0=",      prim_zero_eq, 1, 1, {T::Unknown},                       {T::Integer}},
+    {"0<",      prim_zero_lt, 1, 1, {T::Unknown},                       {T::Integer}},
+    {"0>",      prim_zero_gt, 1, 1, {T::Unknown},                       {T::Integer}},
     // Boolean
-    dict.register_word("true", make_word("prim_true", prim_true,
-        {}, {T::Unknown}));
-
-    dict.register_word("false", make_word("prim_false", prim_false,
-        {}, {T::Unknown}));
-
-    dict.register_word("not", make_word("prim_not", prim_not,
-        {T::Unknown}, {T::Unknown}));
-
-    dict.register_word("bool", make_word("prim_to_bool", prim_to_bool,
-        {T::Unknown}, {T::Unknown}));
-
+    {"true",    prim_true,    0, 1, {},                                 {T::Unknown}},
+    {"false",   prim_false,   0, 1, {},                                 {T::Unknown}},
+    {"not",     prim_not,     1, 1, {T::Unknown},                       {T::Unknown}},
+    {"bool",    prim_to_bool, 1, 1, {T::Unknown},                       {T::Unknown}},
     // Logic
-    dict.register_word("and", make_word("prim_and", prim_and,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("or", make_word("prim_or", prim_or,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("xor", make_word("prim_xor", prim_xor,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
-
-    dict.register_word("invert", make_word("prim_invert", prim_invert,
-        {T::Unknown}, {T::Unknown}));
-
-    dict.register_word("lshift", make_word("prim_lshift", prim_lshift,
-        {T::Integer, T::Integer}, {T::Integer}));
-
-    dict.register_word("rshift", make_word("prim_rshift", prim_rshift,
-        {T::Integer, T::Integer}, {T::Integer}));
-
-    dict.register_word("lroll", make_word("prim_lroll", prim_lroll,
-        {T::Integer, T::Integer}, {T::Integer}));
-
-    dict.register_word("rroll", make_word("prim_rroll", prim_rroll,
-        {T::Integer, T::Integer}, {T::Integer}));
-
+    {"and",     prim_and,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"or",      prim_or,      2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"xor",     prim_xor,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"invert",  prim_invert,  1, 1, {T::Unknown},                       {T::Unknown}},
+    {"lshift",  prim_lshift,  2, 1, {T::Integer, T::Integer},           {T::Integer}},
+    {"rshift",  prim_rshift,  2, 1, {T::Integer, T::Integer},           {T::Integer}},
+    {"lroll",   prim_lroll,   2, 1, {T::Integer, T::Integer},           {T::Integer}},
+    {"rroll",   prim_rroll,   2, 1, {T::Integer, T::Integer},           {T::Integer}},
     // I/O
-    dict.register_word(".", make_word("prim_dot", prim_dot,
-        {T::Unknown}, {}));
-
-    dict.register_word("cr", make_word("prim_cr", prim_cr,
-        {}, {}));
-
-    dict.register_word("emit", make_word("prim_emit", prim_emit,
-        {T::Integer}, {}));
-
-    dict.register_word("space", make_word("prim_space", prim_space,
-        {}, {}));
-
-    dict.register_word("spaces", make_word("prim_spaces", prim_spaces,
-        {T::Integer}, {}));
-
-    dict.register_word("words", make_word("prim_words", prim_words,
-        {}, {}));
-
+    {".",        prim_dot,     1, 0, {T::Unknown},                       {}},
+    {"cr",       prim_cr,      0, 0, {},                                 {}},
+    {"emit",     prim_emit,    1, 0, {T::Integer},                       {}},
+    {"space",    prim_space,   0, 0, {},                                 {}},
+    {"spaces",   prim_spaces,  1, 0, {T::Integer},                       {}},
+    {"words",    prim_words,   0, 0, {},                                 {}},
     // Memory
-    dict.register_word("create", make_word("prim_create", prim_create,
-        {}, {}));
-
-    dict.register_word(",", make_word("prim_comma", prim_comma,
-        {T::Unknown}, {}));
-
-    dict.register_word("@", make_word("prim_fetch", prim_fetch,
-        {T::Unknown}, {T::Unknown}));
-
-    dict.register_word("!", make_word("prim_store", prim_store,
-        {T::Unknown, T::Unknown}, {}));
-
-    dict.register_word("allot", make_word("prim_allot", prim_allot,
-        {T::Integer}, {}));
-
+    {"create",   prim_create,  0, 0, {},                                 {}},
+    {",",        prim_comma,   1, 0, {T::Unknown},                       {}},
+    {"@",        prim_fetch,   1, 1, {T::Unknown},                       {T::Unknown}},
+    {"!",        prim_store,   2, 0, {T::Unknown, T::Unknown},           {}},
+    {"allot",    prim_allot,   1, 0, {T::Integer},                       {}},
     // Math (unary — all return Float)
-    dict.register_word("sqrt", make_word("prim_sqrt", prim_sqrt,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("sin", make_word("prim_sin", prim_sin,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("cos", make_word("prim_cos", prim_cos,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("tan", make_word("prim_tan", prim_tan,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("asin", make_word("prim_asin", prim_asin,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("acos", make_word("prim_acos", prim_acos,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("atan", make_word("prim_atan", prim_atan,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("atan2", make_word("prim_atan2", prim_atan2,
-        {T::Unknown, T::Unknown}, {T::Float}));
-
-    dict.register_word("log", make_word("prim_log", prim_log,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("log2", make_word("prim_log2", prim_log2,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("log10", make_word("prim_log10", prim_log10,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("exp", make_word("prim_exp", prim_exp,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("pow", make_word("prim_pow", prim_pow,
-        {T::Unknown, T::Unknown}, {T::Float}));
-
-    dict.register_word("ceil", make_word("prim_ceil", prim_ceil,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("floor", make_word("prim_floor", prim_floor,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("round", make_word("prim_round", prim_round,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("trunc", make_word("prim_trunc", prim_trunc,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("fmin", make_word("prim_fmin", prim_fmin,
-        {T::Unknown, T::Unknown}, {T::Float}));
-
-    dict.register_word("fmax", make_word("prim_fmax", prim_fmax,
-        {T::Unknown, T::Unknown}, {T::Float}));
-
-    dict.register_word("pi", make_word("prim_pi", prim_pi,
-        {}, {T::Float}));
-
-    dict.register_word("tanh", make_word("prim_tanh", prim_tanh,
-        {T::Unknown}, {T::Float}));
-
-    dict.register_word("f~", make_word("prim_fapprox", prim_fapprox,
-        {T::Unknown, T::Unknown, T::Unknown}, {T::Integer}));
-
+    {"sqrt",     prim_sqrt,    1, 1, {T::Unknown},                       {T::Float}},
+    {"sin",      prim_sin,     1, 1, {T::Unknown},                       {T::Float}},
+    {"cos",      prim_cos,     1, 1, {T::Unknown},                       {T::Float}},
+    {"tan",      prim_tan,     1, 1, {T::Unknown},                       {T::Float}},
+    {"asin",     prim_asin,    1, 1, {T::Unknown},                       {T::Float}},
+    {"acos",     prim_acos,    1, 1, {T::Unknown},                       {T::Float}},
+    {"atan",     prim_atan,    1, 1, {T::Unknown},                       {T::Float}},
+    {"atan2",    prim_atan2,   2, 1, {T::Unknown, T::Unknown},           {T::Float}},
+    {"log",      prim_log,     1, 1, {T::Unknown},                       {T::Float}},
+    {"log2",     prim_log2,    1, 1, {T::Unknown},                       {T::Float}},
+    {"log10",    prim_log10,   1, 1, {T::Unknown},                       {T::Float}},
+    {"exp",      prim_exp,     1, 1, {T::Unknown},                       {T::Float}},
+    {"pow",      prim_pow,     2, 1, {T::Unknown, T::Unknown},           {T::Float}},
+    {"ceil",     prim_ceil,    1, 1, {T::Unknown},                       {T::Float}},
+    {"floor",    prim_floor,   1, 1, {T::Unknown},                       {T::Float}},
+    {"round",    prim_round,   1, 1, {T::Unknown},                       {T::Float}},
+    {"trunc",    prim_trunc,   1, 1, {T::Unknown},                       {T::Float}},
+    {"fmin",     prim_fmin,    2, 1, {T::Unknown, T::Unknown},           {T::Float}},
+    {"fmax",     prim_fmax,    2, 1, {T::Unknown, T::Unknown},           {T::Float}},
+    {"pi",       prim_pi,      0, 1, {},                                 {T::Float}},
+    {"tanh",     prim_tanh,    1, 1, {T::Unknown},                       {T::Float}},
+    {"f~",       prim_fapprox, 3, 1, {T::Unknown, T::Unknown, T::Unknown},{T::Integer}},
     // PRNG
-    dict.register_word("random", make_word("prim_random", prim_random,
-        {}, {T::Float}));
-
-    dict.register_word("random-seed", make_word("prim_random_seed", prim_random_seed,
-        {T::Integer}, {}));
-
-    dict.register_word("random-range", make_word("prim_random_range", prim_random_range,
-        {T::Integer, T::Integer}, {T::Integer}));
-
+    {"random",       prim_random,       0, 1, {},                         {T::Float}},
+    {"random-seed",  prim_random_seed,  1, 0, {T::Integer},              {}},
+    {"random-range", prim_random_range, 2, 1, {T::Integer, T::Integer},  {T::Integer}},
     // System
-    dict.register_word("sys-semver", make_word("prim_sys_semver", prim_sys_semver,
-        {}, {}));
-
-    dict.register_word("sys-timestamp", make_word("prim_sys_timestamp", prim_sys_timestamp,
-        {}, {}));
-
-    dict.register_word("sys-datafields", make_word("prim_sys_datafields", prim_sys_datafields,
-        {}, {}));
-
-    dict.register_word("sys-notification", make_word("prim_sys_notification", prim_sys_notification,
-        {T::Unknown}, {}));
-
-    dict.register_word("user-notification", make_word("prim_user_notification", prim_user_notification,
-        {T::String, T::String}, {T::Integer}));
-
-    dict.register_word("abort", make_word("prim_abort", prim_abort,
-        {T::Unknown}, {}));
-
+    {"sys-semver",       prim_sys_semver,       0, 0, {},                 {}},
+    {"sys-timestamp",    prim_sys_timestamp,    0, 0, {},                 {}},
+    {"sys-datafields",   prim_sys_datafields,   0, 0, {},                 {}},
+    {"sys-notification", prim_sys_notification, 1, 0, {T::Unknown},      {}},
+    {"user-notification",prim_user_notification,2, 1, {T::String, T::String},{T::Integer}},
+    {"abort",            prim_abort,            1, 0, {T::Unknown},      {}},
     // Time
-    dict.register_word("time-us", make_word("prim_time_us", prim_time_us,
-        {}, {T::Integer}));
-
-    dict.register_word("us->iso", make_word("prim_us_to_iso", prim_us_to_iso,
-        {T::Integer}, {T::Unknown}));
-
-    dict.register_word("us->iso-us", make_word("prim_us_to_iso_us", prim_us_to_iso_us,
-        {T::Integer}, {T::Unknown}));
-
-    dict.register_word("us->jd", make_word("prim_us_to_jd", prim_us_to_jd,
-        {T::Integer}, {T::Float}));
-
-    dict.register_word("jd->us", make_word("prim_jd_to_us", prim_jd_to_us,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word("us->mjd", make_word("prim_us_to_mjd", prim_us_to_mjd,
-        {T::Integer}, {T::Float}));
-
-    dict.register_word("mjd->us", make_word("prim_mjd_to_us", prim_mjd_to_us,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word("sleep", make_word("prim_sleep", prim_sleep,
-        {T::Integer}, {}));
-
+    {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
+    {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::Unknown}},
+    {"us->iso-us", prim_us_to_iso_us,1, 1, {T::Integer},{T::Unknown}},
+    {"us->jd",     prim_us_to_jd,    1, 1, {T::Integer},{T::Float}},
+    {"jd->us",     prim_jd_to_us,    1, 1, {T::Unknown},{T::Integer}},
+    {"us->mjd",    prim_us_to_mjd,   1, 1, {T::Integer},{T::Float}},
+    {"mjd->us",    prim_mjd_to_us,   1, 1, {T::Unknown},{T::Integer}},
+    {"sleep",      prim_sleep,       1, 0, {T::Integer},{}},
     // Input-reading
-    dict.register_word("word-read", make_word("prim_word_read", prim_word_read,
-        {}, {T::Unknown, T::Integer}));
-
-    dict.register_word("string-read-delim", make_word("prim_string_read_delim", prim_string_read_delim,
-        {T::Integer}, {T::Unknown, T::Integer}));
-
+    {"word-read",        prim_word_read,        0, 2, {},          {T::Unknown, T::Integer}},
+    {"string-read-delim",prim_string_read_delim,1, 2, {T::Integer},{T::Unknown, T::Integer}},
     // Dictionary operations
-    dict.register_word("dict-forget", make_word("prim_dict_forget", prim_dict_forget,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word("dict-forget-all", make_word("prim_dict_forget_all", prim_dict_forget_all,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word("file-load", make_word("prim_file_load", prim_file_load,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word("include", make_word("prim_include", prim_include,
-        {}, {}));
-
-    dict.register_word("library", make_word("prim_library", prim_library,
-        {}, {}));
-
-    dict.register_word("evaluate", make_word("prim_evaluate", prim_evaluate,
-        {T::String}, {}));
-
-    dict.register_word("marker", make_word("prim_marker", prim_marker,
-        {}, {}));
-
-    dict.register_word("marker-restore", make_word("prim_marker_restore", prim_marker_restore,
-        {T::String}, {}));
-
+    {"dict-forget",     prim_dict_forget,     1, 1, {T::Unknown}, {T::Integer}},
+    {"dict-forget-all", prim_dict_forget_all, 1, 1, {T::Unknown}, {T::Integer}},
+    {"file-load",       prim_file_load,       1, 1, {T::Unknown}, {T::Integer}},
+    {"include",         prim_include,         0, 0, {},            {}},
+    {"library",         prim_library,         0, 0, {},            {}},
+    {"evaluate",        prim_evaluate,        1, 0, {T::String},   {}},
+    {"marker",          prim_marker,          0, 0, {},            {}},
+    {"marker-restore",  prim_marker_restore,  1, 0, {T::String},   {}},
     // Metadata (stack-based)
-    dict.register_word("dict-meta-set", make_word("prim_dict_meta_set", prim_dict_meta_set,
-        {T::Unknown, T::Unknown, T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word("dict-meta-get", make_word("prim_dict_meta_get", prim_dict_meta_get,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Integer}));
-
-    dict.register_word("dict-meta-del", make_word("prim_dict_meta_del", prim_dict_meta_del,
-        {T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word("dict-meta-keys", make_word("prim_dict_meta_keys", prim_dict_meta_keys,
-        {T::Unknown}, {T::Unknown, T::Integer}));
-
-    dict.register_word("impl-meta-set", make_word("prim_impl_meta_set", prim_impl_meta_set,
-        {T::Unknown, T::Unknown, T::Unknown, T::Unknown}, {T::Integer}));
-
-    dict.register_word("impl-meta-get", make_word("prim_impl_meta_get", prim_impl_meta_get,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Integer}));
-
-    // Help
-    dict.register_word("help", make_word("prim_help", prim_help,
-        {}, {}));
-
-    // Debug
-    dict.register_word("dump", make_word("prim_dump", prim_dump,
-        {T::Unknown}, {T::Unknown}));
-
-    dict.register_word("see", make_word("prim_see", prim_see,
-        {}, {}));
-
+    {"dict-meta-set",  prim_dict_meta_set,  4, 1, {T::Unknown, T::Unknown, T::Unknown, T::Unknown},{T::Integer}},
+    {"dict-meta-get",  prim_dict_meta_get,  2, 2, {T::Unknown, T::Unknown},           {T::Unknown, T::Integer}},
+    {"dict-meta-del",  prim_dict_meta_del,  2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
+    {"dict-meta-keys", prim_dict_meta_keys, 1, 2, {T::Unknown},                       {T::Unknown, T::Integer}},
+    {"impl-meta-set",  prim_impl_meta_set,  4, 1, {T::Unknown, T::Unknown, T::Unknown, T::Unknown},{T::Integer}},
+    {"impl-meta-get",  prim_impl_meta_get,  2, 2, {T::Unknown, T::Unknown},           {T::Unknown, T::Integer}},
+    // Help & Debug
+    {"help",    prim_help,    0, 0, {},                                 {}},
+    {"dump",    prim_dump,    1, 1, {T::Unknown},                       {T::Unknown}},
+    {"see",     prim_see,     0, 0, {},                                 {}},
     // Execution tokens
-    dict.register_word("'", make_word("prim_tick", prim_tick,
-        {}, {T::Unknown}));
-
-    dict.register_word("execute", make_word("prim_execute", prim_execute,
-        {T::Unknown}, {}));
-
-    dict.register_word("xt?", make_word("prim_xt_query", prim_xt_query,
-        {T::Unknown}, {T::Integer}));
-
-    dict.register_word(">name", make_word("prim_xt_to_name", prim_xt_to_name,
-        {T::Unknown}, {T::String}));
-
+    {"'",       prim_tick,        0, 1, {},          {T::Unknown}},
+    {"execute", prim_execute,     1, 0, {T::Unknown},{}},
+    {"xt?",     prim_xt_query,    1, 1, {T::Unknown},{T::Integer}},
+    {">name",   prim_xt_to_name,  1, 1, {T::Unknown},{T::String}},
     // Defining words
-    dict.register_word("immediate", make_word("prim_immediate", prim_immediate,
-        {}, {}));
-
-    dict.register_word("xt-body", make_word("prim_xt_body", prim_xt_body,
-        {T::Unknown}, {T::Unknown}));
-
+    {"immediate",prim_immediate,  0, 0, {},          {}},
+    {"xt-body",  prim_xt_body,    1, 1, {T::Unknown},{T::Unknown}},
     // Stack display
-    dict.register_word(".s", make_word("prim_dot_s", prim_dot_s,
-        {}, {}));
-
+    {".s",       prim_dot_s,      0, 0, {},          {}},
     // Type conversion
-    dict.register_word("int->float", make_word("prim_int_to_float", prim_int_to_float,
-        {T::Integer}, {T::Float}));
+    {"int->float",     prim_int_to_float,     1, 1, {T::Integer}, {T::Float}},
+    {"float->int",     prim_float_to_int,     1, 1, {T::Float},   {T::Integer}},
+    {"number->string", prim_number_to_string, 1, 1, {T::Unknown}, {T::String}},
+    {"string->number", prim_string_to_number, 1, 0, {T::String},  {}},
+};
+// clang-format on
 
-    dict.register_word("float->int", make_word("prim_float_to_int", prim_float_to_int,
-        {T::Float}, {T::Integer}));
+void register_primitives(Dictionary& dict) {
+    // Register all entries from the table
+    for (const auto& e : prim_table) {
+        std::vector<T> in(e.in, e.in + e.n_in);
+        std::vector<T> out(e.out, e.out + e.n_out);
+        dict.register_word(e.word_name,
+            make_primitive(e.word_name, e.fn, std::move(in), std::move(out)));
+    }
 
-    dict.register_word("number->string", make_word("prim_number_to_string", prim_number_to_string,
-        {T::Unknown}, {T::String}));
-
-    dict.register_word("string->number", make_word("prim_string_to_number", prim_string_to_number,
-        {T::String}, {}));
-
-    // Register heap object primitives (string, array, byte, map)
+    // Register sub-module primitives
     register_string_primitives(dict);
     register_array_primitives(dict);
     register_byte_primitives(dict);
     register_map_primitives(dict);
     register_json_primitives(dict);
-
-    // Register matrix primitives (mat-new, mat*, mat-solve, etc.)
     register_matrix_primitives(dict);
-
-    // Register LVFS primitives (cwd, cd, ls, ll, lr, cat)
     etil::lvfs::register_lvfs_primitives(dict);
-
-    // Register file I/O primitives (exists-sync, read-file-sync, etc.)
     etil::fileio::register_file_io_primitives(dict);
-
-    // Register async file I/O primitives (exists?, read-file, write-file, etc.)
     etil::fileio::register_async_file_io_primitives(dict);
-
-    // Register observable primitives (obs-from, obs-map, obs-subscribe, etc.)
     register_observable_primitives(dict);
 }
 
