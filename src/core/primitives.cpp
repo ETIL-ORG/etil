@@ -915,133 +915,53 @@ bool pop_two_as_double(ExecutionContext& ctx, double& a, double& b) {
 }
 } // anonymous namespace
 
-bool prim_sqrt(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::sqrt(v)));
-    return true;
+// --- Unary math primitive generator ---
+// Each expands to: pop one double, apply fn, push result.
+#define UNARY_MATH_PRIM(name, fn)                                   \
+bool prim_##name(ExecutionContext& ctx) {                            \
+    double v; if (!pop_as_double(ctx, v)) return false;              \
+    ctx.data_stack().push(Value(fn(v)));                             \
+    return true;                                                     \
 }
 
-bool prim_sin(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::sin(v)));
-    return true;
+UNARY_MATH_PRIM(sqrt,  std::sqrt)
+UNARY_MATH_PRIM(sin,   std::sin)
+UNARY_MATH_PRIM(cos,   std::cos)
+UNARY_MATH_PRIM(tan,   std::tan)
+UNARY_MATH_PRIM(asin,  std::asin)
+UNARY_MATH_PRIM(acos,  std::acos)
+UNARY_MATH_PRIM(atan,  std::atan)
+UNARY_MATH_PRIM(log,   std::log)
+UNARY_MATH_PRIM(log2,  std::log2)
+UNARY_MATH_PRIM(log10, std::log10)
+UNARY_MATH_PRIM(exp,   std::exp)
+UNARY_MATH_PRIM(ceil,  std::ceil)
+UNARY_MATH_PRIM(floor, std::floor)
+UNARY_MATH_PRIM(round, std::round)
+UNARY_MATH_PRIM(trunc, std::trunc)
+UNARY_MATH_PRIM(tanh,  std::tanh)
+
+#undef UNARY_MATH_PRIM
+
+// --- Binary math primitive generator ---
+// Each expands to: pop two doubles, apply fn, push result.
+#define BINARY_MATH_PRIM(name, fn)                                  \
+bool prim_##name(ExecutionContext& ctx) {                            \
+    double a, b;                                                     \
+    if (!pop_two_as_double(ctx, a, b)) return false;                 \
+    ctx.data_stack().push(Value(fn(a, b)));                          \
+    return true;                                                     \
 }
 
-bool prim_cos(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::cos(v)));
-    return true;
-}
+BINARY_MATH_PRIM(atan2, std::atan2)
+BINARY_MATH_PRIM(pow,   std::pow)
+BINARY_MATH_PRIM(fmin,  std::fmin)
+BINARY_MATH_PRIM(fmax,  std::fmax)
 
-bool prim_tan(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::tan(v)));
-    return true;
-}
-
-bool prim_asin(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::asin(v)));
-    return true;
-}
-
-bool prim_acos(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::acos(v)));
-    return true;
-}
-
-bool prim_atan(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::atan(v)));
-    return true;
-}
-
-bool prim_atan2(ExecutionContext& ctx) {
-    double y, x;
-    if (!pop_two_as_double(ctx, y, x)) return false;
-    ctx.data_stack().push(Value(std::atan2(y, x)));
-    return true;
-}
-
-bool prim_log(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::log(v)));
-    return true;
-}
-
-bool prim_log2(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::log2(v)));
-    return true;
-}
-
-bool prim_log10(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::log10(v)));
-    return true;
-}
-
-bool prim_exp(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::exp(v)));
-    return true;
-}
-
-bool prim_pow(ExecutionContext& ctx) {
-    double base, exponent;
-    if (!pop_two_as_double(ctx, base, exponent)) return false;
-    ctx.data_stack().push(Value(std::pow(base, exponent)));
-    return true;
-}
-
-bool prim_ceil(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::ceil(v)));
-    return true;
-}
-
-bool prim_floor(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::floor(v)));
-    return true;
-}
-
-bool prim_round(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::round(v)));
-    return true;
-}
-
-bool prim_trunc(ExecutionContext& ctx) {
-    double v; if (!pop_as_double(ctx, v)) return false;
-    ctx.data_stack().push(Value(std::trunc(v)));
-    return true;
-}
-
-bool prim_fmin(ExecutionContext& ctx) {
-    double a, b;
-    if (!pop_two_as_double(ctx, a, b)) return false;
-    ctx.data_stack().push(Value(std::fmin(a, b)));
-    return true;
-}
-
-bool prim_fmax(ExecutionContext& ctx) {
-    double a, b;
-    if (!pop_two_as_double(ctx, a, b)) return false;
-    ctx.data_stack().push(Value(std::fmax(a, b)));
-    return true;
-}
+#undef BINARY_MATH_PRIM
 
 bool prim_pi(ExecutionContext& ctx) {
     ctx.data_stack().push(Value(3.14159265358979323846));
-    return true;
-}
-
-bool prim_tanh(ExecutionContext& ctx) {
-    double x;
-    if (!pop_as_double(ctx, x)) return false;
-    ctx.data_stack().push(Value(std::tanh(x)));
     return true;
 }
 

@@ -22,77 +22,25 @@ inline bool execute_xt(WordImpl* impl, ExecutionContext& ctx) {
     return false;
 }
 
-/// Pop a HeapString* from the data stack. Returns nullptr on type mismatch or underflow.
-/// On type mismatch, the value is pushed back onto the stack (stack unchanged).
+/// Pop a typed heap value from the data stack. Returns nullptr on type mismatch
+/// or underflow. On type mismatch, the value is pushed back (stack unchanged).
 /// Caller takes ownership of the returned pointer (no addref needed).
-inline HeapString* pop_string(ExecutionContext& ctx) {
+template <typename HeapType, Value::Type TypeTag>
+inline HeapType* pop_heap_value(ExecutionContext& ctx) {
     auto opt = ctx.data_stack().pop();
     if (!opt) return nullptr;
-    if (opt->type != Value::Type::String || !opt->as_ptr) {
+    if (opt->type != TypeTag || !opt->as_ptr) {
         ctx.data_stack().push(*opt);
         return nullptr;
     }
-    return opt->as_string();
+    return static_cast<HeapType*>(opt->as_ptr);
 }
 
-/// Pop a HeapArray* from the data stack. Returns nullptr on type mismatch or underflow.
-/// On type mismatch, the value is pushed back onto the stack (stack unchanged).
-inline HeapArray* pop_array(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return nullptr;
-    if (opt->type != Value::Type::Array || !opt->as_ptr) {
-        ctx.data_stack().push(*opt);
-        return nullptr;
-    }
-    return opt->as_array();
-}
-
-/// Pop a HeapByteArray* from the data stack. Returns nullptr on type mismatch or underflow.
-/// On type mismatch, the value is pushed back onto the stack (stack unchanged).
-inline HeapByteArray* pop_byte_array(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return nullptr;
-    if (opt->type != Value::Type::ByteArray || !opt->as_ptr) {
-        ctx.data_stack().push(*opt);
-        return nullptr;
-    }
-    return opt->as_byte_array();
-}
-
-/// Pop a HeapMap* from the data stack. Returns nullptr on type mismatch or underflow.
-/// On type mismatch, the value is pushed back onto the stack (stack unchanged).
-inline HeapMap* pop_map(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return nullptr;
-    if (opt->type != Value::Type::Map || !opt->as_ptr) {
-        ctx.data_stack().push(*opt);
-        return nullptr;
-    }
-    return opt->as_map();
-}
-
-/// Pop a HeapJson* from the data stack. Returns nullptr on type mismatch or underflow.
-/// On type mismatch, the value is pushed back onto the stack (stack unchanged).
-inline HeapJson* pop_json(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return nullptr;
-    if (opt->type != Value::Type::Json || !opt->as_ptr) {
-        ctx.data_stack().push(*opt);
-        return nullptr;
-    }
-    return opt->as_json();
-}
-
-/// Pop a HeapMatrix* from the data stack. Returns nullptr on type mismatch or underflow.
-/// On type mismatch, the value is pushed back onto the stack (stack unchanged).
-inline HeapMatrix* pop_matrix(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return nullptr;
-    if (opt->type != Value::Type::Matrix || !opt->as_ptr) {
-        ctx.data_stack().push(*opt);
-        return nullptr;
-    }
-    return opt->as_matrix();
-}
+inline HeapString*    pop_string(ExecutionContext& ctx)     { return pop_heap_value<HeapString,    Value::Type::String>(ctx); }
+inline HeapArray*     pop_array(ExecutionContext& ctx)      { return pop_heap_value<HeapArray,     Value::Type::Array>(ctx); }
+inline HeapByteArray* pop_byte_array(ExecutionContext& ctx) { return pop_heap_value<HeapByteArray, Value::Type::ByteArray>(ctx); }
+inline HeapMap*       pop_map(ExecutionContext& ctx)        { return pop_heap_value<HeapMap,       Value::Type::Map>(ctx); }
+inline HeapJson*      pop_json(ExecutionContext& ctx)       { return pop_heap_value<HeapJson,      Value::Type::Json>(ctx); }
+inline HeapMatrix*    pop_matrix(ExecutionContext& ctx)     { return pop_heap_value<HeapMatrix,    Value::Type::Matrix>(ctx); }
 
 } // namespace etil::core

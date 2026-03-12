@@ -15,12 +15,19 @@
 
 namespace etil::core {
 
+/// Maximum byte array size (prevents DoS via huge allocations).
+constexpr int64_t MAX_BYTE_ARRAY_SIZE = 10 * 1024 * 1024;  // 10 MB
+
 // bytes-new ( n -- bytes ) — create byte array of size n (zeroed)
 bool prim_bytes_new(ExecutionContext& ctx) {
     auto opt = ctx.data_stack().pop();
     if (!opt) return false;
     int64_t n = opt->as_int;
     if (n < 0) n = 0;
+    if (n > MAX_BYTE_ARRAY_SIZE) {
+        ctx.err() << "Error: bytes-new size exceeds " << MAX_BYTE_ARRAY_SIZE << " byte limit\n";
+        return false;
+    }
     auto* ba = new HeapByteArray(static_cast<size_t>(n));
     ctx.data_stack().push(Value::from(ba));
     return true;

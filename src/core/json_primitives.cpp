@@ -17,6 +17,9 @@
 
 namespace etil::core {
 
+/// Maximum JSON array/object size for conversion to ETIL collections.
+constexpr size_t MAX_JSON_COLLECTION_SIZE = 100000;
+
 namespace {
 
 // Convert a nlohmann::json leaf/node to an ETIL Value and push it.
@@ -324,6 +327,12 @@ bool prim_json_to_map(ExecutionContext& ctx) {
         hj->release();
         return false;
     }
+    if (j.size() > MAX_JSON_COLLECTION_SIZE) {
+        ctx.err() << "Error: json->map: object has " << j.size()
+                  << " entries, max is " << MAX_JSON_COLLECTION_SIZE << "\n";
+        hj->release();
+        return false;
+    }
     auto* m = json_to_heap_map(j);
     hj->release();
     ctx.data_stack().push(Value::from(m));
@@ -337,6 +346,12 @@ bool prim_json_to_array(ExecutionContext& ctx) {
     const auto& j = hj->json();
     if (!j.is_array()) {
         ctx.err() << "Error: json->array: not an array\n";
+        hj->release();
+        return false;
+    }
+    if (j.size() > MAX_JSON_COLLECTION_SIZE) {
+        ctx.err() << "Error: json->array: array has " << j.size()
+                  << " elements, max is " << MAX_JSON_COLLECTION_SIZE << "\n";
         hj->release();
         return false;
     }

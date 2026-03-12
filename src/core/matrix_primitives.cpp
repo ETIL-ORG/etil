@@ -65,6 +65,28 @@ static bool value_as_double(const Value& v, double& out) {
     return false;
 }
 
+/// Pop two matrices (B first, then A) with automatic stack restoration.
+/// On failure, any successfully popped matrix is pushed back.
+struct MatrixPair {
+    HeapMatrix* A = nullptr;
+    HeapMatrix* B = nullptr;
+    explicit operator bool() const { return A && B; }
+};
+
+static MatrixPair pop_two_matrices(ExecutionContext& ctx) {
+    auto* B = pop_matrix(ctx);
+    if (!B) return {};
+    auto* A = pop_matrix(ctx);
+    if (!A) {
+        ctx.data_stack().push(Value::from(B));
+        return {};
+    }
+    return {A, B};
+}
+
+/// Maximum matrix dimension (prevents DoS via huge allocations).
+constexpr int64_t MAX_MATRIX_DIMENSION = 10000;
+
 // ---------------------------------------------------------------------------
 // Constructors
 // ---------------------------------------------------------------------------
@@ -77,8 +99,8 @@ bool prim_mat_new(ExecutionContext& ctx) {
         ctx.data_stack().push(Value(cols));
         return false;
     }
-    if (rows <= 0 || cols <= 0) {
-        ctx.err() << "Error: mat-new requires positive dimensions\n";
+    if (rows <= 0 || cols <= 0 || rows > MAX_MATRIX_DIMENSION || cols > MAX_MATRIX_DIMENSION) {
+        ctx.err() << "Error: mat-new dimensions must be in [1, " << MAX_MATRIX_DIMENSION << "]\n";
         return false;
     }
     auto* mat = new HeapMatrix(rows, cols);
@@ -90,8 +112,8 @@ bool prim_mat_new(ExecutionContext& ctx) {
 bool prim_mat_eye(ExecutionContext& ctx) {
     int64_t n;
     if (!pop_int(ctx, n)) return false;
-    if (n <= 0) {
-        ctx.err() << "Error: mat-eye requires positive size\n";
+    if (n <= 0 || n > MAX_MATRIX_DIMENSION) {
+        ctx.err() << "Error: mat-eye size must be in [1, " << MAX_MATRIX_DIMENSION << "]\n";
         return false;
     }
     auto* mat = new HeapMatrix(n, n);
@@ -132,9 +154,9 @@ bool prim_mat_from_array(ExecutionContext& ctx) {
         ctx.data_stack().push(Value(cols));
         return false;
     }
-    if (rows <= 0 || cols <= 0) {
+    if (rows <= 0 || cols <= 0 || rows > MAX_MATRIX_DIMENSION || cols > MAX_MATRIX_DIMENSION) {
         arr->release();
-        ctx.err() << "Error: mat-from-array requires positive dimensions\n";
+        ctx.err() << "Error: mat-from-array dimensions must be in [1, " << MAX_MATRIX_DIMENSION << "]\n";
         return false;
     }
     size_t expected = static_cast<size_t>(rows * cols);
@@ -194,8 +216,8 @@ bool prim_mat_rand(ExecutionContext& ctx) {
         ctx.data_stack().push(Value(cols));
         return false;
     }
-    if (rows <= 0 || cols <= 0) {
-        ctx.err() << "Error: mat-rand requires positive dimensions\n";
+    if (rows <= 0 || cols <= 0 || rows > MAX_MATRIX_DIMENSION || cols > MAX_MATRIX_DIMENSION) {
+        ctx.err() << "Error: mat-rand dimensions must be in [1, " << MAX_MATRIX_DIMENSION << "]\n";
         return false;
     }
     auto* mat = new HeapMatrix(rows, cols);
@@ -341,13 +363,8 @@ bool prim_mat_col(ExecutionContext& ctx) {
 
 // mat* ( mat1 mat2 -- mat )  — DGEMM
 bool prim_mat_mul(ExecutionContext& ctx) {
-    auto* B = pop_matrix(ctx);
-    if (!B) return false;
-    auto* A = pop_matrix(ctx);
-    if (!A) {
-        ctx.data_stack().push(Value::from(B));
-        return false;
-    }
+    auto [A, B] = pop_two_matrices(ctx);
+    if (!A) return false;
     if (A->cols() != B->rows()) {
         ctx.err() << "Error: mat* dimension mismatch: "
                   << A->rows() << "x" << A->cols() << " * "
@@ -369,24 +386,21 @@ bool prim_mat_mul(ExecutionContext& ctx) {
     return true;
 }
 
-// mat+ ( mat1 mat2 -- mat )
-bool prim_mat_add(ExecutionContext& ctx) {
-    auto* B = pop_matrix(ctx);
-    if (!B) return false;
-    auto* A = pop_matrix(ctx);
-    if (!A) {
-        ctx.data_stack().push(Value::from(B));
-        return false;
-    }
+/// Element-wise binary matrix operation: pop two same-dimension matrices,
+/// apply op(A[i], B[i]) to produce result.
+template <typename BinaryOp>
+static bool elementwise_binary_matrix_op(ExecutionContext& ctx, const char* name, BinaryOp op) {
+    auto [A, B] = pop_two_matrices(ctx);
+    if (!A) return false;
     if (A->rows() != B->rows() || A->cols() != B->cols()) {
-        ctx.err() << "Error: mat+ dimension mismatch\n";
+        ctx.err() << "Error: " << name << " dimension mismatch\n";
         A->release();
         B->release();
         return false;
     }
     auto* C = new HeapMatrix(A->rows(), A->cols());
     for (size_t i = 0; i < C->size(); ++i) {
-        C->data()[i] = A->data()[i] + B->data()[i];
+        C->data()[i] = op(A->data()[i], B->data()[i]);
     }
     A->release();
     B->release();
@@ -394,29 +408,14 @@ bool prim_mat_add(ExecutionContext& ctx) {
     return true;
 }
 
+// mat+ ( mat1 mat2 -- mat )
+bool prim_mat_add(ExecutionContext& ctx) {
+    return elementwise_binary_matrix_op(ctx, "mat+", [](double a, double b) { return a + b; });
+}
+
 // mat- ( mat1 mat2 -- mat )
 bool prim_mat_sub(ExecutionContext& ctx) {
-    auto* B = pop_matrix(ctx);
-    if (!B) return false;
-    auto* A = pop_matrix(ctx);
-    if (!A) {
-        ctx.data_stack().push(Value::from(B));
-        return false;
-    }
-    if (A->rows() != B->rows() || A->cols() != B->cols()) {
-        ctx.err() << "Error: mat- dimension mismatch\n";
-        A->release();
-        B->release();
-        return false;
-    }
-    auto* C = new HeapMatrix(A->rows(), A->cols());
-    for (size_t i = 0; i < C->size(); ++i) {
-        C->data()[i] = A->data()[i] - B->data()[i];
-    }
-    A->release();
-    B->release();
-    ctx.data_stack().push(Value::from(C));
-    return true;
+    return elementwise_binary_matrix_op(ctx, "mat-", [](double a, double b) { return a - b; });
 }
 
 // mat-scale ( mat scalar -- mat )
@@ -458,13 +457,8 @@ bool prim_mat_transpose(ExecutionContext& ctx) {
 
 // mat-solve ( A b -- x flag )  — DGESV
 bool prim_mat_solve(ExecutionContext& ctx) {
-    auto* b = pop_matrix(ctx);
-    if (!b) return false;
-    auto* A = pop_matrix(ctx);
-    if (!A) {
-        ctx.data_stack().push(Value::from(b));
-        return false;
-    }
+    auto [A, b] = pop_two_matrices(ctx);
+    if (!A) return false;
     if (A->rows() != A->cols()) {
         ctx.err() << "Error: mat-solve requires square A\n";
         A->release();
@@ -668,13 +662,8 @@ bool prim_mat_svd(ExecutionContext& ctx) {
 
 // mat-lstsq ( A b -- x flag )  — DGELS
 bool prim_mat_lstsq(ExecutionContext& ctx) {
-    auto* b = pop_matrix(ctx);
-    if (!b) return false;
-    auto* A = pop_matrix(ctx);
-    if (!A) {
-        ctx.data_stack().push(Value::from(b));
-        return false;
-    }
+    auto [A, b] = pop_two_matrices(ctx);
+    if (!A) return false;
     if (A->rows() != b->rows()) {
         ctx.err() << "Error: mat-lstsq dimension mismatch\n";
         A->release();
@@ -775,84 +764,48 @@ bool prim_mat_print(ExecutionContext& ctx) {
 // Neural Network — Activation Functions
 // ---------------------------------------------------------------------------
 
-// mat-relu ( mat -- mat )
-bool prim_mat_relu(ExecutionContext& ctx) {
+/// Unary element-wise matrix operation: pop one matrix, apply fn to each element.
+template <typename UnaryOp>
+static bool unary_matrix_op(ExecutionContext& ctx, UnaryOp fn) {
     auto* A = pop_matrix(ctx);
     if (!A) return false;
     auto* C = new HeapMatrix(A->rows(), A->cols());
     for (size_t i = 0; i < C->size(); ++i) {
-        C->data()[i] = std::max(0.0, A->data()[i]);
+        C->data()[i] = fn(A->data()[i]);
     }
     A->release();
     ctx.data_stack().push(Value::from(C));
     return true;
+}
+
+// mat-relu ( mat -- mat )
+bool prim_mat_relu(ExecutionContext& ctx) {
+    return unary_matrix_op(ctx, [](double x) { return std::max(0.0, x); });
 }
 
 // mat-sigmoid ( mat -- mat )
 bool prim_mat_sigmoid(ExecutionContext& ctx) {
-    auto* A = pop_matrix(ctx);
-    if (!A) return false;
-    auto* C = new HeapMatrix(A->rows(), A->cols());
-    for (size_t i = 0; i < C->size(); ++i) {
-        C->data()[i] = 1.0 / (1.0 + std::exp(-A->data()[i]));
-    }
-    A->release();
-    ctx.data_stack().push(Value::from(C));
-    return true;
+    return unary_matrix_op(ctx, [](double x) { return 1.0 / (1.0 + std::exp(-x)); });
 }
 
 // mat-tanh ( mat -- mat )
 bool prim_mat_tanh(ExecutionContext& ctx) {
-    auto* A = pop_matrix(ctx);
-    if (!A) return false;
-    auto* C = new HeapMatrix(A->rows(), A->cols());
-    for (size_t i = 0; i < C->size(); ++i) {
-        C->data()[i] = std::tanh(A->data()[i]);
-    }
-    A->release();
-    ctx.data_stack().push(Value::from(C));
-    return true;
+    return unary_matrix_op(ctx, [](double x) { return std::tanh(x); });
 }
 
 // mat-relu' ( mat -- mat ) — derivative: x > 0 ? 1.0 : 0.0
 bool prim_mat_relu_prime(ExecutionContext& ctx) {
-    auto* A = pop_matrix(ctx);
-    if (!A) return false;
-    auto* C = new HeapMatrix(A->rows(), A->cols());
-    for (size_t i = 0; i < C->size(); ++i) {
-        C->data()[i] = A->data()[i] > 0.0 ? 1.0 : 0.0;
-    }
-    A->release();
-    ctx.data_stack().push(Value::from(C));
-    return true;
+    return unary_matrix_op(ctx, [](double x) { return x > 0.0 ? 1.0 : 0.0; });
 }
 
 // mat-sigmoid' ( mat -- mat ) — derivative from pre-activation: s(x)*(1-s(x))
 bool prim_mat_sigmoid_prime(ExecutionContext& ctx) {
-    auto* A = pop_matrix(ctx);
-    if (!A) return false;
-    auto* C = new HeapMatrix(A->rows(), A->cols());
-    for (size_t i = 0; i < C->size(); ++i) {
-        double s = 1.0 / (1.0 + std::exp(-A->data()[i]));
-        C->data()[i] = s * (1.0 - s);
-    }
-    A->release();
-    ctx.data_stack().push(Value::from(C));
-    return true;
+    return unary_matrix_op(ctx, [](double x) { double s = 1.0 / (1.0 + std::exp(-x)); return s * (1.0 - s); });
 }
 
 // mat-tanh' ( mat -- mat ) — derivative from pre-activation: 1 - tanh(x)^2
 bool prim_mat_tanh_prime(ExecutionContext& ctx) {
-    auto* A = pop_matrix(ctx);
-    if (!A) return false;
-    auto* C = new HeapMatrix(A->rows(), A->cols());
-    for (size_t i = 0; i < C->size(); ++i) {
-        double t = std::tanh(A->data()[i]);
-        C->data()[i] = 1.0 - t * t;
-    }
-    A->release();
-    ctx.data_stack().push(Value::from(C));
-    return true;
+    return unary_matrix_op(ctx, [](double x) { double t = std::tanh(x); return 1.0 - t * t; });
 }
 
 // ---------------------------------------------------------------------------
@@ -861,38 +814,13 @@ bool prim_mat_tanh_prime(ExecutionContext& ctx) {
 
 // mat-hadamard ( mat1 mat2 -- mat ) — element-wise multiply
 bool prim_mat_hadamard(ExecutionContext& ctx) {
-    auto* B = pop_matrix(ctx);
-    if (!B) return false;
-    auto* A = pop_matrix(ctx);
-    if (!A) {
-        ctx.data_stack().push(Value::from(B));
-        return false;
-    }
-    if (A->rows() != B->rows() || A->cols() != B->cols()) {
-        ctx.err() << "Error: mat-hadamard dimension mismatch\n";
-        A->release();
-        B->release();
-        return false;
-    }
-    auto* C = new HeapMatrix(A->rows(), A->cols());
-    for (size_t i = 0; i < C->size(); ++i) {
-        C->data()[i] = A->data()[i] * B->data()[i];
-    }
-    A->release();
-    B->release();
-    ctx.data_stack().push(Value::from(C));
-    return true;
+    return elementwise_binary_matrix_op(ctx, "mat-hadamard", [](double a, double b) { return a * b; });
 }
 
 // mat-add-col ( mat col -- mat ) — broadcast-add column vector to every column
 bool prim_mat_add_col(ExecutionContext& ctx) {
-    auto* col = pop_matrix(ctx);
-    if (!col) return false;
-    auto* A = pop_matrix(ctx);
-    if (!A) {
-        ctx.data_stack().push(Value::from(col));
-        return false;
-    }
+    auto [A, col] = pop_two_matrices(ctx);
+    if (!A) return false;
     if (col->cols() != 1 || col->rows() != A->rows()) {
         ctx.err() << "Error: mat-add-col requires col to be " << A->rows()
                   << "x1, got " << col->rows() << "x" << col->cols() << "\n";
@@ -955,8 +883,8 @@ bool prim_mat_randn(ExecutionContext& ctx) {
         ctx.data_stack().push(Value(cols));
         return false;
     }
-    if (rows <= 0 || cols <= 0) {
-        ctx.err() << "Error: mat-randn requires positive dimensions\n";
+    if (rows <= 0 || cols <= 0 || rows > MAX_MATRIX_DIMENSION || cols > MAX_MATRIX_DIMENSION) {
+        ctx.err() << "Error: mat-randn dimensions must be in [1, " << MAX_MATRIX_DIMENSION << "]\n";
         return false;
     }
     auto* mat = new HeapMatrix(rows, cols);
@@ -1054,13 +982,8 @@ bool prim_mat_softmax(ExecutionContext& ctx) {
 
 // mat-cross-entropy ( predicted actual -- scalar ) — cross-entropy loss
 bool prim_mat_cross_entropy(ExecutionContext& ctx) {
-    auto* actual = pop_matrix(ctx);
-    if (!actual) return false;
-    auto* pred = pop_matrix(ctx);
-    if (!pred) {
-        ctx.data_stack().push(Value::from(actual));
-        return false;
-    }
+    auto [pred, actual] = pop_two_matrices(ctx);
+    if (!pred) return false;
     if (pred->rows() != actual->rows() || pred->cols() != actual->cols()) {
         ctx.err() << "Error: mat-cross-entropy dimension mismatch\n";
         pred->release();

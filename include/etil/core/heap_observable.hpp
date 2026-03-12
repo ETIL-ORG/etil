@@ -5,6 +5,7 @@
 
 #include "etil/core/heap_object.hpp"
 #include "etil/core/execution_context.hpp"
+#include "etil/core/value_helpers.hpp"
 
 namespace etil::core {
 
@@ -89,13 +90,7 @@ private:
 /// Pop a HeapObservable* from the data stack.
 /// On type mismatch, the value is pushed back (stack unchanged).
 inline HeapObservable* pop_observable(ExecutionContext& ctx) {
-    auto opt = ctx.data_stack().pop();
-    if (!opt) return nullptr;
-    if (opt->type != Value::Type::Observable || !opt->as_ptr) {
-        ctx.data_stack().push(*opt);
-        return nullptr;
-    }
-    return static_cast<HeapObservable*>(opt->as_ptr);
+    return pop_heap_value<HeapObservable, Value::Type::Observable>(ctx);
 }
 
 } // namespace etil::core
