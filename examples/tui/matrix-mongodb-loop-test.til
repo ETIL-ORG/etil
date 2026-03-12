@@ -1,0 +1,33 @@
+forget-all matrix-mongodb-loop-test
+: matrix-mongodb-loop-test ;
+
+variable id 
+variable mat 
+
+: insert-mat 
+   mat-rand dup mat ! dup mat. 
+   s" test" swap mat->json mongo-insert 
+   if 
+      dup id ! ." INSERTED: " s. 
+   else 
+      ." INSERT ERROR" false abort
+   then ;
+
+10 10 insert-mat
+
+: find-by-id # ( coll id -- json bool )
+   map-new s" $oid" rot map-set dump 
+   map-new s" _id" rot map-set dump
+   map->json dump j| {}| mongo-find 
+   if 
+      0 json-get true
+   else
+      false
+   then ;
+
+s" test" id @ .s find-by-id . cr .s cr 
+
+json->mat dup mat.
+
+mat @ mat- mat-sum : sum-test 0= if ." IDENTICAL!" else ." DIFFERENT!" then cr ; sum-test
+

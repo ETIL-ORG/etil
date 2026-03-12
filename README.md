@@ -29,7 +29,7 @@ ninja
 # Run the REPL
 ./bin/etil_repl
 
-# Run tests (1,171 tests, all passing)
+# Run tests (1,257 tests, all passing)
 ctest --output-on-failure
 ```
 
@@ -43,8 +43,8 @@ script execution, and session logging.
 
 ### Language
 
-- **243 primitive words** across 30 categories — arithmetic, stack, comparison, logic, I/O,
-  math, strings, arrays, maps, JSON, file I/O, linear algebra, HTTP, MongoDB, and more
+- **256 primitive words** across 32 categories — arithmetic, stack, comparison, logic, I/O,
+  math, strings, arrays, maps, JSON, file I/O, linear algebra, HTTP, MongoDB, observables, and more
 - **Colon definitions** — `: name ... ;` compiles to bytecode, executed by an inner interpreter
 - **Full control flow** — `if`/`else`/`then`, `do`/`loop`/`+loop`/`i`/`j`/`leave`,
   `begin`/`until`/`again`, `begin`/`while`/`repeat`, `>r`/`r>`/`r@`, `exit`, `recurse`
@@ -58,7 +58,7 @@ script execution, and session logging.
 
 ### Data Types
 
-Six heap-allocated, reference-counted types — all interoperable on the stack:
+Seven heap-allocated, reference-counted types — all interoperable on the stack:
 
 | Type | Literal | Example |
 |------|---------|---------|
@@ -68,6 +68,7 @@ Six heap-allocated, reference-counted types — all interoperable on the stack:
 | **Map** | `map-new` | `map-new s" x" 42 map-set s" x" map-get .` → `42` |
 | **JSON** | `j\| ... \|` | `j\| {"a":1} \| s" a" json-get .` → `1` |
 | **Matrix** | `mat-new` | `3 3 mat-eye mat.` (prints 3×3 identity) |
+| **Observable** | `obs-range` | `1 6 obs-range ' double obs-map obs-to-array` |
 
 Strings support regex (`sregex-find`, `sregex-replace`, `sregex-match`), `sprintf` formatting,
 and a **taint bit** that tracks data from untrusted sources (HTTP responses, file reads) through
@@ -105,6 +106,33 @@ copy overhead.
 | TIL-level | `mat-xavier` `mat-he` `mat-mse` |
 
 Requires OpenBLAS or compatible BLAS/LAPACK (always compiled in).
+
+### Observables
+
+RxJS-style reactive pipelines — lazy, push-based, composable data processing:
+
+```
+> 1 6 obs-range ' double obs-map ' even? obs-filter ' add 0 obs-reduce .
+30
+> 0 1000000 obs-range 5 obs-take obs-count .
+5
+```
+
+21 words across 7 categories:
+
+| Category | Words |
+|----------|-------|
+| Creation | `obs-from` `obs-of` `obs-empty` `obs-range` |
+| Transform | `obs-map` `obs-map-with` `obs-filter` `obs-filter-with` |
+| Accumulate | `obs-scan` `obs-reduce` |
+| Limiting | `obs-take` `obs-skip` `obs-distinct` |
+| Combination | `obs-merge` `obs-concat` `obs-zip` |
+| Terminal | `obs-subscribe` `obs-to-array` `obs-count` |
+| Introspection | `obs?` `obs-kind` |
+
+Pipelines are lazy — nodes build a linked list; terminal operators trigger recursive execution.
+The `-with` variants (`obs-map-with`, `obs-filter-with`) carry a context value per node,
+enabling closure-like data binding without language-level closures.
 
 ### MongoDB
 
@@ -230,7 +258,7 @@ OAuth login, script execution (`--exec`/`--execux`), and session logging.
 ### Introspection & Help
 
 - **`help <word>`** — description, stack effect, category, and examples for any word
-  (all 243 words documented in `data/help.til`)
+  (all 256 words documented in `data/help.til`)
 - **`dump`** — deep-inspect TOS without consuming it (recursive, with truncation)
 - **`see <word>`** — decompile word definitions showing bytecode, primitives, or handler status
 - **Word metadata** — attach text, markdown, HTML, code, JSON, or JSONL to word concepts
@@ -309,11 +337,11 @@ LITE
    dispatch). Handler logic extracted into three handler set classes via dependency injection.
    Dual output streams (`out_`/`err_`) enable MCP output capture
 6. **HeapObject** — reference-counted base class for String, Array, ByteArray, Map, JSON,
-   and Matrix. Taint bit tracks untrusted data provenance
+   Matrix, and Observable. Taint bit tracks untrusted data provenance
 7. **MCP Server** — `etil_mcp` library with JSON-RPC 2.0, HTTP Streamable Transport,
    per-session profiling, dual-mode auth (JWT/API key)
 
-### Implemented Primitives (243 words)
+### Implemented Primitives (256 words)
 
 | Category | Words |
 |----------|-------|
@@ -343,6 +371,8 @@ LITE
 | File I/O (async) | `exists?` `read-file` `write-file` `append-file` `copy-file` `rename-file` `lstat` `readdir` `mkdir` `mkdir-tmp` `rmdir` `rm` `truncate` |
 | File I/O (sync) | `exists-sync` `read-file-sync` `write-file-sync` `append-file-sync` `copy-file-sync` `rename-sync` `lstat-sync` `readdir-sync` `mkdir-sync` `mkdir-tmp-sync` `rmdir-sync` `rm-sync` `truncate-sync` |
 | HTTP Client | `http-get` `http-post` |
+| Observable | `obs-from` `obs-of` `obs-empty` `obs-range` `obs-map` `obs-map-with` `obs-filter` `obs-filter-with` `obs-scan` `obs-reduce` `obs-take` `obs-skip` `obs-distinct` `obs-merge` `obs-concat` `obs-zip` `obs-subscribe` `obs-to-array` `obs-count` `obs?` `obs-kind` |
+| Array Iteration | `array-each` `array-map` `array-filter` `array-reduce` |
 | MongoDB | `mongo-find` `mongo-count` `mongo-insert` `mongo-update` `mongo-delete` |
 | Parsing | `."` `s"` `s\|` `.\|` `j\|` `:` `;` |
 | Self-hosted | `variable` `constant` `forget` `forget-all` `meta!` `meta@` `meta-del` `meta-keys` `impl-meta!` `impl-meta@` `time-iso` `time-iso-us` `time-jd` `time-mjd` `1+` `1-` `-rot` |

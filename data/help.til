@@ -1616,3 +1616,117 @@ s" mat->array" s" examples" s" code" s" array-new 1.0 array-push 2.0 array-push 
 s" mat-randn" s" examples" s" code" s" 42 random-seed  : mat-xavier over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;  3 2 mat-xavier mat." meta! drop
 
 s" mat-cross-entropy" s" examples" s" code" s" : mat-mse mat- dup mat-hadamard mat-mean ;" meta! drop
+
+# --- Observable ---
+
+# Creation
+s" obs-from" s" description" s" text" s" Create an observable from an array. Each element is emitted in order when a terminal operator executes the pipeline" meta! drop
+s" obs-from" s" stack-effect" s" text" s" ( array -- obs )" meta! drop
+s" obs-from" s" category" s" text" s" observable" meta! drop
+s" obs-from" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push obs-from obs-to-array array-length ." meta! drop
+
+s" obs-of" s" description" s" text" s" Create an observable that emits a single value" meta! drop
+s" obs-of" s" stack-effect" s" text" s" ( value -- obs )" meta! drop
+s" obs-of" s" category" s" text" s" observable" meta! drop
+s" obs-of" s" examples" s" code" s" 42 obs-of obs-to-array array-length ." meta! drop
+
+s" obs-empty" s" description" s" text" s" Create an observable that emits no values. Useful as a base case or for testing" meta! drop
+s" obs-empty" s" stack-effect" s" text" s" ( -- obs )" meta! drop
+s" obs-empty" s" category" s" text" s" observable" meta! drop
+s" obs-empty" s" examples" s" code" s" obs-empty obs-count ." meta! drop
+
+s" obs-range" s" description" s" text" s" Create an observable that emits integers from start (inclusive) to end (exclusive)" meta! drop
+s" obs-range" s" stack-effect" s" text" s" ( start end -- obs )" meta! drop
+s" obs-range" s" category" s" text" s" observable" meta! drop
+s" obs-range" s" examples" s" code" s" 1 6 obs-range obs-to-array array-length ." meta! drop
+
+# Transform
+s" obs-map" s" description" s" text" s" Transform each emitted value by applying xt. The xt receives ( value -- result )" meta! drop
+s" obs-map" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-map" s" category" s" text" s" observable" meta! drop
+s" obs-map" s" examples" s" code" s" : double dup + ;  1 4 obs-range ' double obs-map obs-to-array array-length ." meta! drop
+
+s" obs-map-with" s" description" s" text" s" Transform each value by applying xt with a context value. The xt receives ( ctx value -- result )" meta! drop
+s" obs-map-with" s" stack-effect" s" text" s" ( obs xt ctx -- obs' )" meta! drop
+s" obs-map-with" s" category" s" text" s" observable" meta! drop
+s" obs-map-with" s" examples" s" code" s" : add-n + ;  1 4 obs-range ' add-n 100 obs-map-with obs-to-array array-length ." meta! drop
+
+s" obs-filter" s" description" s" text" s" Keep only values for which xt returns true. The xt receives ( value -- bool )" meta! drop
+s" obs-filter" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-filter" s" category" s" text" s" observable" meta! drop
+s" obs-filter" s" examples" s" code" s" : even? 2 mod 0 = ;  1 7 obs-range ' even? obs-filter obs-count ." meta! drop
+
+s" obs-filter-with" s" description" s" text" s" Keep only values for which xt returns true, with a context value. The xt receives ( ctx value -- bool )" meta! drop
+s" obs-filter-with" s" stack-effect" s" text" s" ( obs xt ctx -- obs' )" meta! drop
+s" obs-filter-with" s" category" s" text" s" observable" meta! drop
+s" obs-filter-with" s" examples" s" code" s" : lt? < ;  1 10 obs-range ' lt? 5 obs-filter-with obs-count ." meta! drop
+
+# Accumulate
+s" obs-scan" s" description" s" text" s" Accumulate values, emitting each intermediate result. The xt receives ( accumulator value -- new-accumulator ). Similar to reduce but emits every step" meta! drop
+s" obs-scan" s" stack-effect" s" text" s" ( obs xt init -- obs' )" meta! drop
+s" obs-scan" s" category" s" text" s" observable" meta! drop
+s" obs-scan" s" examples" s" code" s" : add + ;  1 4 obs-range ' add 0 obs-scan obs-to-array array-length ." meta! drop
+
+s" obs-reduce" s" description" s" text" s" Reduce all emitted values to a single result using xt. Terminal operator that executes the pipeline. The xt receives ( accumulator value -- new-accumulator )" meta! drop
+s" obs-reduce" s" stack-effect" s" text" s" ( obs xt init -- result )" meta! drop
+s" obs-reduce" s" category" s" text" s" observable" meta! drop
+s" obs-reduce" s" examples" s" code" s" : add + ;  1 6 obs-range ' add 0 obs-reduce ." meta! drop
+
+# Limiting
+s" obs-take" s" description" s" text" s" Emit only the first n values from the source observable, then stop" meta! drop
+s" obs-take" s" stack-effect" s" text" s" ( obs n -- obs' )" meta! drop
+s" obs-take" s" category" s" text" s" observable" meta! drop
+s" obs-take" s" examples" s" code" s" 1 100 obs-range 3 obs-take obs-to-array array-length ." meta! drop
+
+s" obs-skip" s" description" s" text" s" Skip the first n values from the source observable, then emit the rest" meta! drop
+s" obs-skip" s" stack-effect" s" text" s" ( obs n -- obs' )" meta! drop
+s" obs-skip" s" category" s" text" s" observable" meta! drop
+s" obs-skip" s" examples" s" code" s" 1 6 obs-range 2 obs-skip obs-count ." meta! drop
+
+s" obs-distinct" s" description" s" text" s" Suppress consecutive duplicate values. Uses value equality (same type and same integer/float representation)" meta! drop
+s" obs-distinct" s" stack-effect" s" text" s" ( obs -- obs' )" meta! drop
+s" obs-distinct" s" category" s" text" s" observable" meta! drop
+s" obs-distinct" s" examples" s" code" s" array-new 1 array-push 1 array-push 2 array-push 2 array-push 3 array-push obs-from obs-distinct obs-count ." meta! drop
+
+# Combination
+s" obs-merge" s" description" s" text" s" Merge two observables. The third parameter is max concurrent merges (0 = unlimited). In the current synchronous implementation, merge behaves like concat" meta! drop
+s" obs-merge" s" stack-effect" s" text" s" ( obs-a obs-b max-concurrent -- obs )" meta! drop
+s" obs-merge" s" category" s" text" s" observable" meta! drop
+s" obs-merge" s" examples" s" code" s" 1 3 obs-range 10 13 obs-range 0 obs-merge obs-count ." meta! drop
+
+s" obs-concat" s" description" s" text" s" Concatenate two observables — emit all values from obs-a, then all from obs-b" meta! drop
+s" obs-concat" s" stack-effect" s" text" s" ( obs-a obs-b -- obs )" meta! drop
+s" obs-concat" s" category" s" text" s" observable" meta! drop
+s" obs-concat" s" examples" s" code" s" 1 3 obs-range 10 13 obs-range obs-concat obs-count ." meta! drop
+
+s" obs-zip" s" description" s" text" s" Zip two observables into pairs. Emits 2-element arrays pairing elements by position. Stops at the shorter source" meta! drop
+s" obs-zip" s" stack-effect" s" text" s" ( obs-a obs-b -- obs )" meta! drop
+s" obs-zip" s" category" s" text" s" observable" meta! drop
+s" obs-zip" s" examples" s" code" s" 1 4 obs-range 10 13 obs-range obs-zip obs-count ." meta! drop
+
+# Terminal
+s" obs-subscribe" s" description" s" text" s" Execute the observable pipeline, calling xt for each emitted value. Terminal operator. The xt receives ( value -- )" meta! drop
+s" obs-subscribe" s" stack-effect" s" text" s" ( obs xt -- )" meta! drop
+s" obs-subscribe" s" category" s" text" s" observable" meta! drop
+s" obs-subscribe" s" examples" s" code" s" : show . ;  1 4 obs-range ' show obs-subscribe" meta! drop
+
+s" obs-to-array" s" description" s" text" s" Execute the observable pipeline, collecting all emitted values into a new array. Terminal operator" meta! drop
+s" obs-to-array" s" stack-effect" s" text" s" ( obs -- array )" meta! drop
+s" obs-to-array" s" category" s" text" s" observable" meta! drop
+s" obs-to-array" s" examples" s" code" s" 1 4 obs-range obs-to-array array-length ." meta! drop
+
+s" obs-count" s" description" s" text" s" Execute the observable pipeline, counting emitted values. Terminal operator" meta! drop
+s" obs-count" s" stack-effect" s" text" s" ( obs -- n )" meta! drop
+s" obs-count" s" category" s" text" s" observable" meta! drop
+s" obs-count" s" examples" s" code" s" 1 11 obs-range obs-count ." meta! drop
+
+# Introspection
+s" obs?" s" description" s" text" s" Test if the top-of-stack value is an observable. Returns true if it is, false otherwise" meta! drop
+s" obs?" s" stack-effect" s" text" s" ( value -- bool )" meta! drop
+s" obs?" s" category" s" text" s" observable" meta! drop
+s" obs?" s" examples" s" code" s" obs-empty obs? . 42 obs? ." meta! drop
+
+s" obs-kind" s" description" s" text" s" Return the kind name of an observable node as a string (e.g. from-array, map, filter, range)" meta! drop
+s" obs-kind" s" stack-effect" s" text" s" ( obs -- string )" meta! drop
+s" obs-kind" s" category" s" text" s" observable" meta! drop
+s" obs-kind" s" examples" s" code" s| 1 5 obs-range obs-kind s. cr| meta! drop
