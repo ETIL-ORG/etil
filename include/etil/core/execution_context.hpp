@@ -33,6 +33,7 @@ namespace etil::core
     class HeapMap;
     class HeapJson;
     class HeapMatrix;
+    class HeapObservable;
 
     // Value type on stack (union/variant)
     struct Value
@@ -49,6 +50,7 @@ namespace etil::core
             Map,
             Json,
             Matrix,
+            Observable,
             Xt
         };
 
@@ -86,6 +88,7 @@ namespace etil::core
         HeapMap* as_map() const { return static_cast<HeapMap*>(as_ptr); }
         HeapJson* as_json() const { return static_cast<HeapJson*>(as_ptr); }
         HeapMatrix* as_matrix() const { return static_cast<HeapMatrix*>(as_ptr); }
+        HeapObservable* as_observable() const { return static_cast<HeapObservable*>(as_ptr); }
         WordImpl* as_xt_impl() const { return static_cast<WordImpl*>(as_ptr); }
 
         // DataRef member accessors

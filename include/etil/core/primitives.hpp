@@ -181,6 +181,9 @@ bool prim_string_to_number(ExecutionContext& ctx);   // string->number ( str -- 
 bool prim_marker(ExecutionContext& ctx);         // marker ( "name" -- ) — parsing word
 bool prim_marker_restore(ExecutionContext& ctx); // marker-restore ( name-str -- )
 
+// Observable primitives
+void register_observable_primitives(Dictionary& dict);
+
 // Map primitives
 bool prim_map_new(ExecutionContext& ctx);        // map-new ( -- map )
 bool prim_map_set(ExecutionContext& ctx);        // map-set ( map key val -- map )

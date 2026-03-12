@@ -8,6 +8,7 @@
 #include "etil/core/heap_json.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_matrix.hpp"
+#include "etil/core/heap_observable.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/lvfs/lvfs.hpp"
 
@@ -758,6 +759,12 @@ nlohmann::json McpServer::tool_get_stack(const nlohmann::json& /*params*/) {
                     auto* mat = val.as_matrix();
                     elem["rows"] = mat->rows();
                     elem["cols"] = mat->cols();
+                }
+                break;
+            case etil::core::Value::Type::Observable:
+                elem["type"] = "observable";
+                if (val.as_ptr) {
+                    elem["kind"] = val.as_observable()->kind_name();
                 }
                 break;
             case etil::core::Value::Type::Xt:

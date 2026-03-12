@@ -10,6 +10,7 @@
 #include "etil/core/heap_json.hpp"
 #include "etil/core/heap_map.hpp"
 #include "etil/core/heap_matrix.hpp"
+#include "etil/core/heap_observable.hpp"
 #include "etil/core/json_primitives.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_primitives.hpp"
@@ -67,6 +68,7 @@ const char* type_name(Value::Type t) {
     case Value::Type::Map:       return "map";
     case Value::Type::Json:      return "json";
     case Value::Type::Matrix:    return "matrix";
+    case Value::Type::Observable: return "observable";
     case Value::Type::Xt:        return "xt";
     }
     return "unknown";
@@ -742,6 +744,12 @@ bool prim_dot(ExecutionContext& ctx) {
             ctx.out() << v.as_json()->dump() << " ";
         } else {
             ctx.out() << "<json> ";
+        }
+    } else if (v.type == Value::Type::Observable) {
+        if (v.as_ptr) {
+            ctx.out() << "<observable:" << v.as_observable()->kind_name() << "> ";
+        } else {
+            ctx.out() << "<observable> ";
         }
     } else if (v.type == Value::Type::Xt) {
         if (v.as_ptr) {
@@ -1757,6 +1765,13 @@ void dump_value(std::ostream& os, const Value& v, size_t depth, size_t max_depth
         }
         break;
     }
+    case Value::Type::Observable:
+        if (v.as_ptr) {
+            os << indent << "<observable:" << v.as_observable()->kind_name() << "> (observable)\n";
+        } else {
+            os << indent << "<observable:null> (observable)\n";
+        }
+        break;
     case Value::Type::Xt:
         if (v.as_ptr) {
             os << indent << "<xt:" << v.as_xt_impl()->name() << "> (execution token)\n";
@@ -2397,6 +2412,12 @@ bool prim_dot_s(ExecutionContext& ctx) {
             ctx.out() << "<map:" << (v.as_ptr ? v.as_map()->size() : 0) << ">";
         } else if (v.type == Value::Type::Json) {
             ctx.out() << "<json>";
+        } else if (v.type == Value::Type::Observable) {
+            if (v.as_ptr) {
+                ctx.out() << "<observable:" << v.as_observable()->kind_name() << ">";
+            } else {
+                ctx.out() << "<observable>";
+            }
         } else if (v.type == Value::Type::Xt) {
             if (v.as_ptr) {
                 ctx.out() << "<xt:" << v.as_xt_impl()->name() << ">";
@@ -3014,6 +3035,9 @@ void register_primitives(Dictionary& dict) {
 
     // Register async file I/O primitives (exists?, read-file, write-file, etc.)
     etil::fileio::register_async_file_io_primitives(dict);
+
+    // Register observable primitives (obs-from, obs-map, obs-subscribe, etc.)
+    register_observable_primitives(dict);
 }
 
 } // namespace etil::core

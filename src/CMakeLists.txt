@@ -17,6 +17,7 @@ set(ETIL_CORE_SOURCES
     core/byte_primitives.cpp
     core/map_primitives.cpp
     core/json_primitives.cpp
+    core/observable_primitives.cpp
     lvfs/lvfs.cpp
     lvfs/lvfs_primitives.cpp
     fileio/file_io_primitives.cpp

@@ -14,6 +14,7 @@ add_executable(etil_tests
     unit/test_byte_primitives.cpp
     unit/test_map_primitives.cpp
     unit/test_json_primitives.cpp
+    unit/test_observable_primitives.cpp
     unit/test_handler_sets.cpp
     unit/test_lvfs.cpp
     unit/test_file_io_primitives.cpp

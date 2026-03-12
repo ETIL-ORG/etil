@@ -7,6 +7,7 @@
 #include "etil/core/heap_array.hpp"
 #include "etil/core/heap_json.hpp"
 #include "etil/core/heap_matrix.hpp"
+#include "etil/core/heap_observable.hpp"
 #include "etil/core/execution_context.hpp"
 #include "etil/core/dictionary.hpp"
 #include "etil/core/primitives.hpp"
@@ -87,6 +88,15 @@ std::optional<std::string> pop_as_string(ExecutionContext& ctx) {
             return result;
         }
         return std::string("null");
+    }
+    case Value::Type::Observable: {
+        if (opt->as_ptr) {
+            auto* obs = opt->as_observable();
+            std::string result = "observable(" + std::string(obs->kind_name()) + ")";
+            obs->release();
+            return result;
+        }
+        return std::string("observable");
     }
     case Value::Type::Xt: {
         if (opt->as_ptr) {

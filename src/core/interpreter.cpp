@@ -4,6 +4,7 @@
 #include "etil/core/interpreter.hpp"
 #include "etil/core/heap_map.hpp"
 #include "etil/core/heap_matrix.hpp"
+#include "etil/core/heap_observable.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/primitives.hpp"
@@ -314,6 +315,11 @@ std::string Interpreter::format_value(const Value& v) {
         return "{matrix:0x0}";
     } else if (v.type == Value::Type::Json) {
         return "<json>";
+    } else if (v.type == Value::Type::Observable) {
+        if (v.as_ptr) {
+            return "<observable:" + std::string(v.as_observable()->kind_name()) + ">";
+        }
+        return "<observable>";
     } else if (v.type == Value::Type::Xt) {
         if (v.as_ptr) {
             auto* impl = v.as_xt_impl();
