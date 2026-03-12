@@ -1,3 +1,5 @@
+<img src="images/ETIL-Logo-2.png" alt="ETIL Logo" width="800px">
+
 # Evolutionary Threaded Interpretive Language (ETIL)
 
 A modern reimagining of FORTH — 64-bit integers, reference-counted heap objects,

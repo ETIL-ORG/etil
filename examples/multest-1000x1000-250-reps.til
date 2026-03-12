@@ -1,0 +1,20 @@
+forget-all multest
+: multest ;
+
+variable r 1000 r ! 
+variable c 1000 c !
+variable loops 250 loops !
+variable t0
+: multest 
+   time-us t0 ! 
+   loops @ 0 
+   do 
+      r @ c @ mat-rand 
+      c @ r @ mat-rand 
+      mat* 
+      dup mat-rows . dup mat-cols . 
+      mat-sum . cr 
+   loop 
+   time-us t0 @ - 1000 / dup ." dT:" . ." msec " loops @ / . ." ms/per" cr ;
+
+multest
