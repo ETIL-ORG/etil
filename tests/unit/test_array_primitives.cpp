@@ -183,3 +183,127 @@ TEST_F(ArrayPrimitivesTest, MixedTypes) {
 
     arr->release();
 }
+
+// ---------------------------------------------------------------------------
+// Array iteration primitives
+// ---------------------------------------------------------------------------
+
+TEST_F(ArrayPrimitivesTest, ArrayEach) {
+    // Define a word that prints each element
+    run(": double dup + ;");
+    // array-each should execute xt for each element, consuming each
+    run("array-new 10 array-push 20 array-push 30 array-push");
+    run("' . array-each");
+    EXPECT_EQ(out.str(), "10 20 30 ");
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayEachEmpty) {
+    run("array-new ' . array-each");
+    EXPECT_EQ(out.str(), "");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayMap) {
+    run(": double dup + ;");
+    run("array-new 1 array-push 2 array-push 3 array-push");
+    run("' double array-map");
+    auto& stack = ctx().data_stack();
+    EXPECT_EQ(stack.size(), 1u);
+    auto opt = stack.pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->type, Value::Type::Array);
+    auto* arr = opt->as_array();
+    EXPECT_EQ(arr->length(), 3u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 2);
+    arr->get(1, v); EXPECT_EQ(v.as_int, 4);
+    arr->get(2, v); EXPECT_EQ(v.as_int, 6);
+    arr->release();
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayMapEmpty) {
+    run(": double dup + ;");
+    run("array-new ' double array-map");
+    auto& stack = ctx().data_stack();
+    EXPECT_EQ(stack.size(), 1u);
+    auto opt = stack.pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    EXPECT_EQ(arr->length(), 0u);
+    arr->release();
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayFilter) {
+    run(": big? 10 > ;");
+    run("array-new 5 array-push 15 array-push 3 array-push 20 array-push");
+    run("' big? array-filter");
+    auto& stack = ctx().data_stack();
+    EXPECT_EQ(stack.size(), 1u);
+    auto opt = stack.pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    EXPECT_EQ(arr->length(), 2u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 15);
+    arr->get(1, v); EXPECT_EQ(v.as_int, 20);
+    arr->release();
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayFilterNonePass) {
+    run(": big? 100 > ;");
+    run("array-new 1 array-push 2 array-push");
+    run("' big? array-filter");
+    auto& stack = ctx().data_stack();
+    auto opt = stack.pop();
+    auto* arr = opt->as_array();
+    EXPECT_EQ(arr->length(), 0u);
+    arr->release();
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayReduce) {
+    run("array-new 1 array-push 2 array-push 3 array-push 4 array-push");
+    run("' + 0 array-reduce");
+    auto& stack = ctx().data_stack();
+    EXPECT_EQ(stack.size(), 1u);
+    auto opt = stack.pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->as_int, 10);
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayReduceEmpty) {
+    run("array-new ' + 0 array-reduce");
+    auto& stack = ctx().data_stack();
+    EXPECT_EQ(stack.size(), 1u);
+    auto opt = stack.pop();
+    EXPECT_EQ(opt->as_int, 0);  // returns init value
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayReduceStrings) {
+    run("array-new s\" hello\" array-push s\" world\" array-push");
+    run("' s+ s\" \" array-reduce");  // init is empty string (s" " → "")
+    auto& stack = ctx().data_stack();
+    auto opt = stack.pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->type, Value::Type::String);
+    EXPECT_EQ(opt->as_string()->view(), "helloworld");
+    opt->release();
+}
+
+TEST_F(ArrayPrimitivesTest, ArrayMapWithStrings) {
+    // Map over strings — upcase-like operation using s+ to append "!"
+    run(": bang s\" !\" s+ ;");
+    run("array-new s\" hi\" array-push s\" bye\" array-push");
+    run("' bang array-map");
+    auto& stack = ctx().data_stack();
+    auto opt = stack.pop();
+    auto* arr = opt->as_array();
+    EXPECT_EQ(arr->length(), 2u);
+    Value v;
+    arr->get(0, v);
+    EXPECT_EQ(v.as_string()->view(), "hi!");
+    v.release();
+    arr->get(1, v);
+    EXPECT_EQ(v.as_string()->view(), "bye!");
+    v.release();
+    arr->release();
+}

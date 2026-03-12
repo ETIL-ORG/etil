@@ -6,6 +6,7 @@
 #include "etil/core/heap_array.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/execution_context.hpp"
+#include "etil/core/compiled_body.hpp"
 #include "etil/core/dictionary.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/value_helpers.hpp"
@@ -153,6 +154,152 @@ bool prim_array_reverse(ExecutionContext& ctx) {
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Array iteration primitives
+// ---------------------------------------------------------------------------
+
+/// RAII guard for the common (array, xt-impl) pair held during iteration.
+/// Releases both on destruction regardless of exit path. Move-only.
+struct IterGuard {
+    HeapArray* arr;
+    WordImpl*  impl;
+    IterGuard(HeapArray* a, WordImpl* i) : arr(a), impl(i) {}
+    ~IterGuard() { if (arr) arr->release(); if (impl) impl->release(); }
+    IterGuard(IterGuard&& o) noexcept : arr(o.arr), impl(o.impl) {
+        o.arr = nullptr; o.impl = nullptr;
+    }
+    IterGuard& operator=(IterGuard&&) = delete;
+    IterGuard(const IterGuard&) = delete;
+    IterGuard& operator=(const IterGuard&) = delete;
+};
+
+/// Pop ( arr xt -- ) from the stack, validating types.
+/// On success, caller owns one ref to each via the returned guard.
+/// On failure, stack is restored and nullopt is returned.
+static std::optional<IterGuard> pop_array_xt(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return std::nullopt;
+    if (xt_val->type != Value::Type::Xt) {
+        ctx.data_stack().push(*xt_val);
+        return std::nullopt;
+    }
+    auto* arr = pop_array(ctx);
+    if (!arr) {
+        ctx.data_stack().push(*xt_val);
+        return std::nullopt;
+    }
+    return IterGuard(arr, xt_val->as_xt_impl());
+}
+
+// array-each ( arr xt -- ) — execute xt for each element
+bool prim_array_each(ExecutionContext& ctx) {
+    auto guard = pop_array_xt(ctx);
+    if (!guard) return false;
+    for (size_t i = 0; i < guard->arr->length(); ++i) {
+        if (!ctx.tick()) return false;
+        Value v;
+        if (!guard->arr->get(i, v)) return false;
+        ctx.data_stack().push(v);
+        if (!execute_xt(guard->impl, ctx)) return false;
+    }
+    return true;
+}
+
+// array-map ( arr xt -- arr' ) — transform elements into new array
+bool prim_array_map(ExecutionContext& ctx) {
+    auto guard = pop_array_xt(ctx);
+    if (!guard) return false;
+    auto* result = new HeapArray();
+    for (size_t i = 0; i < guard->arr->length(); ++i) {
+        if (!ctx.tick()) { delete result; return false; }
+        Value v;
+        if (!guard->arr->get(i, v)) { delete result; return false; }
+        ctx.data_stack().push(v);
+        if (!execute_xt(guard->impl, ctx)) { delete result; return false; }
+        auto res = ctx.data_stack().pop();
+        if (!res) {
+            ctx.err() << "Error: array-map xt did not leave a result\n";
+            delete result;
+            return false;
+        }
+        result->push_back(*res);
+    }
+    ctx.data_stack().push(Value::from(result));
+    return true;
+}
+
+// array-filter ( arr xt -- arr' ) — keep elements where xt returns true
+bool prim_array_filter(ExecutionContext& ctx) {
+    auto guard = pop_array_xt(ctx);
+    if (!guard) return false;
+    auto* result = new HeapArray();
+    for (size_t i = 0; i < guard->arr->length(); ++i) {
+        if (!ctx.tick()) { delete result; return false; }
+        Value v;
+        if (!guard->arr->get(i, v)) { delete result; return false; }
+        value_addref(v);  // keep a ref — xt consumes one, we may need to store
+        ctx.data_stack().push(v);
+        if (!execute_xt(guard->impl, ctx)) {
+            value_release(v);
+            delete result;
+            return false;
+        }
+        auto pred = ctx.data_stack().pop();
+        if (!pred) {
+            value_release(v);
+            delete result;
+            return false;
+        }
+        if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+            result->push_back(v);  // transfer our extra ref to the array
+        } else {
+            value_release(v);  // filtered out
+        }
+    }
+    ctx.data_stack().push(Value::from(result));
+    return true;
+}
+
+// array-reduce ( arr xt init -- result ) — fold to single value
+bool prim_array_reduce(ExecutionContext& ctx) {
+    auto opt_init = ctx.data_stack().pop();
+    if (!opt_init) return false;
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) {
+        ctx.data_stack().push(*opt_init);
+        return false;
+    }
+    if (xt_val->type != Value::Type::Xt) {
+        ctx.data_stack().push(*xt_val);
+        ctx.data_stack().push(*opt_init);
+        return false;
+    }
+    auto* arr = pop_array(ctx);
+    if (!arr) {
+        ctx.data_stack().push(*xt_val);
+        ctx.data_stack().push(*opt_init);
+        return false;
+    }
+    IterGuard guard(arr, xt_val->as_xt_impl());
+    Value accum = *opt_init;
+    for (size_t i = 0; i < arr->length(); ++i) {
+        if (!ctx.tick()) { value_release(accum); return false; }
+        Value v;
+        if (!arr->get(i, v)) { value_release(accum); return false; }
+        ctx.data_stack().push(accum);
+        ctx.data_stack().push(v);
+        if (!execute_xt(guard.impl, ctx)) return false;
+        auto res = ctx.data_stack().pop();
+        if (!res) {
+            ctx.err() << "Error: array-reduce xt did not leave a result\n";
+            return false;
+        }
+        accum = *res;
+    }
+    ctx.data_stack().push(accum);
+    return true;
+}
+
 void register_array_primitives(Dictionary& dict) {
     using TS = TypeSignature;
     using T = TS::Type;
@@ -182,6 +329,14 @@ void register_array_primitives(Dictionary& dict) {
         {T::Array}, {T::Array}));
     dict.register_word("array-reverse", make_word("prim_array_reverse", prim_array_reverse,
         {T::Array}, {T::Array}));
+    dict.register_word("array-each", make_word("prim_array_each", prim_array_each,
+        {T::Array, T::Unknown}, {}));
+    dict.register_word("array-map", make_word("prim_array_map", prim_array_map,
+        {T::Array, T::Unknown}, {T::Array}));
+    dict.register_word("array-filter", make_word("prim_array_filter", prim_array_filter,
+        {T::Array, T::Unknown}, {T::Array}));
+    dict.register_word("array-reduce", make_word("prim_array_reduce", prim_array_reduce,
+        {T::Array, T::Unknown, T::Unknown}, {T::Unknown}));
 }
 
 // --- ssplit and sjoin implementations (depend on HeapArray) ---
