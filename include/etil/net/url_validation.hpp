@@ -14,10 +14,11 @@ struct HttpClientConfig;
 
 /// Parsed URL components.
 struct ParsedUrl {
-    std::string scheme;   // "http" or "https"
-    std::string host;     // hostname or IP
-    int port = 0;         // 0 = default (80/443)
-    std::string path;     // path + query + fragment (starts with '/')
+    std::string scheme;        // "http" or "https"
+    std::string host;          // hostname or IP
+    int port = 0;              // 0 = default (80/443)
+    std::string path;          // path + query + fragment (starts with '/')
+    std::string resolved_ip;   // First safe resolved IP from SSRF check
 
     /// Effective port (applies defaults for http/https).
     int effective_port() const {
@@ -54,9 +55,16 @@ bool is_ipv6_ssrf_blocked(const uint8_t ipv6_addr[16]);
 /// blocklist.  Returns true if the hostname resolves to at least one
 /// non-blocked address.
 ///
+/// On success, `resolved_ip` is set to the first safe resolved IP
+/// string (e.g. "93.184.216.34" or "2606:2800:220:1::").
+/// Callers should use this IP to connect instead of re-resolving the
+/// hostname, preventing DNS rebinding (TOCTOU) attacks.
+///
 /// If the hostname resolves entirely to blocked addresses, returns false
 /// and sets `error` with a description.
-bool resolve_and_check_ssrf(const std::string& hostname, std::string& error);
+bool resolve_and_check_ssrf(const std::string& hostname,
+                            std::string& resolved_ip,
+                            std::string& error);
 
 /// Check whether a domain is allowed by the allowlist.
 ///

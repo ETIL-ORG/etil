@@ -47,6 +47,7 @@ struct Instruction {
     double float_val = 0.0;     // For PushFloat
     std::string word_name;      // For Call (lookup key) or PrintString (text)
     WordImpl* cached_impl = nullptr;  // Non-owning cache (Dictionary owns the WordImpl)
+    uint64_t cached_generation = 0;   // Dictionary generation when cached_impl was set
 };
 
 /// The ByteCode class that WordImpl already forward-declares.

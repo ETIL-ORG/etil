@@ -148,7 +148,9 @@ bool is_ipv6_ssrf_blocked(const uint8_t addr[16]) {
     return false;
 }
 
-bool resolve_and_check_ssrf(const std::string& hostname, std::string& error) {
+bool resolve_and_check_ssrf(const std::string& hostname,
+                            std::string& resolved_ip,
+                            std::string& error) {
     struct addrinfo hints{};
     hints.ai_family = AF_UNSPEC;      // IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM;  // TCP
@@ -169,12 +171,23 @@ bool resolve_and_check_ssrf(const std::string& hostname, std::string& error) {
             auto* sa = reinterpret_cast<struct sockaddr_in*>(rp->ai_addr);
             uint32_t addr = ntohl(sa->sin_addr.s_addr);
             if (!is_ipv4_ssrf_blocked(addr)) {
+                if (!has_safe_addr) {
+                    // Capture the first safe IP as a string
+                    char buf[INET_ADDRSTRLEN];
+                    inet_ntop(AF_INET, &sa->sin_addr, buf, sizeof(buf));
+                    resolved_ip = buf;
+                }
                 has_safe_addr = true;
                 all_blocked = false;
             }
         } else if (rp->ai_family == AF_INET6) {
             auto* sa = reinterpret_cast<struct sockaddr_in6*>(rp->ai_addr);
             if (!is_ipv6_ssrf_blocked(sa->sin6_addr.s6_addr)) {
+                if (!has_safe_addr) {
+                    char buf[INET6_ADDRSTRLEN];
+                    inet_ntop(AF_INET6, &sa->sin6_addr, buf, sizeof(buf));
+                    resolved_ip = buf;
+                }
                 has_safe_addr = true;
                 all_blocked = false;
             }
@@ -241,9 +254,9 @@ bool validate_url(const std::string& url,
     }
 
     // 4. DNS resolution + SSRF blocklist
-    //    Skip SSRF check for IP literals that are obviously public
-    //    (the check handles them anyway via getaddrinfo).
-    if (!resolve_and_check_ssrf(parsed.host, error)) {
+    //    Resolves once and captures the safe IP so callers can connect
+    //    by IP (preventing DNS rebinding / TOCTOU attacks).
+    if (!resolve_and_check_ssrf(parsed.host, parsed.resolved_ip, error)) {
         return false;
     }
 

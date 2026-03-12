@@ -63,6 +63,7 @@ bool Dictionary::forget_word(const std::string& word) {
     if (it->second.implementations.empty()) {
         concepts_.erase(it);
     }
+    generation_.fetch_add(1, std::memory_order_release);
     return true;
 }
 
@@ -73,6 +74,7 @@ bool Dictionary::forget_all(const std::string& word) {
         return false;
     }
     concepts_.erase(it);
+    generation_.fetch_add(1, std::memory_order_release);
     return true;
 }
 

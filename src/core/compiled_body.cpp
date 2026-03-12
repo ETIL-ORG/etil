@@ -40,16 +40,20 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
             break;
 
         case Instruction::Op::Call: {
-            // Use cached impl if available, otherwise look up and cache
-            if (!instr.cached_impl) {
-                auto* dict = ctx.dictionary();
-                if (!dict) return false;
+            // Use cached impl if available and generation matches,
+            // otherwise look up and cache.  The generation check
+            // detects invalidation caused by forget_word/forget_all.
+            auto* dict = ctx.dictionary();
+            if (!dict) return false;
+            if (!instr.cached_impl ||
+                dict->generation() != instr.cached_generation) {
                 auto result = dict->lookup(instr.word_name);
                 if (!result) {
                     ctx.err() << "Unknown word: " << instr.word_name << "\n";
                     return false;
                 }
                 instr.cached_impl = result->get();
+                instr.cached_generation = dict->generation();
             }
             auto* impl = instr.cached_impl;
             if (impl->native_code()) {
@@ -276,16 +280,19 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
         }
 
         case Instruction::Op::PushXt: {
-            // Use cached impl if available, otherwise look up and cache
-            if (!instr.cached_impl) {
-                auto* dict = ctx.dictionary();
-                if (!dict) return false;
+            // Use cached impl if available and generation matches,
+            // otherwise look up and cache.
+            auto* dict = ctx.dictionary();
+            if (!dict) return false;
+            if (!instr.cached_impl ||
+                dict->generation() != instr.cached_generation) {
                 auto result = dict->lookup(instr.word_name);
                 if (!result) {
                     ctx.err() << "Unknown word: " << instr.word_name << "\n";
                     return false;
                 }
                 instr.cached_impl = result->get();
+                instr.cached_generation = dict->generation();
             }
             auto* impl = instr.cached_impl;
             impl->add_ref();

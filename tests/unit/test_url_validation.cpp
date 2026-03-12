@@ -214,20 +214,37 @@ TEST(DomainAllowlist, MultiplePatterns) {
 // ── DNS Resolution + SSRF ────────────────────────────────────────────────
 
 TEST(ResolveSsrf, BlocksLocalhostResolution) {
-    std::string error;
-    EXPECT_FALSE(resolve_and_check_ssrf("localhost", error));
+    std::string resolved_ip, error;
+    EXPECT_FALSE(resolve_and_check_ssrf("localhost", resolved_ip, error));
     EXPECT_FALSE(error.empty());
+    EXPECT_TRUE(resolved_ip.empty());
 }
 
 TEST(ResolveSsrf, AllowsPublicDomain) {
     // This test requires network, so skip in offline environments
-    std::string error;
-    bool ok = resolve_and_check_ssrf("dns.google", error);
+    std::string resolved_ip, error;
+    bool ok = resolve_and_check_ssrf("dns.google", resolved_ip, error);
     if (!ok) {
         // DNS may not be available in test environment
         GTEST_SKIP() << "DNS resolution not available: " << error;
     }
     EXPECT_TRUE(ok);
+    // resolved_ip should be populated with the first safe IP
+    EXPECT_FALSE(resolved_ip.empty());
+}
+
+TEST(ResolveSsrf, ResolvedIpPopulatedForPublicHost) {
+    // Verify that validate_url populates parsed.resolved_ip
+    HttpClientConfig cfg;
+    cfg.allowed_domains = {"*"};
+    cfg.allow_http = true;
+    ParsedUrl parsed;
+    std::string error;
+    bool ok = validate_url("http://dns.google/", cfg, parsed, error);
+    if (!ok) {
+        GTEST_SKIP() << "DNS resolution not available: " << error;
+    }
+    EXPECT_FALSE(parsed.resolved_ip.empty());
 }
 
 // ── Full validate_url ────────────────────────────────────────────────────

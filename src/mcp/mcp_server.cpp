@@ -46,99 +46,96 @@ McpServer::McpServer() {
         library_dir_ = library_env;
     }
 
-#ifdef ETIL_JWT_ENABLED
-    // Load auth configuration from ETIL_AUTH_CONFIG env var (directory path)
-    const char* auth_config_env = std::getenv("ETIL_AUTH_CONFIG");
-    if (auth_config_env && auth_config_env[0] != '\0') {
-        try {
-            auth_config_dir_ = auth_config_env;
-            auth_config_ = std::make_shared<const AuthConfig>(
-                AuthConfig::from_directory(auth_config_env));
-            if (!auth_config_->jwt_private_key.empty() &&
-                !auth_config_->jwt_public_key.empty()) {
-                jwt_auth_ = std::make_unique<JwtAuth>(
-                    auth_config_->jwt_private_key,
-                    auth_config_->jwt_public_key,
-                    auth_config_->jwt_ttl_seconds);
-                fprintf(stderr, "JWT authentication enabled (config: %s)\n",
-                        auth_config_env);
-            } else {
-                fprintf(stderr, "Warning: auth config loaded but JWT keys "
-                                "not configured\n");
-            }
-            // Create OAuth providers from config
-            for (const auto& [name, prov_cfg] : auth_config_->providers) {
-                if (!prov_cfg.enabled || prov_cfg.client_id.empty()) continue;
-
-                if (name == "github") {
-                    oauth_providers_[name] =
-                        std::make_unique<GitHubProvider>(prov_cfg.client_id);
-                    fprintf(stderr, "OAuth provider enabled: github\n");
-                } else if (name == "google") {
-                    if (prov_cfg.client_secret.empty()) {
-                        fprintf(stderr,
-                                "Warning: Google OAuth requires client_secret "
-                                "(skipping)\n");
-                        continue;
-                    }
-                    oauth_providers_[name] =
-                        std::make_unique<GoogleProvider>(prov_cfg.client_id,
-                                                        prov_cfg.client_secret);
-                    fprintf(stderr, "OAuth provider enabled: google\n");
-                } else {
-                    fprintf(stderr, "Warning: unknown OAuth provider '%s' "
-                                    "(skipping)\n", name.c_str());
-                }
-            }
-        } catch (const std::exception& e) {
-            fprintf(stderr, "Warning: failed to load auth config '%s': %s\n",
-                    auth_config_env, e.what());
-        }
-    }
-#endif
-
-#ifdef ETIL_MONGODB_ENABLED
-    // Initialize MongoDB clients from connections config file + env overrides.
-    // Two separate clients: one for user data (TIL primitives), one for AAA
-    // (audit_log + users collections in a separate database, inaccessible to
-    // TIL code).
-    {
-        auto mongo_cfg = etil::db::MongoConnectionsConfig::resolve();
-        if (mongo_cfg.enabled()) {
-            // User-data client (wired to TIL mongo-* primitives)
-            mongo_client_ = std::make_unique<etil::db::MongoClient>();
-            if (!mongo_client_->connect(mongo_cfg.uri, mongo_cfg.database)) {
-                fprintf(stderr, "Warning: MongoDB connection failed\n");
-                mongo_client_.reset();
-            }
-
-            // AAA client (separate database for audit_log + users)
-            std::string aaa_db = "etil_aaa";
-            if (const char* v = std::getenv("ETIL_MONGODB_AAA_DATABASE")) {
-                if (v[0] != '\0') aaa_db = v;
-            }
-            aaa_client_ = std::make_unique<etil::db::MongoClient>();
-            if (!aaa_client_->connect(mongo_cfg.uri, aaa_db)) {
-                fprintf(stderr, "Warning: MongoDB AAA connection failed\n");
-                aaa_client_.reset();
-            }
-
-            // Build AAA layer on the AAA client (not the user-data client)
-            if (aaa_client_) {
-                user_store_ = std::make_unique<etil::aaa::UserStore>(
-                    *aaa_client_);
-                audit_log_ = std::make_unique<etil::aaa::AuditLog>(
-                    *aaa_client_);
-                user_store_->ensure_indexes();
-                audit_log_->ensure_indexes();
-                fprintf(stderr, "AAA database: %s\n", aaa_db.c_str());
-            }
-        }
-    }
-#endif
-
+    init_auth();
+    init_database();
     register_all_tools();
     register_all_resources();
+}
+
+void McpServer::init_auth() {
+#ifdef ETIL_JWT_ENABLED
+    const char* auth_config_env = std::getenv("ETIL_AUTH_CONFIG");
+    if (!auth_config_env || auth_config_env[0] == '\0') return;
+
+    try {
+        auth_config_dir_ = auth_config_env;
+        auth_config_ = std::make_shared<const AuthConfig>(
+            AuthConfig::from_directory(auth_config_env));
+        if (!auth_config_->jwt_private_key.empty() &&
+            !auth_config_->jwt_public_key.empty()) {
+            jwt_auth_ = std::make_unique<JwtAuth>(
+                auth_config_->jwt_private_key,
+                auth_config_->jwt_public_key,
+                auth_config_->jwt_ttl_seconds);
+            fprintf(stderr, "JWT authentication enabled (config: %s)\n",
+                    auth_config_env);
+        } else {
+            fprintf(stderr, "Warning: auth config loaded but JWT keys "
+                            "not configured\n");
+        }
+        // Create OAuth providers from config
+        for (const auto& [name, prov_cfg] : auth_config_->providers) {
+            if (!prov_cfg.enabled || prov_cfg.client_id.empty()) continue;
+
+            if (name == "github") {
+                oauth_providers_[name] =
+                    std::make_unique<GitHubProvider>(prov_cfg.client_id);
+                fprintf(stderr, "OAuth provider enabled: github\n");
+            } else if (name == "google") {
+                if (prov_cfg.client_secret.empty()) {
+                    fprintf(stderr,
+                            "Warning: Google OAuth requires client_secret "
+                            "(skipping)\n");
+                    continue;
+                }
+                oauth_providers_[name] =
+                    std::make_unique<GoogleProvider>(prov_cfg.client_id,
+                                                    prov_cfg.client_secret);
+                fprintf(stderr, "OAuth provider enabled: google\n");
+            } else {
+                fprintf(stderr, "Warning: unknown OAuth provider '%s' "
+                                "(skipping)\n", name.c_str());
+            }
+        }
+    } catch (const std::exception& e) {
+        fprintf(stderr, "Warning: failed to load auth config '%s': %s\n",
+                auth_config_env, e.what());
+    }
+#endif
+}
+
+void McpServer::init_database() {
+#ifdef ETIL_MONGODB_ENABLED
+    auto mongo_cfg = etil::db::MongoConnectionsConfig::resolve();
+    if (!mongo_cfg.enabled()) return;
+
+    // User-data client (wired to TIL mongo-* primitives)
+    mongo_client_ = std::make_unique<etil::db::MongoClient>();
+    if (!mongo_client_->connect(mongo_cfg.uri, mongo_cfg.database)) {
+        fprintf(stderr, "Warning: MongoDB connection failed\n");
+        mongo_client_.reset();
+    }
+
+    // AAA client (separate database for audit_log + users)
+    std::string aaa_db = "etil_aaa";
+    if (const char* v = std::getenv("ETIL_MONGODB_AAA_DATABASE")) {
+        if (v[0] != '\0') aaa_db = v;
+    }
+    aaa_client_ = std::make_unique<etil::db::MongoClient>();
+    if (!aaa_client_->connect(mongo_cfg.uri, aaa_db)) {
+        fprintf(stderr, "Warning: MongoDB AAA connection failed\n");
+        aaa_client_.reset();
+    }
+
+    // Build AAA layer on the AAA client (not the user-data client)
+    if (aaa_client_) {
+        user_store_ = std::make_unique<etil::aaa::UserStore>(*aaa_client_);
+        audit_log_ = std::make_unique<etil::aaa::AuditLog>(*aaa_client_);
+        user_store_->ensure_indexes();
+        audit_log_->ensure_indexes();
+        fprintf(stderr, "AAA database: %s\n", aaa_db.c_str());
+    }
+#endif
 }
 
 McpServer::~McpServer() = default;

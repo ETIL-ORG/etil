@@ -12,6 +12,7 @@
 #include "etil/core/word_impl.hpp"
 #include "etil/lvfs/lvfs.hpp"
 #include "etil/mcp/role_permissions.hpp"
+#include "file_io_helpers.hpp"
 
 #include <filesystem>
 
@@ -29,35 +30,10 @@ using etil::core::make_heap_value;
 using etil::core::pop_string;
 using etil::core::make_primitive;
 using etil::lvfs::Lvfs;
+using namespace helpers;
 
 namespace {
 
-
-/// Check lvfs_modify permission.  Returns true if permitted, false if denied.
-static bool check_lvfs_modify(ExecutionContext& ctx) {
-    auto* perms = ctx.permissions();
-    if (perms && !perms->lvfs_modify) {
-        ctx.err() << "Error: file modification not permitted\n";
-        return false;
-    }
-    return true;
-}
-
-/// Check disk quota before a write.
-static bool check_disk_quota(ExecutionContext& ctx, size_t write_bytes) {
-    auto* perms = ctx.permissions();
-    if (!perms || perms->disk_quota <= 0) return true;
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) return true;
-    uint64_t usage = lvfs->home_usage_bytes();
-    if (usage + write_bytes > static_cast<uint64_t>(perms->disk_quota)) {
-        ctx.err() << "Error: disk quota exceeded ("
-                  << usage << " + " << write_bytes
-                  << " > " << perms->disk_quota << " bytes)\n";
-        return false;
-    }
-    return true;
-}
 
 // Thread-local loop for synchronous libuv operations.
 // libuv sync mode (callback=NULL) requires a valid loop parameter
@@ -83,22 +59,11 @@ struct SyncReq {
 
 // exists-sync ( path -- flag )
 bool prim_exists_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     SyncReq r;
     int rc = uv_fs_stat(sync_loop(), &r.req, fs_path.c_str(), nullptr);
@@ -108,22 +73,11 @@ bool prim_exists_sync(ExecutionContext& ctx) {
 
 // read-file-sync ( path -- string? flag )
 bool prim_read_file_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     // Step 1: stat to get file size and verify regular file
     SyncReq stat_r;
@@ -187,41 +141,10 @@ bool prim_read_file_sync(ExecutionContext& ctx) {
 
 // Helper: sync write/append with open flags
 bool write_file_sync_impl(ExecutionContext& ctx, int flags) {
-    auto* path_hs = pop_string(ctx);
-    if (!path_hs) return false;
-    std::string path(path_hs->view());
-    path_hs->release();
-
-    auto* content_hs = pop_string(ctx);
-    if (!content_hs) return false;
-    std::string content(content_hs->view());
-    content_hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-    if (!check_disk_quota(ctx, content.size())) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string content, fs_path;
+    auto s = pop_write_args(ctx, content, fs_path);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     // Open
     SyncReq open_r;
@@ -268,41 +191,11 @@ bool prim_append_file_sync(ExecutionContext& ctx) {
 }
 
 // copy-file-sync ( src dest -- flag )
-// Source can be /library (read-only OK). Only dest is checked.
 bool prim_copy_file_sync(ExecutionContext& ctx) {
-    auto* dest_hs = pop_string(ctx);
-    if (!dest_hs) return false;
-    std::string dest(dest_hs->view());
-    dest_hs->release();
-
-    auto* src_hs = pop_string(ctx);
-    if (!src_hs) return false;
-    std::string src(src_hs->view());
-    src_hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    // Only dest is checked for read-only
-    if (lvfs->is_read_only(dest)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string src_fs = lvfs->resolve(src);
-    std::string dest_fs = lvfs->resolve(dest);
-    if (src_fs.empty() || dest_fs.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string src_fs, dest_fs;
+    auto s = pop_two_paths_copy(ctx, src_fs, dest_fs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     SyncReq r;
     int rc = uv_fs_copyfile(sync_loop(), &r.req, src_fs.c_str(), dest_fs.c_str(),
@@ -312,40 +205,11 @@ bool prim_copy_file_sync(ExecutionContext& ctx) {
 }
 
 // rename-sync ( old new -- flag )
-// Both paths must be writable (under /home).
 bool prim_rename_sync(ExecutionContext& ctx) {
-    auto* new_hs = pop_string(ctx);
-    if (!new_hs) return false;
-    std::string new_path(new_hs->view());
-    new_hs->release();
-
-    auto* old_hs = pop_string(ctx);
-    if (!old_hs) return false;
-    std::string old_path(old_hs->view());
-    old_hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(old_path) || lvfs->is_read_only(new_path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string old_fs = lvfs->resolve(old_path);
-    std::string new_fs = lvfs->resolve(new_path);
-    if (old_fs.empty() || new_fs.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string old_fs, new_fs;
+    auto s = pop_two_paths_rename(ctx, old_fs, new_fs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     SyncReq r;
     int rc = uv_fs_rename(sync_loop(), &r.req, old_fs.c_str(), new_fs.c_str(),
@@ -355,24 +219,12 @@ bool prim_rename_sync(ExecutionContext& ctx) {
 }
 
 // lstat-sync ( path -- array? flag )
-// Returns [size, mtime_us, is_directory, is_read_only]
 bool prim_lstat_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     SyncReq r;
     int rc = uv_fs_lstat(sync_loop(), &r.req, fs_path.c_str(), nullptr);
@@ -381,46 +233,19 @@ bool prim_lstat_sync(ExecutionContext& ctx) {
         return true;
     }
 
-    auto& st = r.req.statbuf;
-    bool is_dir = (st.st_mode & S_IFDIR) != 0;
-    int64_t size = is_dir ? 0 : static_cast<int64_t>(st.st_size);
-
-    // Convert timespec to microseconds since epoch
-    int64_t mtime_us = static_cast<int64_t>(st.st_mtim.tv_sec) * 1'000'000LL +
-                       static_cast<int64_t>(st.st_mtim.tv_nsec) / 1'000LL;
-
-    bool is_ro = lvfs->is_read_only(path);
-
-    auto* arr = new HeapArray();
-    arr->push_back(Value(size));
-    arr->push_back(Value(mtime_us));
-    arr->push_back(Value(static_cast<bool>(is_dir)));
-    arr->push_back(Value(static_cast<bool>(is_ro)));
-
-    ctx.data_stack().push(make_heap_value(arr));
+    ctx.data_stack().push(make_heap_value(
+        make_stat_array(r.req.statbuf, lvfs->is_read_only(path))));
     ctx.data_stack().push(Value(true));
     return true;
 }
 
 // readdir-sync ( path -- array? flag )
-// Returns array of strings (filenames).
 bool prim_readdir_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     SyncReq r;
     int rc = uv_fs_scandir(sync_loop(), &r.req, fs_path.c_str(), 0, nullptr);
@@ -433,7 +258,7 @@ bool prim_readdir_sync(ExecutionContext& ctx) {
     uv_dirent_t ent;
     while (uv_fs_scandir_next(&r.req, &ent) != UV_EOF) {
         auto* name = HeapString::create(ent.name);
-        name->set_tainted(true);  // Filesystem data is untrusted
+        name->set_tainted(true);
         arr->push_back(make_heap_value(name));
     }
 
@@ -443,35 +268,12 @@ bool prim_readdir_sync(ExecutionContext& ctx) {
 }
 
 // mkdir-sync ( path -- flag )
-// Creates directory and parents. Stays stdlib (recursive mkdir needs
-// path component iteration; fs::create_directories() is simpler).
 bool prim_mkdir_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     std::error_code ec;
     fs::create_directories(fs_path, ec);
@@ -480,7 +282,6 @@ bool prim_mkdir_sync(ExecutionContext& ctx) {
 }
 
 // mkdir-tmp-sync ( prefix -- string? flag )
-// Creates unique temp dir under /home using uv_fs_mkdtemp().
 bool prim_mkdir_tmp_sync(ExecutionContext& ctx) {
     auto* hs = pop_string(ctx);
     if (!hs) return false;
@@ -493,9 +294,7 @@ bool prim_mkdir_tmp_sync(ExecutionContext& ctx) {
         return true;
     }
 
-    // Build template: {home_fs}/{prefix}XXXXXX
     std::string home_fs = lvfs->home_dir();
-    // Remove trailing slash for template construction
     if (!home_fs.empty() && home_fs.back() == '/') {
         home_fs.pop_back();
     }
@@ -508,56 +307,20 @@ bool prim_mkdir_tmp_sync(ExecutionContext& ctx) {
         return true;
     }
 
-    // Convert filesystem path back to virtual path
-    // The result starts with home_fs, so strip home_fs prefix and prepend /home
-    std::string fs_result(r.req.path);
-    std::string home_with_slash = lvfs->home_dir();
-    if (!home_with_slash.empty() && home_with_slash.back() != '/') {
-        home_with_slash += '/';
-    }
-    std::string virtual_path;
-    if (fs_result.compare(0, home_with_slash.size(), home_with_slash) == 0) {
-        virtual_path = "/home/" + fs_result.substr(home_with_slash.size());
-    } else {
-        // Fallback — shouldn't happen
-        virtual_path = fs_result;
-    }
-
-    auto* out_str = HeapString::create(virtual_path);
+    auto* out_str = HeapString::create(
+        fs_path_to_virtual(std::string(r.req.path), lvfs->home_dir()));
     ctx.data_stack().push(make_heap_value(out_str));
     ctx.data_stack().push(Value(true));
     return true;
 }
 
 // rmdir-sync ( path -- flag )
-// Removes empty directory.
 bool prim_rmdir_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     // Verify it's a directory
     {
@@ -576,43 +339,14 @@ bool prim_rmdir_sync(ExecutionContext& ctx) {
 }
 
 // rm-sync ( path -- flag )
-// Removes file or directory recursively. Guards against deleting home root.
-// Stays stdlib (libuv has no recursive remove).
 bool prim_rm_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    // Safety guard: prevent deleting home root directory itself
-    std::string home = lvfs->home_dir();
-    // Normalize both for comparison (remove trailing slash)
-    if (!home.empty() && home.back() == '/') home.pop_back();
-    std::string fs_norm = fs_path;
-    if (!fs_norm.empty() && fs_norm.back() == '/') fs_norm.pop_back();
-    if (fs_norm == home) {
+    if (is_home_root(fs_path, lvfs)) {
         ctx.data_stack().push(Value(false));
         return true;
     }
@@ -624,34 +358,12 @@ bool prim_rm_sync(ExecutionContext& ctx) {
 }
 
 // truncate-sync ( path -- flag )
-// Truncates file to zero length.
 bool prim_truncate_sync(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     // Verify regular file
     SyncReq stat_r;

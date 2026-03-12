@@ -13,8 +13,8 @@
 #include "etil/core/word_impl.hpp"
 #include "etil/lvfs/lvfs.hpp"
 #include "etil/mcp/role_permissions.hpp"
+#include "file_io_helpers.hpp"
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -35,57 +35,19 @@ using etil::core::make_heap_value;
 using etil::core::pop_string;
 using etil::core::make_primitive;
 using etil::lvfs::Lvfs;
+using namespace helpers;
 
 namespace {
-
-
-/// Check lvfs_modify permission.  Returns true if permitted, false if denied
-/// (pushes false and prints error).
-static bool check_lvfs_modify(ExecutionContext& ctx) {
-    auto* perms = ctx.permissions();
-    if (perms && !perms->lvfs_modify) {
-        ctx.err() << "Error: file modification not permitted\n";
-        return false;
-    }
-    return true;
-}
-
-/// Check disk quota before a write.  Returns true if within quota or no perms set.
-static bool check_disk_quota(ExecutionContext& ctx, size_t write_bytes) {
-    auto* perms = ctx.permissions();
-    if (!perms || perms->disk_quota <= 0) return true;
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) return true;
-    uint64_t usage = lvfs->home_usage_bytes();
-    if (usage + write_bytes > static_cast<uint64_t>(perms->disk_quota)) {
-        ctx.err() << "Error: disk quota exceeded ("
-                  << usage << " + " << write_bytes
-                  << " > " << perms->disk_quota << " bytes)\n";
-        return false;
-    }
-    return true;
-}
 
 // ---------------------------------------------------------------------------
 // exists? ( path -- flag )
 // ---------------------------------------------------------------------------
 bool prim_exists(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -110,22 +72,11 @@ bool prim_exists(ExecutionContext& ctx) {
 // read-file ( path -- string? flag )
 // ---------------------------------------------------------------------------
 bool prim_read_file(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -227,41 +178,10 @@ bool prim_read_file(ExecutionContext& ctx) {
 // Helper: async write/append with open flags
 // ---------------------------------------------------------------------------
 bool write_file_impl(ExecutionContext& ctx, int flags) {
-    auto* path_hs = pop_string(ctx);
-    if (!path_hs) return false;
-    std::string path(path_hs->view());
-    path_hs->release();
-
-    auto* content_hs = pop_string(ctx);
-    if (!content_hs) return false;
-    std::string content(content_hs->view());
-    content_hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-    if (!check_disk_quota(ctx, content.size())) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string content, fs_path;
+    auto s = pop_write_args(ctx, content, fs_path);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -344,38 +264,10 @@ bool prim_append_file(ExecutionContext& ctx) {
 // copy-file ( src dest -- flag )
 // ---------------------------------------------------------------------------
 bool prim_copy_file(ExecutionContext& ctx) {
-    auto* dest_hs = pop_string(ctx);
-    if (!dest_hs) return false;
-    std::string dest(dest_hs->view());
-    dest_hs->release();
-
-    auto* src_hs = pop_string(ctx);
-    if (!src_hs) return false;
-    std::string src(src_hs->view());
-    src_hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(dest)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string src_fs = lvfs->resolve(src);
-    std::string dest_fs = lvfs->resolve(dest);
-    if (src_fs.empty() || dest_fs.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string src_fs, dest_fs;
+    auto s = pop_two_paths_copy(ctx, src_fs, dest_fs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -400,38 +292,10 @@ bool prim_copy_file(ExecutionContext& ctx) {
 // rename-file ( old new -- flag )
 // ---------------------------------------------------------------------------
 bool prim_rename_file(ExecutionContext& ctx) {
-    auto* new_hs = pop_string(ctx);
-    if (!new_hs) return false;
-    std::string new_path(new_hs->view());
-    new_hs->release();
-
-    auto* old_hs = pop_string(ctx);
-    if (!old_hs) return false;
-    std::string old_path(old_hs->view());
-    old_hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(old_path) || lvfs->is_read_only(new_path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string old_fs = lvfs->resolve(old_path);
-    std::string new_fs = lvfs->resolve(new_path);
-    if (old_fs.empty() || new_fs.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string old_fs, new_fs;
+    auto s = pop_two_paths_rename(ctx, old_fs, new_fs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -456,22 +320,11 @@ bool prim_rename_file(ExecutionContext& ctx) {
 // Returns [size, mtime_us, is_directory, is_read_only]
 // ---------------------------------------------------------------------------
 bool prim_lstat(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -511,23 +364,8 @@ bool prim_lstat(ExecutionContext& ctx) {
         return true;
     }
 
-    auto& st = req.req.statbuf;
-    bool is_dir = (st.st_mode & S_IFDIR) != 0;
-    int64_t size = is_dir ? 0 : static_cast<int64_t>(st.st_size);
-
-    // Convert timespec to microseconds since epoch
-    int64_t mtime_us = static_cast<int64_t>(st.st_mtim.tv_sec) * 1'000'000LL +
-                       static_cast<int64_t>(st.st_mtim.tv_nsec) / 1'000LL;
-
-    bool is_ro = lvfs->is_read_only(path);
-
-    auto* arr = new HeapArray();
-    arr->push_back(Value(size));
-    arr->push_back(Value(mtime_us));
-    arr->push_back(Value(static_cast<bool>(is_dir)));
-    arr->push_back(Value(static_cast<bool>(is_ro)));
-
-    ctx.data_stack().push(make_heap_value(arr));
+    ctx.data_stack().push(make_heap_value(
+        make_stat_array(req.req.statbuf, lvfs->is_read_only(path))));
     ctx.data_stack().push(Value(true));
     return true;
 }
@@ -537,22 +375,11 @@ bool prim_lstat(ExecutionContext& ctx) {
 // Returns array of filename strings.
 // ---------------------------------------------------------------------------
 bool prim_readdir(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string path, fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve(ctx, path, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -601,47 +428,14 @@ bool prim_readdir(ExecutionContext& ctx) {
 // Creates directory and parents.
 // ---------------------------------------------------------------------------
 bool prim_mkdir(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* uv = ctx.uv_session();
-    if (!uv) {
-        // Fallback to sync
-        std::error_code ec;
-        fs::create_directories(fs_path, ec);
-        ctx.data_stack().push(Value(static_cast<bool>(!ec)));
-        return true;
-    }
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     // libuv's uv_fs_mkdir only creates one level.
-    // Use std::filesystem for recursive creation (still async-compatible since
-    // we fall back to it), or iterate path components.
-    // For simplicity and correctness, use fs::create_directories via the sync
-    // fallback pattern — mkdir is metadata-only, not I/O bound.
+    // Use std::filesystem for recursive creation.
     std::error_code ec;
     fs::create_directories(fs_path, ec);
     ctx.data_stack().push(Value(static_cast<bool>(!ec)));
@@ -678,7 +472,6 @@ bool prim_mkdir_tmp(ExecutionContext& ctx) {
     std::vector<char> buf(tmpl.begin(), tmpl.end());
     buf.push_back('\0');
 
-    // libuv has uv_fs_mkdtemp but it requires an async pattern.
     auto* uv = ctx.uv_session();
     if (!uv) {
         // Fallback to sync
@@ -687,18 +480,8 @@ bool prim_mkdir_tmp(ExecutionContext& ctx) {
             ctx.data_stack().push(Value(false));
             return true;
         }
-        std::string fs_result(result);
-        std::string home_with_slash = lvfs->home_dir();
-        if (!home_with_slash.empty() && home_with_slash.back() != '/') {
-            home_with_slash += '/';
-        }
-        std::string virtual_path;
-        if (fs_result.compare(0, home_with_slash.size(), home_with_slash) == 0) {
-            virtual_path = "/home/" + fs_result.substr(home_with_slash.size());
-        } else {
-            virtual_path = fs_result;
-        }
-        auto* out_str = HeapString::create(virtual_path);
+        auto* out_str = HeapString::create(
+            fs_path_to_virtual(std::string(result), lvfs->home_dir()));
         ctx.data_stack().push(make_heap_value(out_str));
         ctx.data_stack().push(Value(true));
         return true;
@@ -713,19 +496,8 @@ bool prim_mkdir_tmp(ExecutionContext& ctx) {
         return true;
     }
 
-    std::string fs_result(req.req.path);
-    std::string home_with_slash = lvfs->home_dir();
-    if (!home_with_slash.empty() && home_with_slash.back() != '/') {
-        home_with_slash += '/';
-    }
-    std::string virtual_path;
-    if (fs_result.compare(0, home_with_slash.size(), home_with_slash) == 0) {
-        virtual_path = "/home/" + fs_result.substr(home_with_slash.size());
-    } else {
-        virtual_path = fs_result;
-    }
-
-    auto* out_str = HeapString::create(virtual_path);
+    auto* out_str = HeapString::create(
+        fs_path_to_virtual(std::string(req.req.path), lvfs->home_dir()));
     ctx.data_stack().push(make_heap_value(out_str));
     ctx.data_stack().push(Value(true));
     return true;
@@ -736,32 +508,11 @@ bool prim_mkdir_tmp(ExecutionContext& ctx) {
 // Removes empty directory.
 // ---------------------------------------------------------------------------
 bool prim_rmdir(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {
@@ -798,39 +549,13 @@ bool prim_rmdir(ExecutionContext& ctx) {
 // Removes file or directory recursively. Guards against deleting home root.
 // ---------------------------------------------------------------------------
 bool prim_rm(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    // Safety guard: prevent deleting home root directory itself
-    std::string home = lvfs->home_dir();
-    if (!home.empty() && home.back() == '/') home.pop_back();
-    std::string fs_norm = fs_path;
-    if (!fs_norm.empty() && fs_norm.back() == '/') fs_norm.pop_back();
-    if (fs_norm == home) {
+    if (is_home_root(fs_path, lvfs)) {
         ctx.data_stack().push(Value(false));
         return true;
     }
@@ -848,32 +573,11 @@ bool prim_rm(ExecutionContext& ctx) {
 // Truncates file to zero length.
 // ---------------------------------------------------------------------------
 bool prim_truncate(ExecutionContext& ctx) {
-    auto* hs = pop_string(ctx);
-    if (!hs) return false;
-    std::string path(hs->view());
-    hs->release();
-
-    if (!check_lvfs_modify(ctx)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    auto* lvfs = ctx.lvfs();
-    if (!lvfs) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    if (lvfs->is_read_only(path)) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
-
-    std::string fs_path = lvfs->resolve(path);
-    if (fs_path.empty()) {
-        ctx.data_stack().push(Value(false));
-        return true;
-    }
+    std::string fs_path;
+    Lvfs* lvfs = nullptr;
+    auto s = pop_and_resolve_writable(ctx, fs_path, lvfs);
+    if (s == Status::Underflow) return false;
+    if (s == Status::PushedFalse) return true;
 
     auto* uv = ctx.uv_session();
     if (!uv) {

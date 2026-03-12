@@ -235,6 +235,10 @@ private:
     void register_all_tools();
     void register_all_resources();
 
+    // Constructor helpers — extract auth and database init for readability.
+    void init_auth();
+    void init_database();
+
     // Tool implementations
     nlohmann::json tool_interpret(const nlohmann::json& params);
     nlohmann::json tool_list_words(const nlohmann::json& params);

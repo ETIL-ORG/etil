@@ -77,10 +77,18 @@ public:
     /// Generate a unique WordImpl ID.
     static uint64_t next_id();
 
+    /// Monotonically increasing generation counter.  Incremented on every
+    /// forget_word() / forget_all() so that cached WordImpl* pointers in
+    /// compiled bytecode can detect staleness cheaply.
+    uint64_t generation() const noexcept {
+        return generation_.load(std::memory_order_acquire);
+    }
+
 private:
     mutable absl::Mutex mutex_;
     absl::flat_hash_map<std::string, WordConcept> concepts_ ABSL_GUARDED_BY(mutex_);
     static std::atomic<uint64_t> next_id_;
+    std::atomic<uint64_t> generation_{0};
 };
 
 } // namespace etil::core

@@ -33,6 +33,8 @@ struct HttpWorkData {
     // --- Input (set by caller, read by worker) ---
     std::string scheme_host_port;  // e.g. "https://example.com:443"
     std::string path;              // e.g. "/data/file.csv"
+    std::string hostname;          // original hostname (for addr map pinning)
+    std::string resolved_ip;       // pre-validated IP (prevents DNS rebinding)
     int timeout_ms = 10'000;
     size_t max_response_bytes = 1 * 1024 * 1024;
     httplib::Headers headers;      // extra HTTP headers from HeapMap
@@ -55,6 +57,12 @@ void http_get_work(uv_work_t* req) {
 
     try {
         httplib::Client cli(d->scheme_host_port);
+
+        // Pin DNS resolution to our pre-validated IP, preventing
+        // DNS rebinding attacks (TOCTOU between validate_url and connect).
+        if (!d->resolved_ip.empty()) {
+            cli.set_hostname_addr_map({{d->hostname, d->resolved_ip}});
+        }
 
         auto timeout_sec = d->timeout_ms / 1000;
         auto timeout_usec = (d->timeout_ms % 1000) * 1000;
@@ -92,6 +100,11 @@ void http_post_work(uv_work_t* req) {
 
     try {
         httplib::Client cli(d->scheme_host_port);
+
+        // Pin DNS resolution to our pre-validated IP (same as GET)
+        if (!d->resolved_ip.empty()) {
+            cli.set_hostname_addr_map({{d->hostname, d->resolved_ip}});
+        }
 
         auto timeout_sec = d->timeout_ms / 1000;
         auto timeout_usec = (d->timeout_ms % 1000) * 1000;
@@ -204,7 +217,11 @@ static bool prim_http_get(etil::core::ExecutionContext& ctx) {
         return true;
     }
 
-    // Build scheme_host_port for cpp-httplib Client constructor
+    // Build scheme_host_port for cpp-httplib Client constructor.
+    // Use the original hostname (not the resolved IP) so httplib handles
+    // TLS SNI and Host header correctly.  DNS pinning via
+    // set_hostname_addr_map() ensures the actual connection goes to our
+    // pre-validated IP.
     std::string scheme_host_port = parsed.scheme + "://" + parsed.host;
     if (parsed.port != 0) {
         scheme_host_port += ":" + std::to_string(parsed.port);
@@ -214,6 +231,8 @@ static bool prim_http_get(etil::core::ExecutionContext& ctx) {
     HttpWorkData work_data;
     work_data.scheme_host_port = std::move(scheme_host_port);
     work_data.path = parsed.path;
+    work_data.hostname = parsed.host;
+    work_data.resolved_ip = parsed.resolved_ip;
     work_data.timeout_ms = http_state->config->request_timeout_ms;
     work_data.max_response_bytes = http_state->config->max_response_bytes;
 
@@ -365,7 +384,7 @@ static bool prim_http_post(etil::core::ExecutionContext& ctx) {
         return true;
     }
 
-    // Build scheme_host_port for cpp-httplib Client constructor
+    // Build scheme_host_port — same DNS pinning approach as GET
     std::string scheme_host_port = parsed.scheme + "://" + parsed.host;
     if (parsed.port != 0) {
         scheme_host_port += ":" + std::to_string(parsed.port);
@@ -375,6 +394,8 @@ static bool prim_http_post(etil::core::ExecutionContext& ctx) {
     HttpWorkData work_data;
     work_data.scheme_host_port = std::move(scheme_host_port);
     work_data.path = parsed.path;
+    work_data.hostname = parsed.host;
+    work_data.resolved_ip = parsed.resolved_ip;
     work_data.timeout_ms = http_state->config->request_timeout_ms;
     work_data.max_response_bytes = http_state->config->max_response_bytes;
 

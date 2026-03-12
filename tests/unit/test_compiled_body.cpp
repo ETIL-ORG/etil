@@ -1314,3 +1314,67 @@ TEST_F(CompiledBodyTest, CallTraceShowsSourceLocation) {
     EXPECT_TRUE(err_text.find("defined at mylib.til:12") != std::string::npos);
     interp.shutdown();
 }
+
+// --- Bytecode cache invalidation after forget ---
+
+TEST_F(CompiledBodyTest, CacheInvalidatedAfterForget) {
+    // Define B that pushes 42, define A that calls B.
+    // Execute A → should get 42.
+    // Forget B, redefine B to push 99.
+    // Execute A again → should get 99 (not stale cached 42).
+    std::ostringstream out, err;
+    Interpreter interp(dict, out, err);
+
+    interp.interpret_line(": cache-b 42 ;");
+    interp.interpret_line(": cache-a cache-b ;");
+    interp.interpret_line("cache-a .");
+    EXPECT_NE(out.str().find("42"), std::string::npos);
+
+    // Forget and redefine B (use dict-forget primitive, not self-hosted forget)
+    out.str("");
+    interp.interpret_line("s\" cache-b\" dict-forget drop");
+    interp.interpret_line(": cache-b 99 ;");
+    interp.interpret_line("cache-a .");
+    EXPECT_NE(out.str().find("99"), std::string::npos);
+    // Ensure the old value is NOT present
+    EXPECT_EQ(out.str().find("42"), std::string::npos);
+    interp.shutdown();
+}
+
+TEST_F(CompiledBodyTest, CacheInvalidatedAfterForgetAll) {
+    std::ostringstream out, err;
+    Interpreter interp(dict, out, err);
+
+    interp.interpret_line(": fa-b 10 ;");
+    interp.interpret_line(": fa-a fa-b ;");
+    interp.interpret_line("fa-a .");
+    EXPECT_NE(out.str().find("10"), std::string::npos);
+
+    // forget-all and redefine (use dict-forget-all primitive)
+    out.str("");
+    interp.interpret_line("s\" fa-b\" dict-forget-all drop");
+    interp.interpret_line(": fa-b 20 ;");
+    interp.interpret_line("fa-a .");
+    EXPECT_NE(out.str().find("20"), std::string::npos);
+    EXPECT_EQ(out.str().find("10"), std::string::npos);
+    interp.shutdown();
+}
+
+TEST_F(CompiledBodyTest, CacheInvalidatedForPushXt) {
+    std::ostringstream out, err;
+    Interpreter interp(dict, out, err);
+
+    interp.interpret_line(": xt-target 77 ;");
+    interp.interpret_line(": xt-user ['] xt-target execute ;");
+    interp.interpret_line("xt-user .");
+    EXPECT_NE(out.str().find("77"), std::string::npos);
+
+    // Forget and redefine (use dict-forget primitive)
+    out.str("");
+    interp.interpret_line("s\" xt-target\" dict-forget drop");
+    interp.interpret_line(": xt-target 88 ;");
+    interp.interpret_line("xt-user .");
+    EXPECT_NE(out.str().find("88"), std::string::npos);
+    EXPECT_EQ(out.str().find("77"), std::string::npos);
+    interp.shutdown();
+}
