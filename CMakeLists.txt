@@ -28,9 +28,9 @@ option(ETIL_BUILD_TESTS "Build tests" ON)
 option(ETIL_BUILD_EXAMPLES "Build examples" ON)
 option(ETIL_ENABLE_PROFILING "Enable profiling support" ON)
 option(ETIL_USE_JEMALLOC "Use jemalloc allocator" OFF)
-option(ETIL_BUILD_HTTP_CLIENT "Build HTTP client primitives (http-get)" OFF)
-option(ETIL_BUILD_JWT "Build JWT authentication" OFF)
-option(ETIL_BUILD_MONGODB "Build MongoDB integration (requires ETIL_BUILD_JWT)" OFF)
+option(ETIL_BUILD_HTTP_CLIENT "Build HTTP client primitives (http-get)" ON)
+option(ETIL_BUILD_JWT "Build JWT authentication" ON)
+option(ETIL_BUILD_MONGODB "Build MongoDB integration (requires ETIL_BUILD_JWT)" ON)
 
 # Include custom CMake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

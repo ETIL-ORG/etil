@@ -273,6 +273,16 @@ if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
     FetchContent_MakeAvailable(OpenBLAS)
     set(BLAS_LIBRARIES openblas)
     set(LAPACK_LIBRARIES openblas)
+    # OpenBLAS only sets INSTALL_INTERFACE include dirs, not BUILD_INTERFACE.
+    # Expose headers (cblas.h, lapacke.h) for FetchContent consumers.
+    # IMPORTANT: Do NOT add openblas_SOURCE_DIR directly — it contains a
+    # cpuid.h that shadows GCC's system <cpuid.h> and breaks SIMD detection.
+    # Use the generated/ directory for cblas.h instead.
+    set(OPENBLAS_INCLUDE_DIRS
+        ${CMAKE_BINARY_DIR}/generated
+        ${CMAKE_BINARY_DIR}
+        ${openblas_SOURCE_DIR}/lapack-netlib/LAPACKE/include
+    )
 else()
     message(STATUS "Using pre-built BLAS/LAPACK")
 endif()
