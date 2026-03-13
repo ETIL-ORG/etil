@@ -885,6 +885,22 @@ s" array-reverse" s" description" s" text" s" Reverse array in-place" meta! drop
 s" array-reverse" s" stack-effect" s" text" s" ( array -- array )" meta! drop
 s" array-reverse" s" category" s" text" s" array" meta! drop
 
+s" array-each" s" description" s" text" s" Execute xt for each element. Terminal operator" meta! drop
+s" array-each" s" stack-effect" s" text" s" ( array xt -- )" meta! drop
+s" array-each" s" category" s" text" s" array" meta! drop
+
+s" array-map" s" description" s" text" s" Transform each element via xt into a new array" meta! drop
+s" array-map" s" stack-effect" s" text" s" ( array xt -- array' )" meta! drop
+s" array-map" s" category" s" text" s" array" meta! drop
+
+s" array-filter" s" description" s" text" s" Keep elements where xt returns true" meta! drop
+s" array-filter" s" stack-effect" s" text" s" ( array xt -- array' )" meta! drop
+s" array-filter" s" category" s" text" s" array" meta! drop
+
+s" array-reduce" s" description" s" text" s" Fold array to a single value. xt receives ( accum elem -- accum' )" meta! drop
+s" array-reduce" s" stack-effect" s" text" s" ( array xt init -- result )" meta! drop
+s" array-reduce" s" category" s" text" s" array" meta! drop
+
 s" array-new" s" examples" s" code" s" array-new 42 array-push dump drop" meta! drop
 s" array-push" s" examples" s" code" s" array-new 1 array-push 2 array-push dump drop" meta! drop
 s" array-pop" s" examples" s" code" s" array-new 1 array-push 2 array-push array-pop . drop" meta! drop
@@ -895,6 +911,10 @@ s" array-shift" s" examples" s" code" s" array-new 10 array-push 20 array-push a
 s" array-unshift" s" examples" s" code" s" array-new 2 array-push 1 array-unshift dump drop" meta! drop
 s" array-compact" s" examples" s" code" s" array-new 0 array-push 1 array-push 0 array-push array-compact dump drop" meta! drop
 s" array-reverse" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push array-reverse dump drop" meta! drop
+s" array-each" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push ' . array-each\n=> 1 2 3" meta! drop
+s" array-map" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push ' dup * array-map dump drop\n=> [1, 4, 9]" meta! drop
+s" array-filter" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push 4 array-push ' 2 > array-filter dump drop\n=> [3, 4]" meta! drop
+s" array-reduce" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push ' + 0 array-reduce .\n=> 6" meta! drop
 
 # --- Byte Array ---
 
