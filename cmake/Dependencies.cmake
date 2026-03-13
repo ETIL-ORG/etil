@@ -285,6 +285,11 @@ if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
     )
 else()
     message(STATUS "Using pre-built BLAS/LAPACK")
+    # System OpenBLAS doesn't bundle LAPACKE — link it separately.
+    find_library(LAPACKE_LIBRARY lapacke)
+    if(LAPACKE_LIBRARY)
+        set(LAPACKE_LIBRARIES ${LAPACKE_LIBRARY})
+    endif()
 endif()
 
 # Optional: jemalloc for better memory performance

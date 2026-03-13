@@ -94,7 +94,7 @@ endif()
 target_sources(etil PRIVATE
     core/matrix_primitives.cpp
 )
-target_link_libraries(etil PUBLIC ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+target_link_libraries(etil PUBLIC ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
 if(DEFINED OPENBLAS_INCLUDE_DIRS)
     # FetchContent OpenBLAS: headers not on default include path
     target_include_directories(etil PRIVATE ${OPENBLAS_INCLUDE_DIRS})
