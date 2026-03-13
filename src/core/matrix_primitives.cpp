@@ -124,61 +124,98 @@ bool prim_mat_eye(ExecutionContext& ctx) {
     return true;
 }
 
-// mat->array ( mat -- array )
+// mat->array ( mat -- array ) — nested 2D array (array of row arrays)
 bool prim_mat_to_array(ExecutionContext& ctx) {
     auto* mat = pop_matrix(ctx);
     if (!mat) return false;
-    auto* arr = new HeapArray();
-    // Row-major order to match mat-from-array
+    auto* outer = new HeapArray();
     for (int64_t r = 0; r < mat->rows(); ++r) {
+        auto* row = new HeapArray();
         for (int64_t c = 0; c < mat->cols(); ++c) {
-            arr->push_back(Value(mat->get(r, c)));
+            row->push_back(Value(mat->get(r, c)));
         }
+        outer->push_back(Value::from(row));
     }
     mat->release();
-    ctx.data_stack().push(Value::from(arr));
+    ctx.data_stack().push(Value::from(outer));
     return true;
 }
 
-// mat-from-array ( array rows cols -- mat )
-bool prim_mat_from_array(ExecutionContext& ctx) {
-    int64_t cols, rows;
-    if (!pop_int(ctx, cols)) return false;
-    if (!pop_int(ctx, rows)) {
-        ctx.data_stack().push(Value(cols));
+// array->mat ( nested-array -- mat ) — convert 2D nested array to matrix
+bool prim_array_to_mat(ExecutionContext& ctx) {
+    auto* outer = pop_array(ctx);
+    if (!outer) return false;
+
+    int64_t rows = static_cast<int64_t>(outer->length());
+    if (rows == 0) {
+        outer->release();
+        ctx.err() << "Error: array->mat requires at least 1x1 input\n";
         return false;
     }
-    auto* arr = pop_array(ctx);
-    if (!arr) {
-        ctx.data_stack().push(Value(rows));
-        ctx.data_stack().push(Value(cols));
+    if (rows > MAX_MATRIX_DIMENSION) {
+        outer->release();
+        ctx.err() << "Error: array->mat row count exceeds limit " << MAX_MATRIX_DIMENSION << "\n";
         return false;
     }
-    if (rows <= 0 || cols <= 0 || rows > MAX_MATRIX_DIMENSION || cols > MAX_MATRIX_DIMENSION) {
-        arr->release();
-        ctx.err() << "Error: mat-from-array dimensions must be in [1, " << MAX_MATRIX_DIMENSION << "]\n";
+
+    // Get column count from first row
+    Value row0v;
+    if (!outer->get(0, row0v) || row0v.type != Value::Type::Array) {
+        outer->release();
+        ctx.err() << "Error: array->mat expects array of arrays\n";
         return false;
     }
-    size_t expected = static_cast<size_t>(rows * cols);
-    if (arr->length() < expected) {
-        ctx.err() << "Error: array has " << arr->length() << " elements, need " << expected << "\n";
-        arr->release();
+    int64_t cols = static_cast<int64_t>(row0v.as_array()->length());
+    value_release(row0v);
+    if (cols == 0 || cols > MAX_MATRIX_DIMENSION) {
+        outer->release();
+        ctx.err() << "Error: array->mat column count must be in [1, " << MAX_MATRIX_DIMENSION << "]\n";
         return false;
     }
+
     auto* mat = new HeapMatrix(rows, cols);
-    // Array is in row-major order: arr[r*cols + c] → mat[r,c] (column-major)
     for (int64_t r = 0; r < rows; ++r) {
+        Value rowv;
+        if (!outer->get(static_cast<size_t>(r), rowv) || rowv.type != Value::Type::Array) {
+            outer->release();
+            delete mat;
+            ctx.err() << "Error: array->mat row " << r << " is not an array\n";
+            return false;
+        }
+        auto* row_arr = rowv.as_array();
+        if (static_cast<int64_t>(row_arr->length()) != cols) {
+            value_release(rowv);
+            outer->release();
+            delete mat;
+            ctx.err() << "Error: array->mat row " << r << " has " << row_arr->length()
+                       << " elements, expected " << cols << "\n";
+            return false;
+        }
         for (int64_t c = 0; c < cols; ++c) {
             Value elem;
             double val = 0.0;
-            if (arr->get(static_cast<size_t>(r * cols + c), elem)) {
-                value_as_double(elem, val);
-                value_release(elem);
+            if (!row_arr->get(static_cast<size_t>(c), elem)) {
+                value_release(rowv);
+                outer->release();
+                delete mat;
+                ctx.err() << "Error: array->mat failed to read element [" << r << "," << c << "]\n";
+                return false;
             }
+            if (!value_as_double(elem, val)) {
+                value_release(elem);
+                value_release(rowv);
+                outer->release();
+                delete mat;
+                ctx.err() << "Error: array->mat element [" << r << "," << c
+                           << "] is not a number (integers and floats only)\n";
+                return false;
+            }
+            value_release(elem);
             mat->set(r, c, val);
         }
+        value_release(rowv);
     }
-    arr->release();
+    outer->release();
     ctx.data_stack().push(Value::from(mat));
     return true;
 }
@@ -1072,8 +1109,8 @@ void register_matrix_primitives(Dictionary& dict) {
         {T::Integer, T::Integer}, {T::Unknown}));
     dict.register_word("mat-eye", make_primitive("mat-eye", prim_mat_eye,
         {T::Integer}, {T::Unknown}));
-    dict.register_word("mat-from-array", make_primitive("mat-from-array", prim_mat_from_array,
-        {T::Array, T::Integer, T::Integer}, {T::Unknown}));
+    dict.register_word("array->mat", make_primitive("array->mat", prim_array_to_mat,
+        {T::Array}, {T::Unknown}));
     dict.register_word("mat->array", make_primitive("mat->array", prim_mat_to_array,
         {T::Unknown}, {T::Array}));
     dict.register_word("mat-diag", make_primitive("mat-diag", prim_mat_diag,

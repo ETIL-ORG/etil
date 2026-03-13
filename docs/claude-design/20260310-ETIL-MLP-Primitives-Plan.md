@@ -125,7 +125,7 @@ After each stage:
 ```forth
 # 2-layer forward pass: 2 inputs → 3 hidden (ReLU) → 1 output (sigmoid)
 42 random-seed
-array-new 0.5 array-push -0.3 array-push 2 1 mat-from-array
+array-new array-new 0.5 array-push array-push array-new -0.3 array-push array-push array->mat
 3 2 mat-randn  3 1 mat-new
 rot rot mat*  swap mat-add-col  mat-relu
 1 3 mat-randn  1 1 mat-new

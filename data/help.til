@@ -1442,9 +1442,9 @@ s" mat-eye" s" stack-effect" s" text" s" ( n -- mat )" meta! drop
 s" mat-eye" s" category" s" text" s" matrix" meta! drop
 s" mat-eye" s" examples" s" code" s" 3 mat-eye mat." meta! drop
 
-s" mat-from-array" s" description" s" text" s" Create matrix from flat array (row-major order)" meta! drop
-s" mat-from-array" s" stack-effect" s" text" s" ( array rows cols -- mat )" meta! drop
-s" mat-from-array" s" category" s" text" s" matrix" meta! drop
+s" array->mat" s" description" s" text" s" Convert nested 2D array (array of row arrays) to matrix" meta! drop
+s" array->mat" s" stack-effect" s" text" s" ( nested-array -- mat )" meta! drop
+s" array->mat" s" category" s" text" s" matrix" meta! drop
 
 s" mat-diag" s" description" s" text" s" Create diagonal matrix from array of values" meta! drop
 s" mat-diag" s" stack-effect" s" text" s" ( array -- mat )" meta! drop
@@ -1610,9 +1610,9 @@ s" tanh" s" category" s" text" s" math" meta! drop
 
 s" mat-randn" s" examples" s" code" s" 42 random-seed 3 4 mat-randn mat." meta! drop
 
-s" mat-apply" s" examples" s" code" s" : double-it 2.0 * ; array-new 1.0 array-push 2.0 array-push 3.0 array-push 1 3 mat-from-array ' double-it mat-apply mat." meta! drop
+s" mat-apply" s" examples" s" code" s" : double-it 2.0 * ; array-new array-new 1.0 array-push 2.0 array-push 3.0 array-push array-push array->mat ' double-it mat-apply mat." meta! drop
 
-s" mat-softmax" s" examples" s" code" s" array-new 1.0 array-push 2.0 array-push 3.0 array-push 3 1 mat-from-array mat-softmax mat." meta! drop
+s" mat-softmax" s" examples" s" code" s" array-new array-new 1.0 array-push array-push array-new 2.0 array-push array-push array-new 3.0 array-push array-push array->mat mat-softmax mat." meta! drop
 
 s" mat->json" s" description" s" text" s" Convert matrix to JSON object with rows, cols, and data keys" meta! drop
 s" mat->json" s" stack-effect" s" text" s" ( mat -- json )" meta! drop
@@ -1624,10 +1624,10 @@ s" json->mat" s" stack-effect" s" text" s" ( json -- mat )" meta! drop
 s" json->mat" s" category" s" text" s" matrix" meta! drop
 s" json->mat" s" examples" s" code" s" 2 2 mat-eye mat->json json->mat mat." meta! drop
 
-s" mat->array" s" description" s" text" s" Convert matrix to flat array of floats in row-major order" meta! drop
+s" mat->array" s" description" s" text" s" Convert matrix to nested 2D array (array of row arrays)" meta! drop
 s" mat->array" s" stack-effect" s" text" s" ( mat -- array )" meta! drop
 s" mat->array" s" category" s" text" s" matrix" meta! drop
-s" mat->array" s" examples" s" code" s" array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat->array array-length ." meta! drop
+s" mat->array" s" examples" s" code" s" array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat->array dump drop" meta! drop
 
 : mat-xavier over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;
 : mat-he over over mat-randn -rot drop int->float sqrt 2.0 swap / mat-scale ;

@@ -442,8 +442,8 @@ TEST_F(JsonPrimitivesTest, MatToJson) {
 }
 
 TEST_F(JsonPrimitivesTest, MatJsonRoundTrip) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push "
-        "4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array "
+    run("array-new array-new 1.0 array-push 2.0 array-push 3.0 array-push array-push "
+        "array-new 4.0 array-push 5.0 array-push 6.0 array-push array-push array->mat "
         "mat->json json->mat");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(EvolutionaryTIL VERSION 0.9.2 LANGUAGES C CXX)
+project(EvolutionaryTIL VERSION 0.9.3 LANGUAGES C CXX)
 
 # All executables go to <builddir>/bin/
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

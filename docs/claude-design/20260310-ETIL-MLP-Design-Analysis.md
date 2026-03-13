@@ -306,7 +306,7 @@ The P0 items are roughly 200-300 lines of C++ in `matrix_primitives.cpp` followi
 
 **`mat*` via DGEMM is the right call.** This one decision means ETIL's forward pass performance will be competitive with NumPy/PyTorch for matrix-multiply-dominated workloads (which MLPs are). The rest is overhead — and the proposed element-wise primitives eliminate the main source of that overhead.
 
-**Column-major HeapMatrix + BLAS interop is a genuine advantage.** Many "embed LAPACK in language X" projects fight the column-major layout. ETIL embraced it from the start, and `mat-from-array` handles the row-major → column-major translation at the boundary where users think in row-major. That's the right place to pay the cost.
+**Column-major HeapMatrix + BLAS interop is a genuine advantage.** Many "embed LAPACK in language X" projects fight the column-major layout. ETIL embraced it from the start, and `array->mat` handles the row-major → column-major translation at the boundary where users think in row-major. That's the right place to pay the cost.
 
 **The evolution/selection directories are still `.gitkeep` placeholders.** The MLP design should assume these modules don't exist yet and define the network purely in terms of existing words + the proposed new primitives. When the evolution engine materializes, the MLP's structure (layers as array of maps, activation as execution tokens) is already compatible with evolutionary selection.
 

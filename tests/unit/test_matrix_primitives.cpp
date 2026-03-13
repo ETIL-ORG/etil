@@ -65,8 +65,8 @@ TEST_F(MatrixPrimitivesTest, MatEye) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatFromArray) {
-    // Create array [1.0 2.0 3.0 4.0 5.0 6.0], reshape as 2x3
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array");
+    // Create nested 2D array [[1,2,3],[4,5,6]], convert to 2x3 matrix
+    run("array-new array-new 1.0 array-push 2.0 array-push 3.0 array-push array-push array-new 4.0 array-push 5.0 array-push 6.0 array-push array-push array->mat");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -132,7 +132,7 @@ TEST_F(MatrixPrimitivesTest, MatRowsCols) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatRow) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array 1 mat-row");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat 1 mat-row");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_EQ(opt->type, Value::Type::Array);
@@ -147,7 +147,7 @@ TEST_F(MatrixPrimitivesTest, MatRow) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatCol) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array 0 mat-col");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat 0 mat-col");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* arr = opt->as_array();
@@ -166,8 +166,8 @@ TEST_F(MatrixPrimitivesTest, MatCol) {
 
 TEST_F(MatrixPrimitivesTest, MatMul) {
     // [1 2; 3 4] * [5 6; 7 8] = [19 22; 43 50]
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array");
-    run("array-new 5.0 array-push 6.0 array-push 7.0 array-push 8.0 array-push 2 2 mat-from-array");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat");
+    run("array-new array-new 5.0 array-push 6.0 array-push array-push array-new 7.0 array-push 8.0 array-push array-push array->mat");
     run("mat*");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
@@ -180,8 +180,8 @@ TEST_F(MatrixPrimitivesTest, MatMul) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatAdd) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array");
-    run("array-new 10.0 array-push 20.0 array-push 30.0 array-push 40.0 array-push 2 2 mat-from-array");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat");
+    run("array-new array-new 10.0 array-push 20.0 array-push array-push array-new 30.0 array-push 40.0 array-push array-push array->mat");
     run("mat+");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
@@ -192,8 +192,8 @@ TEST_F(MatrixPrimitivesTest, MatAdd) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatSub) {
-    run("array-new 10.0 array-push 20.0 array-push 2 1 mat-from-array");
-    run("array-new 3.0 array-push 5.0 array-push 2 1 mat-from-array");
+    run("array-new array-new 10.0 array-push array-push array-new 20.0 array-push array-push array->mat");
+    run("array-new array-new 3.0 array-push array-push array-new 5.0 array-push array-push array->mat");
     run("mat-");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
@@ -204,7 +204,7 @@ TEST_F(MatrixPrimitivesTest, MatSub) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatScale) {
-    run("array-new 2.0 array-push 4.0 array-push 2 1 mat-from-array 3.0 mat-scale");
+    run("array-new array-new 2.0 array-push array-push array-new 4.0 array-push array-push array->mat 3.0 mat-scale");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* C = opt->as_matrix();
@@ -214,7 +214,7 @@ TEST_F(MatrixPrimitivesTest, MatScale) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatTranspose) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array mat-transpose");
+    run("array-new array-new 1.0 array-push 2.0 array-push 3.0 array-push array-push array-new 4.0 array-push 5.0 array-push 6.0 array-push array-push array->mat mat-transpose");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* T = opt->as_matrix();
@@ -240,8 +240,8 @@ TEST_F(MatrixPrimitivesTest, MatMulDimensionMismatch) {
 
 TEST_F(MatrixPrimitivesTest, MatSolve) {
     // Solve [2 1; 1 3]x = [5; 10] → x = [1; 3]
-    run("array-new 2.0 array-push 1.0 array-push 1.0 array-push 3.0 array-push 2 2 mat-from-array");
-    run("array-new 5.0 array-push 10.0 array-push 2 1 mat-from-array");
+    run("array-new array-new 2.0 array-push 1.0 array-push array-push array-new 1.0 array-push 3.0 array-push array-push array->mat");
+    run("array-new array-new 5.0 array-push array-push array-new 10.0 array-push array-push array->mat");
     run("mat-solve");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
@@ -257,7 +257,7 @@ TEST_F(MatrixPrimitivesTest, MatSolve) {
 
 TEST_F(MatrixPrimitivesTest, MatInv) {
     // Inverse of [1 2; 3 4] = 1/(1*4-2*3) * [4 -2; -3 1] = [-2 1; 1.5 -0.5]
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-inv");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat-inv");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
     EXPECT_EQ(flag->type, Value::Type::Boolean);
@@ -274,7 +274,7 @@ TEST_F(MatrixPrimitivesTest, MatInv) {
 
 TEST_F(MatrixPrimitivesTest, MatDet) {
     // det([1 2; 3 4]) = 1*4 - 2*3 = -2
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-det");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat-det");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
     EXPECT_EQ(flag->type, Value::Type::Boolean);
@@ -290,7 +290,7 @@ TEST_F(MatrixPrimitivesTest, MatDet) {
 
 TEST_F(MatrixPrimitivesTest, MatEigenSymmetric) {
     // Symmetric: [2 1; 1 2] → eigenvalues [1, 3]
-    run("array-new 2.0 array-push 1.0 array-push 1.0 array-push 2.0 array-push 2 2 mat-from-array mat-eigen");
+    run("array-new array-new 2.0 array-push 1.0 array-push array-push array-new 1.0 array-push 2.0 array-push array-push array->mat mat-eigen");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
     EXPECT_EQ(flag->type, Value::Type::Boolean);
@@ -308,7 +308,7 @@ TEST_F(MatrixPrimitivesTest, MatEigenSymmetric) {
 
 TEST_F(MatrixPrimitivesTest, MatSvd) {
     // SVD of [3 0; 0 4] → singular values [4, 3]
-    run("array-new 3.0 array-push 0.0 array-push 0.0 array-push 4.0 array-push 2 2 mat-from-array mat-svd");
+    run("array-new array-new 3.0 array-push 0.0 array-push array-push array-new 0.0 array-push 4.0 array-push array-push array->mat mat-svd");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
     EXPECT_EQ(flag->type, Value::Type::Boolean);
@@ -328,8 +328,8 @@ TEST_F(MatrixPrimitivesTest, MatSvd) {
 
 TEST_F(MatrixPrimitivesTest, MatLstsq) {
     // Overdetermined: [1; 1; 1] x ≈ [1; 2; 3] → x = [2]
-    run("array-new 1.0 array-push 1.0 array-push 1.0 array-push 3 1 mat-from-array");
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 3 1 mat-from-array");
+    run("array-new array-new 1.0 array-push array-push array-new 1.0 array-push array-push array-new 1.0 array-push array-push array->mat");
+    run("array-new array-new 1.0 array-push array-push array-new 2.0 array-push array-push array-new 3.0 array-push array-push array->mat");
     run("mat-lstsq");
     auto flag = ctx().data_stack().pop();
     ASSERT_TRUE(flag.has_value());
@@ -348,21 +348,21 @@ TEST_F(MatrixPrimitivesTest, MatLstsq) {
 
 TEST_F(MatrixPrimitivesTest, MatNorm) {
     // Frobenius norm of [3 4] = sqrt(9+16) = 5
-    run("array-new 3.0 array-push 4.0 array-push 1 2 mat-from-array mat-norm");
+    run("array-new array-new 3.0 array-push 4.0 array-push array-push array->mat mat-norm");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_NEAR(opt->as_float, 5.0, 1e-10);
 }
 
 TEST_F(MatrixPrimitivesTest, MatTrace) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-trace");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat-trace");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_NEAR(opt->as_float, 5.0, 1e-10);
 }
 
 TEST_F(MatrixPrimitivesTest, MatPrint) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat.");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat.");
     EXPECT_TRUE(out.str().find("<matrix 2x2>") != std::string::npos);
     EXPECT_TRUE(out.str().find("1") != std::string::npos);
 }
@@ -400,7 +400,7 @@ TEST_F(MatrixPrimitivesTest, MatInvIdentity) {
 
 TEST_F(MatrixPrimitivesTest, MatMulIdentity) {
     // A * I = A
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat");
     run("2 mat-eye mat*");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
@@ -436,7 +436,7 @@ TEST_F(MatrixPrimitivesTest, FormatValue) {
 // ---------------------------------------------------------------------------
 
 TEST_F(MatrixPrimitivesTest, MatRelu) {
-    run("array-new -2.0 array-push 0.0 array-push 3.0 array-push 1 3 mat-from-array mat-relu");
+    run("array-new array-new -2.0 array-push 0.0 array-push 3.0 array-push array-push array->mat mat-relu");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -447,7 +447,7 @@ TEST_F(MatrixPrimitivesTest, MatRelu) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatSigmoid) {
-    run("array-new 0.0 array-push 1 1 mat-from-array mat-sigmoid");
+    run("array-new array-new 0.0 array-push array-push array->mat mat-sigmoid");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -456,7 +456,7 @@ TEST_F(MatrixPrimitivesTest, MatSigmoid) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatSigmoidLargePos) {
-    run("array-new 100.0 array-push 1 1 mat-from-array mat-sigmoid");
+    run("array-new array-new 100.0 array-push array-push array->mat mat-sigmoid");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -465,7 +465,7 @@ TEST_F(MatrixPrimitivesTest, MatSigmoidLargePos) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatTanh) {
-    run("array-new 0.0 array-push 1 1 mat-from-array mat-tanh");
+    run("array-new array-new 0.0 array-push array-push array->mat mat-tanh");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -474,8 +474,8 @@ TEST_F(MatrixPrimitivesTest, MatTanh) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatHadamard) {
-    run("array-new 2.0 array-push 3.0 array-push 1 2 mat-from-array");
-    run("array-new 4.0 array-push 5.0 array-push 1 2 mat-from-array");
+    run("array-new array-new 2.0 array-push 3.0 array-push array-push array->mat");
+    run("array-new array-new 4.0 array-push 5.0 array-push array-push array->mat");
     run("mat-hadamard");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
@@ -492,8 +492,8 @@ TEST_F(MatrixPrimitivesTest, MatHadamardDimensionMismatch) {
 
 TEST_F(MatrixPrimitivesTest, MatAddCol) {
     // mat = [1 2; 3 4], col = [10; 20]
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array");
-    run("array-new 10.0 array-push 20.0 array-push 2 1 mat-from-array");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat");
+    run("array-new array-new 10.0 array-push array-push array-new 20.0 array-push array-push array->mat");
     run("mat-add-col");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
@@ -548,7 +548,7 @@ TEST_F(MatrixPrimitivesTest, MatRandnReproducible) {
 // ---------------------------------------------------------------------------
 
 TEST_F(MatrixPrimitivesTest, MatReluPrime) {
-    run("array-new -1.0 array-push 0.0 array-push 2.0 array-push 1 3 mat-from-array mat-relu'");
+    run("array-new array-new -1.0 array-push 0.0 array-push 2.0 array-push array-push array->mat mat-relu'");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -559,7 +559,7 @@ TEST_F(MatrixPrimitivesTest, MatReluPrime) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatSigmoidPrime) {
-    run("array-new 0.0 array-push 1 1 mat-from-array mat-sigmoid'");
+    run("array-new array-new 0.0 array-push array-push array->mat mat-sigmoid'");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -569,7 +569,7 @@ TEST_F(MatrixPrimitivesTest, MatSigmoidPrime) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatTanhPrime) {
-    run("array-new 0.0 array-push 1 1 mat-from-array mat-tanh'");
+    run("array-new array-new 0.0 array-push array-push array->mat mat-tanh'");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -579,7 +579,7 @@ TEST_F(MatrixPrimitivesTest, MatTanhPrime) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatSum) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-sum");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat-sum");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_NEAR(opt->as_float, 10.0, 1e-10);
@@ -587,7 +587,7 @@ TEST_F(MatrixPrimitivesTest, MatSum) {
 
 TEST_F(MatrixPrimitivesTest, MatColSum) {
     // [1 2; 3 4] → col-sum = [1+2; 3+4] = [3; 7]
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array mat-col-sum");
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat-col-sum");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -599,14 +599,14 @@ TEST_F(MatrixPrimitivesTest, MatColSum) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatMean) {
-    run("array-new 2.0 array-push 4.0 array-push 6.0 array-push 8.0 array-push 2 2 mat-from-array mat-mean");
+    run("array-new array-new 2.0 array-push 4.0 array-push array-push array-new 6.0 array-push 8.0 array-push array-push array->mat mat-mean");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_NEAR(opt->as_float, 5.0, 1e-10);
 }
 
 TEST_F(MatrixPrimitivesTest, MatClip) {
-    run("array-new -5.0 array-push 0.5 array-push 10.0 array-push 1 3 mat-from-array 0.0 1.0 mat-clip");
+    run("array-new array-new -5.0 array-push 0.5 array-push 10.0 array-push array-push array->mat 0.0 1.0 mat-clip");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -617,7 +617,7 @@ TEST_F(MatrixPrimitivesTest, MatClip) {
 }
 
 TEST_F(MatrixPrimitivesTest, MatClipLoGtHi) {
-    run("array-new 1.0 array-push 1 1 mat-from-array 5.0 1.0 mat-clip");
+    run("array-new array-new 1.0 array-push array-push array->mat 5.0 1.0 mat-clip");
     // lo > hi → error, matrix consumed, stack empty
     EXPECT_EQ(ctx().data_stack().size(), 0u);
 }
@@ -643,7 +643,7 @@ TEST_F(MatrixPrimitivesTest, ScalarTanhNonZero) {
 
 TEST_F(MatrixPrimitivesTest, MatSoftmax) {
     // Single column [1; 2; 3] → softmax
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 3 1 mat-from-array mat-softmax");
+    run("array-new array-new 1.0 array-push array-push array-new 2.0 array-push array-push array-new 3.0 array-push array-push array->mat mat-softmax");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -660,7 +660,7 @@ TEST_F(MatrixPrimitivesTest, MatSoftmax) {
 
 TEST_F(MatrixPrimitivesTest, MatSoftmaxNumericalStability) {
     // Large values shouldn't overflow
-    run("array-new 1000.0 array-push 1001.0 array-push 2 1 mat-from-array mat-softmax");
+    run("array-new array-new 1000.0 array-push array-push array-new 1001.0 array-push array-push array->mat mat-softmax");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -674,8 +674,8 @@ TEST_F(MatrixPrimitivesTest, MatSoftmaxNumericalStability) {
 TEST_F(MatrixPrimitivesTest, MatCrossEntropy) {
     // Perfect prediction: pred = actual = [1 0; 0 1]
     // Cross-entropy should be very close to 0
-    run("array-new 0.999 array-push 0.001 array-push 0.001 array-push 0.999 array-push 2 2 mat-from-array");
-    run("array-new 1.0 array-push 0.0 array-push 0.0 array-push 1.0 array-push 2 2 mat-from-array");
+    run("array-new array-new 0.999 array-push 0.001 array-push array-push array-new 0.001 array-push 0.999 array-push array-push array->mat");
+    run("array-new array-new 1.0 array-push 0.0 array-push array-push array-new 0.0 array-push 1.0 array-push array-push array->mat");
     run("mat-cross-entropy");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
@@ -690,7 +690,7 @@ TEST_F(MatrixPrimitivesTest, MatCrossEntropyDimensionMismatch) {
 TEST_F(MatrixPrimitivesTest, MatApplyDouble) {
     // Apply a word that doubles each element
     run(": double-it 2.0 * ;");
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push 1 3 mat-from-array ' double-it mat-apply");
+    run("array-new array-new 1.0 array-push 2.0 array-push 3.0 array-push array-push array->mat ' double-it mat-apply");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -702,7 +702,7 @@ TEST_F(MatrixPrimitivesTest, MatApplyDouble) {
 
 TEST_F(MatrixPrimitivesTest, MatApplyNative) {
     // Apply a native primitive (negate)
-    run("array-new 1.0 array-push -2.0 array-push 3.0 array-push 1 3 mat-from-array ' negate mat-apply");
+    run("array-new array-new 1.0 array-push -2.0 array-push 3.0 array-push array-push array->mat ' negate mat-apply");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* mat = opt->as_matrix();
@@ -742,37 +742,52 @@ TEST_F(MatrixPrimitivesTest, MatRandUsesSeededPRNG) {
 // --- mat->array ---
 
 TEST_F(MatrixPrimitivesTest, MatToArray) {
-    // 2x3 matrix with known values
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push "
-        "4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array mat->array");
+    // 2x3 matrix → nested array [[1,2,3],[4,5,6]]
+    run("array-new array-new 1.0 array-push 2.0 array-push 3.0 array-push array-push "
+        "array-new 4.0 array-push 5.0 array-push 6.0 array-push array-push array->mat mat->array");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_EQ(opt->type, Value::Type::Array);
-    auto* arr = opt->as_array();
-    EXPECT_EQ(arr->length(), 6u);
-    // Row-major: [1,2,3, 4,5,6]
+    auto* outer = opt->as_array();
+    EXPECT_EQ(outer->length(), 2u);  // 2 rows
+    // Row 0: [1.0, 2.0, 3.0]
+    Value row0v;
+    outer->get(0, row0v);
+    EXPECT_EQ(row0v.type, Value::Type::Array);
+    auto* row0 = row0v.as_array();
+    EXPECT_EQ(row0->length(), 3u);
     Value v;
-    arr->get(0, v); EXPECT_DOUBLE_EQ(v.as_float, 1.0);
-    arr->get(1, v); EXPECT_DOUBLE_EQ(v.as_float, 2.0);
-    arr->get(2, v); EXPECT_DOUBLE_EQ(v.as_float, 3.0);
-    arr->get(3, v); EXPECT_DOUBLE_EQ(v.as_float, 4.0);
-    arr->get(4, v); EXPECT_DOUBLE_EQ(v.as_float, 5.0);
-    arr->get(5, v); EXPECT_DOUBLE_EQ(v.as_float, 6.0);
-    arr->release();
+    row0->get(0, v); EXPECT_DOUBLE_EQ(v.as_float, 1.0);
+    row0->get(1, v); EXPECT_DOUBLE_EQ(v.as_float, 2.0);
+    row0->get(2, v); EXPECT_DOUBLE_EQ(v.as_float, 3.0);
+    // Row 1: [4.0, 5.0, 6.0]
+    Value row1v;
+    outer->get(1, row1v);
+    EXPECT_EQ(row1v.type, Value::Type::Array);
+    auto* row1 = row1v.as_array();
+    EXPECT_EQ(row1->length(), 3u);
+    row1->get(0, v); EXPECT_DOUBLE_EQ(v.as_float, 4.0);
+    row1->get(1, v); EXPECT_DOUBLE_EQ(v.as_float, 5.0);
+    row1->get(2, v); EXPECT_DOUBLE_EQ(v.as_float, 6.0);
+    row1->release();
+    row0->release();
+    outer->release();
 }
 
-TEST_F(MatrixPrimitivesTest, MatToArrayRoundTrip) {
-    run("array-new 1.0 array-push 2.0 array-push 3.0 array-push "
-        "4.0 array-push 5.0 array-push 6.0 array-push 2 3 mat-from-array "
-        "mat->array 2 3 mat-from-array");
+TEST_F(MatrixPrimitivesTest, MatToArray1x1) {
+    // 1x1 matrix → [[value]]
+    run("array-new array-new 42.0 array-push array-push array->mat mat->array");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
-    auto* mat = opt->as_matrix();
-    EXPECT_EQ(mat->rows(), 2);
-    EXPECT_EQ(mat->cols(), 3);
-    EXPECT_DOUBLE_EQ(mat->get(0, 0), 1.0);
-    EXPECT_DOUBLE_EQ(mat->get(0, 2), 3.0);
-    EXPECT_DOUBLE_EQ(mat->get(1, 0), 4.0);
-    EXPECT_DOUBLE_EQ(mat->get(1, 2), 6.0);
-    mat->release();
+    auto* outer = opt->as_array();
+    EXPECT_EQ(outer->length(), 1u);
+    Value row0v;
+    outer->get(0, row0v);
+    auto* row0 = row0v.as_array();
+    EXPECT_EQ(row0->length(), 1u);
+    Value v;
+    row0->get(0, v);
+    EXPECT_DOUBLE_EQ(v.as_float, 42.0);
+    row0->release();
+    outer->release();
 }

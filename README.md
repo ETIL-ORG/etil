@@ -116,7 +116,7 @@ copy overhead.
 
 | Category | Words |
 |----------|-------|
-| Constructors | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` `mat-randn` |
+| Constructors | `mat-new` `mat-eye` `array->mat` `mat-diag` `mat-rand` `mat-randn` |
 | Accessors | `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` |
 | Arithmetic | `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-hadamard` `mat-add-col` `mat-clip` |
 | Activations | `mat-relu` `mat-sigmoid` `mat-tanh` |
@@ -384,7 +384,7 @@ LITE
 | ByteArray | `bytes-new` `bytes-get` `bytes-set` `bytes-length` `bytes-resize` `bytes->string` `string->bytes` |
 | Map | `map-new` `map-set` `map-get` `map-remove` `map-length` `map-keys` `map-values` `map-has?` |
 | JSON | `json-parse` `json-dump` `json-pretty` `json-get` `json-length` `json-type` `json-keys` `json->map` `json->array` `map->json` `array->json` `json->value` |
-| Matrix | `mat-new` `mat-eye` `mat-from-array` `mat-diag` `mat-rand` `mat-randn` `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-hadamard` `mat-add-col` `mat-clip` `mat-relu` `mat-sigmoid` `mat-tanh` `mat-relu'` `mat-sigmoid'` `mat-tanh'` `mat-sum` `mat-col-sum` `mat-mean` `mat-softmax` `mat-cross-entropy` `mat-apply` `mat-solve` `mat-inv` `mat-det` `mat-eigen` `mat-svd` `mat-lstsq` `mat-norm` `mat-trace` `mat.` `mat->json` `json->mat` `mat->array` |
+| Matrix | `mat-new` `mat-eye` `array->mat` `mat-diag` `mat-rand` `mat-randn` `mat-get` `mat-set` `mat-rows` `mat-cols` `mat-row` `mat-col` `mat*` `mat+` `mat-` `mat-scale` `mat-transpose` `mat-hadamard` `mat-add-col` `mat-clip` `mat-relu` `mat-sigmoid` `mat-tanh` `mat-relu'` `mat-sigmoid'` `mat-tanh'` `mat-sum` `mat-col-sum` `mat-mean` `mat-softmax` `mat-cross-entropy` `mat-apply` `mat-solve` `mat-inv` `mat-det` `mat-eigen` `mat-svd` `mat-lstsq` `mat-norm` `mat-trace` `mat.` `mat->json` `json->mat` `mat->array` |
 | LVFS | `cwd` `cd` `ls` `ll` `lr` `cat` |
 | System | `sys-semver` `sys-timestamp` `sys-datafields` `sys-notification` `user-notification` `abort` |
 | Time | `time-us` `us->iso` `us->iso-us` `us->jd` `jd->us` `us->mjd` `mjd->us` `sleep` |
@@ -845,7 +845,7 @@ Three TIL-level convenience words (`mat-xavier`, `mat-he`, `mat-mse`) are define
 
 **Words:** `json->mat` `mat+` `mat-` `mat*` `mat-add-col` `mat-apply` `mat-clip`
 `mat-col` `mat-col-sum` `mat-cols` `mat-cross-entropy` `mat-det` `mat-diag` `mat-eigen`
-`mat-eye` `mat-from-array` `mat-hadamard` `mat-he` `mat-inv` `mat-lstsq` `mat-mean`
+`mat-eye` `array->mat` `mat-hadamard` `mat-he` `mat-inv` `mat-lstsq` `mat-mean`
 `mat-mse` `mat-new` `mat-norm` `mat-rand` `mat-randn` `mat-relu` `mat-relu'` `mat-row`
 `mat-rows` `mat-scale` `mat-sigmoid` `mat-sigmoid'` `mat-softmax` `mat-solve` `mat-sum`
 `mat-svd` `mat-tanh` `mat-tanh'` `mat-trace` `mat-transpose` `mat-xavier` `mat.`
@@ -857,7 +857,7 @@ Three TIL-level convenience words (`mat-xavier`, `mat-he`, `mat-mse`) are define
 |------|-------------|-------------|---------|
 | `mat-new` | `( rows cols -- mat )` | Zero-filled matrix | `3 3 mat-new` |
 | `mat-eye` | `( n -- mat )` | Identity matrix | `3 mat-eye mat.` |
-| `mat-from-array` | `( array rows cols -- mat )` | From flat array (row-major) | `array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array` |
+| `array->mat` | `( nested-array -- mat )` | From nested 2D array | `array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat` |
 | `mat-diag` | `( array -- mat )` | Diagonal matrix | `array-new 1.0 array-push 2.0 array-push 3.0 array-push mat-diag` |
 | `mat-rand` | `( rows cols -- mat )` | Uniform random [0,1) | `3 3 mat-rand` |
 | `mat-randn` | `( rows cols -- mat )` | Standard normal random | `100 1 mat-randn` |
@@ -941,7 +941,7 @@ the **pre-activation** input, not the activated output.
 | Word | Stack Effect | Description |
 |------|-------------|-------------|
 | `mat.` | `( mat -- )` | Pretty-print (consumes) |
-| `mat->array` | `( mat -- array )` | To flat array (row-major) |
+| `mat->array` | `( mat -- array )` | To nested 2D array (array of row arrays) |
 | `mat->json` | `( mat -- json )` | To JSON `{rows, cols, data}` |
 | `json->mat` | `( json -- mat )` | From JSON `{rows, cols, data}` |
 
