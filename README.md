@@ -19,12 +19,15 @@ Hello, World!
   0.000   2.000   0.000
   0.000   0.000   2.000
 ```
+---
 
 ## Quick Start
 
 See the [BUILD_INSTRUCTIONS.md](./BUILD_INSTRUCTIONS.md) for compilation instructions.
 
 ## ETIL TUI: _Text User Interface_ Network Client
+
+### See the TUI [README.md](https://github.com/krystalmonolith/etil-tui/README.md) in the ETIL TUI Project for more detail.
 
 Connect the [TUI Client](https://github.com/krystalmonolith/etil-tui) to the
 ETIL MCP server directly for a richer experience:
@@ -34,7 +37,32 @@ ETIL MCP server directly for a richer experience:
 - Script Execution
 - Session Logging and Screen Shots.
 
----
+### Interactive REPL: Simple Read-Evaluate-Process-Loop for the console.
+
+- Note: Further development on the REPL is not planned.
+- Use the TUI or another MCP client as the primary ETIL interface.
+- The REPL only works with a subset of the words, and is primarily a comparative testing tool. 
+
+```bash
+./build/bin/etil_repl            # interactive mode
+echo '42 . cr' | 
+
+./build-debug/bin/etil_repl -q   # pipe-friendly quiet mode
+```
+
+- Line editing (arrow keys, Home/End, Ctrl-A/E/K)
+- Persistent history (`~/.etil/repl/history.txt`),
+- Tab-completion of all dictionary words and meta commands (via replxx).
+- Color themes (`--color=auto|always|never`), 
+- `--quiet` pipe-friendly mode.
+- REPL meta commands: 
+  - `/help [word]`, 
+  - `/quit`, 
+  - `/clear`, 
+  - `/words`, 
+  - `/history`, 
+  - `/dark`, 
+  - `/light`
 
 ## ETIL Features
 
@@ -376,37 +404,6 @@ LITE
 | Parsing | `."` `s"` `s\|` `.\|` `j\|` `:` `;` |
 | Self-hosted | `variable` `constant` `forget` `forget-all` `meta!` `meta@` `meta-del` `meta-keys` `impl-meta!` `impl-meta@` `time-iso` `time-iso-us` `time-jd` `time-mjd` `1+` `1-` `-rot` |
 | Control (compile-only) | `if` `else` `then` `do` `loop` `+loop` `i` `j` `begin` `until` `while` `repeat` `again` `>r` `r>` `r@` `leave` `exit` `recurse` `does>` `[']` |
-
----
-
-## Building
-
-See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for prerequisites, build options,
-Docker setup, and troubleshooting.
-
----
-
-## Running
-
-### Interactive REPL
-
-```bash
-./build-debug/bin/etil_repl            # interactive mode
-echo '42 . cr' | ./build-debug/bin/etil_repl -q   # pipe-friendly quiet mode
-```
-
-Line editing (arrow keys, Home/End, Ctrl-A/E/K), persistent history (`~/.etil/repl/history.txt`),
-tab-completion of all dictionary words and meta commands (via replxx). Color themes
-(`--color=auto|always|never`), `--quiet` pipe-friendly mode.
-
-REPL meta commands: `/help [word]`, `/quit`, `/clear`, `/words`, `/history`, `/dark`, `/light`.
-
-### Running Tests
-
-```bash
-ctest --test-dir build-debug --output-on-failure    # 1,272 tests (debug)
-ctest --test-dir build --output-on-failure           # 1,272 tests (release)
-```
 
 ---
 
