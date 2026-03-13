@@ -455,6 +455,32 @@ are not yet implemented:
 
 ---
 
+## Appendix Index
+
+| Appendix | Topic | Words |
+|----------|-------|------:|
+| [A](#appendix-a-integers-and-floats) | Integers and Floats | 61 |
+| [B](#appendix-b-strings) | Strings | 20 |
+| [C](#appendix-c-arrays) | Arrays | 14 |
+| [D](#appendix-d-maps) | Maps | 8 |
+| [E](#appendix-e-json) | JSON | 13 |
+| [F](#appendix-f-matrices) | Matrices | 45 |
+| [G](#appendix-g-observables) | Observables | 21 |
+| [H](#appendix-h-stack-manipulation) | Stack Manipulation | 12 |
+| [I](#appendix-i-io-and-printing) | I/O and Printing | 8 |
+| [J](#appendix-j-variables-constants-and-defining-words) | Variables, Constants, and Defining Words | 11 |
+| [K](#appendix-k-control-flow) | Control Flow | 20 |
+| [L](#appendix-l-execution-tokens-and-evaluation) | Execution Tokens and Evaluation | 6 |
+| [M](#appendix-m-dictionary-operations) | Dictionary Operations | 12 |
+| [N](#appendix-n-metadata) | Metadata | 12 |
+| [O](#appendix-o-byte-arrays) | Byte Arrays | 7 |
+| [P](#appendix-p-file-io) | File I/O | 26 |
+| [Q](#appendix-q-lvfs-virtual-filesystem) | LVFS (Virtual Filesystem) | 6 |
+| [R](#appendix-r-http-client-and-mongodb) | HTTP Client and MongoDB | 7 |
+| [S](#appendix-s-system-time-and-debug) | System, Time, and Debug | 21 |
+
+---
+
 ## Appendix A: Integers and Floats
 
 ETIL has two numeric types: 64-bit signed integers (`int64_t`) and 64-bit IEEE 754
@@ -1251,6 +1277,1063 @@ pipelines. Each operator returns an observable, so they compose naturally:
 - **Memory efficient**: Values flow through one at a time. A `filter` on a
   million-element range never materializes the full sequence — each value is tested
   and either passed downstream or discarded immediately.
+
+---
+
+## Appendix H: Stack Manipulation
+
+ETIL's data stack is the primary mechanism for passing values between words. These
+12 words rearrange stack values without modifying them. All work in both interpret and
+compile mode.
+
+**Words:** `-rot` `?dup` `depth` `drop` `dup` `nip` `over` `pick` `roll` `rot` `swap`
+`tuck`
+
+### Basic Operations
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `dup` | `( x -- x x )` | Duplicate TOS | `5 dup .s` → `5 5` |
+| `drop` | `( x -- )` | Remove TOS | `1 2 drop .` → `1` |
+| `swap` | `( a b -- b a )` | Swap top two | `1 2 swap .s` → `2 1` |
+| `over` | `( a b -- a b a )` | Copy second to top | `1 2 over .s` → `1 2 1` |
+
+### Rearranging
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `rot` | `( a b c -- b c a )` | Rotate third to top | `1 2 3 rot .s` → `2 3 1` |
+| `-rot` | `( a b c -- c a b )` | Reverse rotate | `1 2 3 -rot .s` → `3 1 2` |
+| `nip` | `( a b -- b )` | Drop second item | `1 2 nip .` → `2` |
+| `tuck` | `( a b -- b a b )` | Copy TOS under second | `1 2 tuck .s` → `2 1 2` |
+
+### Indexed and Conditional
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `pick` | `( xn..x0 n -- xn..x0 xn )` | Copy Nth item (0-based) | `10 20 30 2 pick .` → `10` |
+| `roll` | `( xn..x0 n -- xn-1..x0 xn )` | Move Nth item to top | `10 20 30 2 roll .` → `10` |
+| `depth` | `( -- n )` | Current stack depth | `1 2 3 depth .` → `3` |
+| `?dup` | `( x -- x x \| 0 )` | Dup if non-zero | `5 ?dup .s` → `5 5`; `0 ?dup .s` → `0` |
+
+---
+
+## Appendix I: I/O and Printing
+
+Words for outputting text and characters. `."` and `.|` are parsing words that read a
+string literal from the input stream and print it immediately. Both work in interpret
+mode (at the command line) and compile mode (inside colon definitions).
+
+**Words:** `.` `."` `.\|` `cr` `emit` `space` `spaces` `words`
+
+### Reference
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `.` | `( x -- )` | Print and consume TOS | `42 .` prints `42` |
+| `cr` | `( -- )` | Print newline | `42 . cr` prints `42` + newline |
+| `emit` | `( n -- )` | Print character by ASCII code | `65 emit` prints `A` |
+| `space` | `( -- )` | Print one space | `1 . space 2 .` prints `1 2` |
+| `spaces` | `( n -- )` | Print n spaces | `3 spaces` prints `   ` |
+| `."` | `( -- )` | Print string literal (parse to `"`) | `." hello" cr` prints `hello` |
+| `.\|` | `( -- )` | Print string literal with escapes | `.\| line1\nline2\|` prints two lines |
+| `words` | `( -- )` | List all dictionary words | `words` |
+
+### Using `."` in Compiled Words
+
+`."` and `.|` compile seamlessly into colon definitions — the string is embedded in
+the bytecode and printed each time the word executes:
+
+```
+> : greet ." Hello, World!" cr ;
+> greet
+Hello, World!
+> : show-pair  ( a b -- )  ." (" swap . ." , " . ." )" cr ;
+> 3 7 show-pair
+(3, 7)
+```
+
+### Building Characters with `emit`
+
+```
+> : star 42 emit ;            # ASCII 42 = '*'
+> : stars  ( n -- )  0 do star loop cr ;
+> 5 stars
+*****
+> : box  ( w h -- )
+    0 do dup stars loop drop ;
+> 4 3 box
+****
+****
+****
+```
+
+---
+
+## Appendix J: Variables, Constants, and Defining Words
+
+ETIL supports user-defined data storage and word creation. `:` and `;` create compiled
+word definitions (colon definitions). `create` and `does>` build custom defining words
+that manufacture new words with shared behavior and per-word data.
+
+`variable` and `constant` are self-hosted — defined in `data/builtins.til` using
+`create`, `does>`, and `allot`.
+
+**Words:** `!` `,` `:` `;` `@` `allot` `constant` `create` `does>` `immediate`
+`variable`
+
+### Colon Definitions
+
+| Word | Mode | Description |
+|------|------|-------------|
+| `:` | interpret-only | Begin colon definition. Reads the word name from input |
+| `;` | **compile-only** | End colon definition. Registers the new word in the dictionary |
+
+```
+> : square  ( n -- n*n )  dup * ;
+> 7 square .
+49
+> : cube  ( n -- n*n*n )  dup dup * * ;
+> 3 cube .
+27
+> : hypotenuse  ( a b -- c )  swap square swap square + int->float sqrt ;
+> 3 4 hypotenuse .
+5
+```
+
+### Variables and Constants
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `variable` | `( -- )` | Define a variable (init to 0) | `variable counter` |
+| `constant` | `( x -- )` | Define a named constant | `42 constant answer` |
+| `@` | `( dataref -- x )` | Fetch value from variable | `counter @` → `0` |
+| `!` | `( x dataref -- )` | Store value in variable | `5 counter !` |
+
+```
+> variable score
+> 100 score !
+> score @ .
+100
+> score @ 10 + score !    # increment by 10
+> score @ .
+110
+> 3.14159 constant pi-approx
+> pi-approx .
+3.14159
+```
+
+### Low-Level Defining Words
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `create` | `( -- )` | Define a word with a data field (reads name from input) |
+| `,` | `( x -- )` | Append value to last created word's data field |
+| `allot` | `( n -- )` | Reserve n cells in last created word |
+| `does>` | `( -- )` | Set runtime behavior for `create`d words (**compile-only**) |
+| `immediate` | `( -- )` | Mark last defined word as immediate (runs during compilation) |
+
+`create` and `does>` together build word-factories. Everything before `does>` runs
+once at definition time; everything after `does>` runs each time the created word
+executes, with the data field reference pushed onto the stack:
+
+```
+> # A constant is just create + comma + does> + fetch:
+> : my-constant  create , does> @ ;
+> 99 my-constant bottles
+> bottles .
+99
+
+> # A variable is create + allot + does> (push the dataref):
+> : my-variable  create 0 , does> ;
+> my-variable x
+> 42 x !
+> x @ .
+42
+```
+
+---
+
+## Appendix K: Control Flow
+
+All control flow words are **compile-only** — they can only be used inside colon
+definitions (`: name ... ;`). Attempting to use them at the top level produces an error.
+
+ETIL requires **Boolean** values for conditional tests (`if`, `while`, `until`).
+Use comparison words (`=`, `<`, `0=`, etc.) or `bool` to produce Booleans from
+integers.
+
+**Words:** `[']` `again` `begin` `do` `else` `exit` `i` `if` `j` `leave` `loop`
+`+loop` `r>` `r@` `recurse` `repeat` `then` `until` `while` `>r`
+
+### Word Reference
+
+All words below are **compile-only** unless noted.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `if` | `( bool -- )` | Conditional branch — requires Boolean on TOS |
+| `else` | `( -- )` | Alternative branch |
+| `then` | `( -- )` | End conditional |
+| `do` | `( limit start -- )` | Begin counted loop |
+| `loop` | `( -- )` | Increment index by 1 and loop |
+| `+loop` | `( n -- )` | Add n to index and loop |
+| `i` | `( -- n )` | Push current loop index |
+| `j` | `( -- n )` | Push outer loop index |
+| `begin` | `( -- )` | Begin indefinite loop |
+| `until` | `( bool -- )` | Loop back to `begin` unless true |
+| `while` | `( bool -- )` | Continue loop if true, else jump past `repeat` |
+| `repeat` | `( -- )` | Loop back to `begin` (end of `begin`/`while` loop) |
+| `again` | `( -- )` | Unconditional loop back to `begin` |
+| `>r` | `( x -- ) R:( -- x )` | Move value to return stack |
+| `r>` | `( -- x ) R:( x -- )` | Move value from return stack |
+| `r@` | `( -- x ) R:( x -- x )` | Copy top of return stack |
+| `leave` | `( -- )` | Exit `do` loop immediately |
+| `exit` | `( -- )` | Return from current word immediately |
+| `recurse` | `( -- )` | Call current word recursively |
+| `[']` | `( -- xt )` | Compile-time tick — push xt of next word at runtime |
+
+### Conditionals: `if` / `else` / `then`
+
+`if` pops a Boolean from the stack. If `true`, the code between `if` and `else` (or
+`then`) executes. If `false`, the `else` branch executes (or nothing if no `else`).
+
+```
+> # Simple if/then (no else):
+> : check-positive  ( n -- )
+    0> if ." positive" cr then ;
+> 5 check-positive
+positive
+> -3 check-positive
+>
+```
+
+```
+> # if/else/then:
+> : abs-value  ( n -- |n| )
+    dup 0< if negate then ;
+> -42 abs-value .
+42
+> 7 abs-value .
+7
+```
+
+```
+> # Nested conditionals:
+> : classify  ( n -- )
+    dup 0> if
+      drop ." positive" cr
+    else
+      dup 0= if
+        drop ." zero" cr
+      else
+        drop ." negative" cr
+      then
+    then ;
+> 5 classify
+positive
+> 0 classify
+zero
+> -3 classify
+negative
+```
+
+```
+> # Fizzbuzz:
+> : fizzbuzz  ( n -- )
+    dup 15 mod 0= if drop ." FizzBuzz" else
+    dup  3 mod 0= if drop ." Fizz" else
+    dup  5 mod 0= if drop ." Buzz" else
+    .
+    then then then ;
+> : run-fizzbuzz  16 1 do i fizzbuzz space loop cr ;
+> run-fizzbuzz
+1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz
+```
+
+### Counted Loops: `do` / `loop` / `+loop` / `i` / `j`
+
+`do` pops a limit and start value: `( limit start -- )`. The loop body executes
+with the index going from `start` up to (but not including) `limit`. Inside the loop,
+`i` pushes the current index and `j` pushes the outer loop's index.
+
+```
+> # Count 0 to 9:
+> : count-up  10 0 do i . space loop cr ;
+> count-up
+0 1 2 3 4 5 6 7 8 9
+
+> # Sum 1 to 100:
+> : gauss  0  101 1 do i + loop ;
+> gauss .
+5050
+```
+
+`+loop` adds a custom increment instead of 1:
+
+```
+> # Count by twos:
+> : evens  10 0 do i . space 2 +loop cr ;
+> evens
+0 2 4 6 8
+
+> # Count backwards:
+> : countdown  0 10 do i . space -1 +loop cr ;
+> countdown
+10 9 8 7 6 5 4 3 2 1 0
+```
+
+Nested loops use `j` for the outer index:
+
+```
+> : times-table  ( n -- )
+    dup 1+ 1 do
+      dup 1+ 1 do
+        i j * 4 spaces swap .
+      loop cr
+    loop drop ;
+> 4 times-table
+   1   2   3   4
+   2   4   6   8
+   3   6   9  12
+   4   8  12  16
+```
+
+### Indefinite Loops: `begin` / `until`
+
+`begin ... until` loops back to `begin` when `until` pops `false`. When it pops
+`true`, the loop exits.
+
+```
+> # Collatz sequence:
+> : collatz  ( n -- )
+    begin
+      dup . space
+      dup 1 = not
+    while
+      dup 2 mod 0= if 2 / else 3 * 1+ then
+    repeat drop cr ;
+> 6 collatz
+6 3 10 5 16 8 4 2 1
+```
+
+```
+> # Count down with begin/until:
+> : count-down  ( n -- )
+    begin dup . space 1- dup 0= until drop cr ;
+> 5 count-down
+5 4 3 2 1
+```
+
+### Indefinite Loops: `begin` / `while` / `repeat`
+
+`begin ... while ... repeat` tests the condition at the top of the loop.
+`while` pops a Boolean — if `true`, the body between `while` and `repeat` executes
+and loops back to `begin`. If `false`, the loop exits past `repeat`.
+
+```
+> # Process while positive:
+> : halve-until-one  ( n -- )
+    begin dup 1 > while
+      dup . space
+      2 /
+    repeat drop cr ;
+> 64 halve-until-one
+64 32 16 8 4 2
+```
+
+```
+> # GCD (Euclid's algorithm):
+> : gcd  ( a b -- gcd )
+    begin dup 0 <> while
+      swap over mod
+    repeat drop ;
+> 48 18 gcd .
+6
+> 100 75 gcd .
+25
+```
+
+### Infinite Loops: `begin` / `again` with `exit`
+
+`begin ... again` loops unconditionally. Use `exit` (return from word) or `leave`
+(exit enclosing `do` loop) to break out.
+
+```
+> # Find first power of 2 exceeding n:
+> : next-pow2  ( n -- 2^k )
+    1 begin
+      dup rot dup rot > if nip exit then
+      swap dup +
+    again ;
+> 100 next-pow2 .
+128
+> 1000 next-pow2 .
+1024
+```
+
+### Return Stack: `>r` / `r>` / `r@`
+
+The return stack temporarily saves values across computations. `>r` moves TOS to the
+return stack; `r>` moves it back; `r@` copies without removing. Values pushed with
+`>r` **must** be popped with `r>` before the word returns.
+
+```
+> # Save a value across a computation:
+> : array-sum  ( array -- n )
+    0 >r                          # running sum on return stack
+    dup array-length drop 0 do
+      dup i array-get r> + >r     # add element to sum
+    loop
+    drop r> ;                     # retrieve sum
+> array-new 10 array-push 20 array-push 30 array-push array-sum .
+60
+```
+
+```
+> # Use r@ to read without consuming:
+> : repeat-char  ( char n -- )
+    >r begin r@ 0> while
+      over emit r> 1- >r
+    repeat r> drop drop cr ;
+> 42 5 repeat-char
+*****
+```
+
+### `leave` — Exit a `do` Loop Early
+
+`leave` immediately terminates the innermost `do` loop, jumping past `loop`/`+loop`:
+
+```
+> # Find first even number in a range:
+> : first-even  ( start end -- n )
+    swap do
+      i 2 mod 0= if i leave then
+    loop ;
+> 1 20 first-even .
+2
+> 7 20 first-even .
+8
+```
+
+### `exit` — Return from a Word Early
+
+`exit` returns from the current word immediately, like `return` in C:
+
+```
+> : classify-sign  ( n -- str )
+    dup 0> if drop s" positive" exit then
+    dup 0< if drop s" negative" exit then
+    drop s" zero" ;
+> 5 classify-sign type cr
+positive
+> -3 classify-sign type cr
+negative
+> 0 classify-sign type cr
+zero
+```
+
+### `recurse` — Self-Referencing Definitions
+
+`recurse` calls the word currently being defined:
+
+```
+> : factorial  ( n -- n! )
+    dup 1 <= if drop 1 exit then
+    dup 1- recurse * ;
+> 5 factorial .
+120
+> 10 factorial .
+3628800
+```
+
+```
+> : fib  ( n -- fib(n) )
+    dup 2 < if exit then
+    dup 1- recurse swap 2 - recurse + ;
+> 10 fib .
+55
+```
+
+### `[']` — Compile-Time Tick
+
+`[']` is the compile-mode counterpart of `'` (tick). It reads a word name at compile
+time and embeds the execution token in the bytecode so it is pushed at runtime:
+
+```
+> : double dup + ;
+> : apply-double  ['] double execute ;
+> 21 apply-double .
+42
+```
+
+This is equivalent to writing `' double` at runtime, but `[']` resolves the word at
+compile time, avoiding the dictionary lookup at runtime.
+
+---
+
+## Appendix L: Execution Tokens and Evaluation
+
+Execution tokens (XTs) are first-class references to word implementations. They enable
+higher-order programming: passing words as arguments to other words, storing them in
+data structures, and executing them dynamically. The `evaluate` word interprets a
+string as TIL code at runtime.
+
+**Words:** `'` `>name` `evaluate` `execute` `xt-body` `xt?`
+
+### Getting and Using Execution Tokens
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `'` | `( -- xt )` | Parse next word, push its execution token |
+| `execute` | `( xt -- )` | Pop xt and execute the referenced word |
+| `xt?` | `( val -- bool )` | Test if value is an execution token |
+| `>name` | `( xt -- str )` | Extract the word name as a string |
+| `xt-body` | `( xt -- dataref )` | Get data field reference from a `create`d word's xt |
+
+### Finding and Executing XTs
+
+`'` (tick) reads the next word from the input and pushes its execution token onto the
+stack. `execute` pops the xt and runs the word:
+
+```
+> : double dup + ;
+> ' double          # push xt for "double"
+> 21 swap execute . # execute it
+42
+> ' double xt? .
+true
+> 42 xt? .
+false
+> ' double >name type cr
+double
+```
+
+### XTs as Function Arguments
+
+XTs are the mechanism behind all of ETIL's higher-order words — `array-map`,
+`array-filter`, `array-reduce`, `array-each`, `obs-map`, `obs-filter`, `obs-reduce`,
+`obs-subscribe`, and `mat-apply`:
+
+```
+> : square dup * ;
+> : even? 2 mod 0= ;
+> : add + ;
+
+> # Pass square to array-map:
+> array-new 1 array-push 2 array-push 3 array-push
+  ' square array-map
+  # Result: [1, 4, 9]
+
+> # Pass even? to array-filter:
+> array-new 1 array-push 2 array-push 3 array-push 4 array-push
+  ' even? array-filter
+  # Result: [2, 4]
+
+> # Pass add to obs-reduce:
+> 1 11 obs-range ' add 0 obs-reduce .
+55
+```
+
+### Building a Dispatch Table
+
+```
+> : do-add + ;
+> : do-sub - ;
+> : do-mul * ;
+> : dispatch  ( a b op-xt -- result )  execute ;
+> 10 3 ' do-add dispatch .
+13
+> 10 3 ' do-sub dispatch .
+7
+> 10 3 ' do-mul dispatch .
+30
+```
+
+### Dynamic Introspection with `xt-body`
+
+For words created with `create`, `xt-body` retrieves the data field reference,
+enabling dynamic access to a word's stored data:
+
+```
+> create magic 42 ,
+> ' magic xt-body @ .
+42
+```
+
+### `evaluate` — Runtime Code Interpretation
+
+`evaluate` pops a string from the stack and interprets it as TIL code. It can define
+new words, execute existing words, and interact with the full interpreter. Call depth
+tracking prevents infinite recursion.
+
+```
+> s" 2 3 + ." evaluate
+5
+```
+
+```
+> # Define and immediately use a word:
+> s| : triple 3 * ; 7 triple .| evaluate
+21
+```
+
+```
+> # Build code dynamically:
+> : make-constant  ( val name-str -- )
+    s" : " swap s+ s"  " s+ swap number->string s+ s"  ; " s+ evaluate ;
+> 42 s" answer" make-constant
+> answer .
+42
+```
+
+```
+> # Evaluate preserves the data stack:
+> 10 20
+> s" + ." evaluate
+30
+```
+
+---
+
+## Appendix M: Dictionary Operations
+
+Words for managing the dictionary — loading files, removing words, creating checkpoints,
+and low-level input parsing. `forget` and `forget-all` are self-hosted (defined in
+`data/builtins.til`); the rest are C++ primitives.
+
+**Words:** `dict-forget` `dict-forget-all` `file-load` `forget` `forget-all` `help`
+`include` `library` `marker` `marker-restore` `string-read-delim` `word-read`
+
+### Loading Files
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `file-load` | `( path-str -- flag )` | Load and interpret a TIL file |
+| `include` | `( -- )` | Load a TIL file (reads path from input) |
+| `library` | `( -- )` | Load from library directory (reads path from input) |
+
+```
+> include data/builtins.til       # load a file by path
+> library examples/evolve.til     # load from /library
+> s" my-script.til" file-load     # programmatic load (returns bool)
+```
+
+### Removing Words
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `forget` | `( -- )` | Remove latest implementation (reads name from input) |
+| `forget-all` | `( -- )` | Remove all implementations (reads name from input) |
+| `dict-forget` | `( name-str -- flag )` | Stack-based: remove latest impl |
+| `dict-forget-all` | `( name-str -- flag )` | Stack-based: remove all impls |
+
+```
+> : test 42 . cr ;
+> test
+42
+> forget test              # remove the definition
+> : test 99 . cr ;         # redefine
+> test
+99
+```
+
+### Dictionary Checkpoints
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `marker` | `( -- )` | Create a checkpoint (reads name from input) |
+| `marker-restore` | `( name-str -- )` | Restore dictionary to checkpoint |
+
+```
+> marker clean-state
+> : temp1 1 ;
+> : temp2 2 ;
+> clean-state                # executing the marker restores the dictionary
+> temp1                      # error — temp1 no longer exists
+```
+
+### Input Parsing and Help
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `word-read` | `( -- str flag )` | Read next whitespace-delimited token from input |
+| `string-read-delim` | `( char -- str flag )` | Read string between delimiters |
+| `help` | `( -- )` | Show help for a word (reads name from input) |
+
+`word-read` and `string-read-delim` are low-level parsing primitives used by
+self-hosted defining words (e.g., `forget` uses `word-read` to read the word name).
+
+---
+
+## Appendix N: Metadata
+
+ETIL's metadata system attaches key-value pairs to words at two levels:
+**concept-level** (shared across all implementations of a word) and
+**implementation-level** (per-implementation). The help system (`data/help.til`) uses
+metadata extensively to store descriptions, stack effects, categories, and examples.
+
+The `meta!`/`meta@` family are self-hosted aliases (defined in `builtins.til`) for the
+underlying `dict-meta-*`/`impl-meta-*` C++ primitives.
+
+**Words:** `dict-meta-del` `dict-meta-get` `dict-meta-keys` `dict-meta-set`
+`impl-meta!` `impl-meta-get` `impl-meta-set` `impl-meta@` `meta!` `meta-del`
+`meta-keys` `meta@`
+
+### Concept-Level Metadata
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `meta!` | `( word key fmt content -- flag )` | Set metadata |
+| `meta@` | `( word key -- content flag )` | Get metadata |
+| `meta-del` | `( word key -- flag )` | Delete metadata |
+| `meta-keys` | `( word -- array flag )` | List metadata keys |
+
+```
+> # Attach a description to a word:
+> s" square" s" description" s" text" s" Multiply a number by itself" meta! drop
+
+> # Read it back:
+> s" square" s" description" meta@
+  # Stack: "Multiply a number by itself" true
+
+> # List all keys for a word:
+> s" square" meta-keys
+  # Stack: ["description"] true
+```
+
+### Implementation-Level Metadata
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `impl-meta!` | `( word key fmt content -- flag )` | Set impl metadata |
+| `impl-meta@` | `( word key -- content flag )` | Get impl metadata |
+
+Implementation-level metadata is per-implementation, useful when a word has multiple
+implementations and each needs its own source location or notes.
+
+### C++ Primitives (Underlying API)
+
+| Word | Alias for |
+|------|-----------|
+| `dict-meta-set` | `meta!` |
+| `dict-meta-get` | `meta@` |
+| `dict-meta-del` | `meta-del` |
+| `dict-meta-keys` | `meta-keys` |
+| `impl-meta-set` | `impl-meta!` |
+| `impl-meta-get` | `impl-meta@` |
+
+---
+
+## Appendix O: Byte Arrays
+
+Byte arrays are heap-allocated, reference-counted, mutable buffers of raw bytes.
+They are used for binary data, HTTP request/response bodies, and conversions
+to/from strings. Index access is bounds-checked.
+
+**Words:** `bytes->string` `bytes-get` `bytes-length` `bytes-new` `bytes-resize`
+`bytes-set` `string->bytes`
+
+### Reference
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `bytes-new` | `( n -- bytes )` | Create zero-filled byte array | `4 bytes-new` |
+| `bytes-get` | `( bytes idx -- val )` | Get byte at index (0–255) | `buf 0 bytes-get` → `65` |
+| `bytes-set` | `( bytes idx val -- bytes )` | Set byte at index (returns buf) | `buf 0 72 bytes-set` |
+| `bytes-length` | `( bytes -- n )` | Get byte array length | `buf bytes-length` → `4` |
+| `bytes-resize` | `( bytes n -- bytes )` | Resize (zero-fills new bytes) | `buf 8 bytes-resize` |
+| `bytes->string` | `( bytes -- str )` | Convert to UTF-8 string | `buf bytes->string` |
+| `string->bytes` | `( str -- bytes )` | Convert string to bytes | `s" hello" string->bytes` |
+
+### Round-Trip Example
+
+```
+> s" Hello" string->bytes dup bytes-length .
+5
+> dup 0 bytes-get .       # 'H' = 72
+72
+> 0 104 bytes-set         # 'h' = 104
+> bytes->string type cr
+hello
+```
+
+### Use with HTTP
+
+HTTP response bodies are returned as byte arrays. Convert to string for text
+processing:
+
+```
+> s" https://api.example.com/data"
+  map-new s" Accept" s" application/json" map-set
+  http-get           # ( bytes status-code flag )
+  drop drop          # keep just the bytes
+  bytes->string      # convert to string
+  json-parse         # parse as JSON
+```
+
+---
+
+## Appendix P: File I/O
+
+ETIL provides 13 file operations in both asynchronous and synchronous variants (26
+words total). Async words use libuv's thread pool with cooperative await; sync words
+block. All paths are virtual — `/home` is writable (per-session), `/library` is
+read-only (shared).
+
+**Async words:** `append-file` `copy-file` `exists?` `lstat` `mkdir` `mkdir-tmp`
+`read-file` `readdir` `rename-file` `rm` `rmdir` `truncate` `write-file`
+
+**Sync words:** `append-file-sync` `copy-file-sync` `exists-sync` `lstat-sync`
+`mkdir-sync` `mkdir-tmp-sync` `read-file-sync` `readdir-sync` `rename-sync`
+`rm-sync` `rmdir-sync` `truncate-sync` `write-file-sync`
+
+### File Operations
+
+| Operation | Async | Sync | Stack Effect |
+|-----------|-------|------|-------------|
+| Check existence | `exists?` | `exists-sync` | `( path -- flag )` |
+| Read file | `read-file` | `read-file-sync` | `( path -- string? flag )` |
+| Write file | `write-file` | `write-file-sync` | `( string path -- flag )` |
+| Append file | `append-file` | `append-file-sync` | `( string path -- flag )` |
+| Copy file | `copy-file` | `copy-file-sync` | `( src dest -- flag )` |
+| Rename/move | `rename-file` | `rename-sync` | `( old new -- flag )` |
+| File status | `lstat` | `lstat-sync` | `( path -- array? flag )` |
+| List directory | `readdir` | `readdir-sync` | `( path -- array? flag )` |
+| Make directory | `mkdir` | `mkdir-sync` | `( path -- flag )` |
+| Make temp dir | `mkdir-tmp` | `mkdir-tmp-sync` | `( prefix -- string? flag )` |
+| Remove dir | `rmdir` | `rmdir-sync` | `( path -- flag )` |
+| Remove file/tree | `rm` | `rm-sync` | `( path -- flag )` |
+| Truncate | `truncate` | `truncate-sync` | `( path -- flag )` |
+
+### Read and Write Example
+
+```
+> s" Hello, file!" s" /home/test.txt" write-file .
+true
+> s" /home/test.txt" read-file .
+true
+> type cr
+Hello, file!
+```
+
+### File Status
+
+`lstat` returns a 4-element array: `[size, mtime_us, is_dir, is_read_only]`:
+
+```
+> s" /home/test.txt" lstat drop
+> dup 0 array-get .          # size in bytes
+12
+> 1 array-get .              # mtime as microseconds since epoch
+```
+
+### Async vs Sync
+
+Async words use libuv's thread pool and poll with `ctx.tick()`, so they respect
+instruction budgets and execution deadlines. Sync words block the interpreter thread.
+Prefer async words in the MCP server; sync words are fine for startup scripts and
+REPL use.
+
+---
+
+## Appendix Q: LVFS (Virtual Filesystem)
+
+The Little Virtual File System provides shell-like navigation within the sandboxed
+`/home` (writable, per-session) and `/library` (read-only, shared) directories.
+These words are parsing words — they read an optional argument from the input stream
+(except `cat`, which requires one).
+
+**Words:** `cat` `cd` `cwd` `ll` `lr` `ls`
+
+### Reference
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `cwd` | `( -- )` | Print current working directory |
+| `cd` | `( -- )` | Change directory (no arg → `/home`). Accepts absolute or relative paths |
+| `ls` | `( -- )` | List directory contents (no arg → CWD). Directories shown with trailing `/` |
+| `ll` | `( -- )` | Long listing sorted by modification time (newest first) |
+| `lr` | `( -- )` | Recursive long listing with relative paths |
+| `cat` | `( -- )` | Print file contents (requires a path argument) |
+
+```
+> cwd
+/home
+> ls
+scripts/  notes.txt
+> cd scripts
+> cwd
+/home/scripts
+> ll
+  1234  2026-03-12T10:30:00Z  run.til
+> cat run.til
+42 . cr
+> cd /library
+> ls
+examples/  help.til  builtins.til
+> cd
+> cwd
+/home
+```
+
+---
+
+## Appendix R: HTTP Client and MongoDB
+
+### HTTP Client
+
+Outbound HTTP/HTTPS requests with SSRF protection, domain allowlisting, and per-session
+fetch budgets. Requires `ETIL_BUILD_HTTP_CLIENT=ON` at build time. Domains must be in
+`ETIL_HTTP_ALLOWLIST`. SSRF protection blocks loopback, RFC 1918, link-local, and cloud
+metadata IPs. DNS is resolved once and connections are made by IP to prevent DNS
+rebinding attacks.
+
+**Words:** `http-get` `http-post`
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `http-get` | `( url headers -- bytes code flag )` | GET request. Headers is a HeapMap |
+| `http-post` | `( url headers body -- bytes code flag )` | POST request. Body is a HeapByteArray |
+
+```
+> # GET request (map-new for no extra headers):
+> s" https://api.example.com/data" map-new http-get
+  # Stack: bytes 200 true
+  drop drop bytes->string json-parse
+
+> # GET with custom headers:
+> s" https://api.example.com/data"
+  map-new s" Accept" s" application/json" map-set
+  http-get drop drop bytes->string type cr
+
+> # POST with JSON body:
+> s" https://api.example.com/submit"
+  map-new s" Content-Type" s" application/json" map-set
+  s| {"key": "value"} | string->bytes
+  http-post drop drop bytes->string type cr
+```
+
+### MongoDB
+
+All MongoDB words require `mongo_access` permission (per-role RBAC). Filter, document,
+and options parameters accept String, Json, or Map types interchangeably. Requires
+`ETIL_BUILD_MONGODB=ON` at build time.
+
+**Words:** `mongo-count` `mongo-delete` `mongo-find` `mongo-insert` `mongo-update`
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `mongo-find` | `( coll filter opts -- json flag )` | Query documents. Returns results as Json |
+| `mongo-count` | `( coll filter opts -- n flag )` | Count matching documents |
+| `mongo-insert` | `( coll doc -- id flag )` | Insert document, return `_id` |
+| `mongo-update` | `( coll filter update opts -- n flag )` | Update documents, return modified count |
+| `mongo-delete` | `( coll filter opts -- n flag )` | Delete documents, return deleted count |
+
+Options support: `skip`, `limit`, `sort`, `projection`, `hint`, `collation`,
+`max_time_ms`, `batch_size`, `upsert`.
+
+```
+> # Insert a document:
+> s" users" j| {"name": "Alice", "age": 30} | mongo-insert
+  # Stack: "65f..." true
+
+> # Find with options:
+> s" users" j| {"age": {"$gte": 18}} | j| {"limit": 10, "sort": {"name": 1}} |
+  mongo-find drop json-pretty type cr
+
+> # Count:
+> s" users" j| {} | j| {} | mongo-count drop .
+1
+```
+
+---
+
+## Appendix S: System, Time, and Debug
+
+### System Words
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `sys-semver` | `( -- )` | Print project version | `sys-semver` → `v0.9.1` |
+| `sys-timestamp` | `( -- )` | Print build timestamp | `sys-timestamp` → `2026-03-12 ...` |
+| `sys-datafields` | `( -- )` | Print DataFieldRegistry diagnostics | `sys-datafields` |
+| `sys-notification` | `( x -- )` | Queue an MCP notification | `s" hello" sys-notification` |
+| `user-notification` | `( msg user -- flag )` | Send notification to a user's sessions | `s" alert" s" github:123" user-notification` |
+| `abort` | `( flag -- )` | Terminate interpretation | `true abort` (success) |
+
+`abort` has two modes: with `true`, it terminates cleanly (success abort). With
+`false`, it first pops an error message string, then terminates as an error:
+
+```
+> s" something went wrong" false abort
+Error: something went wrong
+```
+
+### Time Words
+
+ETIL represents time as microseconds since the Unix epoch (UTC, `int64_t`) or as
+Julian Date / Modified Julian Date (`double`). All formatting produces UTC timestamps.
+
+**Words:** `jd->us` `mjd->us` `sleep` `time-iso` `time-iso-us` `time-jd` `time-mjd`
+`time-us` `us->iso` `us->iso-us` `us->jd` `us->mjd`
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `time-us` | `( -- n )` | Current UTC as microseconds since epoch | `time-us .` |
+| `time-iso` | `( -- str )` | Current UTC as compact ISO 8601 | `time-iso type` → `20260312T153000Z` |
+| `time-iso-us` | `( -- str )` | Current UTC with microseconds | `time-iso-us type` |
+| `us->iso` | `( n -- str )` | Format microseconds as ISO 8601 | `time-us us->iso type` |
+| `us->iso-us` | `( n -- str )` | Format microseconds with high-res | `time-us us->iso-us type` |
+| `us->jd` | `( n -- f )` | Microseconds to Julian Date | `time-us us->jd .` |
+| `jd->us` | `( f -- n )` | Julian Date to microseconds | `2460000.0 jd->us .` |
+| `us->mjd` | `( n -- f )` | Microseconds to Modified Julian Date | `time-us us->mjd .` |
+| `mjd->us` | `( f -- n )` | Modified Julian Date to microseconds | `60000.0 mjd->us .` |
+| `time-jd` | `( -- f )` | Current UTC as Julian Date | `time-jd .` |
+| `time-mjd` | `( -- f )` | Current UTC as Modified Julian Date | `time-mjd .` |
+| `sleep` | `( n -- )` | Sleep for n microseconds | `1000000 sleep` (1 second) |
+
+```
+> # Elapsed time measurement:
+> time-us
+> 1000000 sleep           # sleep 1 second
+> time-us swap - .        # elapsed microseconds
+1000123                   # approximately 1,000,000 μs
+
+> # Julian Date round-trip:
+> time-us dup us->jd jd->us - .
+0                         # lossless round-trip
+```
+
+### Debug Words
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `dump` | `( x -- x )` | Deep-inspect TOS (non-destructive) | `42 dump` |
+| `see` | `( -- )` | Decompile a word (reads name from input) | `see square` |
+| `.s` | `( -- )` | Display entire stack without modifying it | `1 2 3 .s` → `1 2 3` |
+
+`dump` shows the value's type, contents, and internal details (refcount for heap
+objects, data field for `create`d words). Unlike `.`, it does not consume the value:
+
+```
+> 42 dump
+<Integer: 42>
+> s" hello" dump
+<String: "hello" (len=5, tainted=false, rc=1)>
+> drop drop
+```
+
+`see` decompiles a compiled word, showing the bytecode instructions:
+
+```
+> : double dup + ;
+> see double
+: double
+  0: Call dup
+  1: Call +
+;
+```
 
 ---
 
