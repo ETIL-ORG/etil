@@ -22,30 +22,25 @@ Hello, World!
 
 ## Quick Start
 
-```bash
-# Build
-mkdir build-debug && cd build-debug
-cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ..
-ninja
+See the [BUILD_INSTRUCTIONS.md](./BUILD_INSTRUCTIONS.md) for compilation instructions.
 
-# Run the REPL
-./bin/etil_repl
+## ETIL TUI: _Text User Interface_ Network Client
 
-# Run tests (1,257 tests, all passing)
-ctest --output-on-failure
-```
-
-Or connect the [TUI client](https://github.com/krystalmonolith/etil-tui) to the
-MCP server for a richer experience — triple-window layout, help browser (F1), OAuth login,
-script execution, and session logging.
+Connect the [TUI Client](https://github.com/krystalmonolith/etil-tui) to the
+ETIL MCP server directly for a richer experience:
+- Triple Window Layout, 
+- Help Browser (F1)
+- OAuth Login
+- Script Execution
+- Session Logging and Screen Shots.
 
 ---
 
-## Features
+## ETIL Features
 
 ### Language
 
-- **256 primitive words** across 32 categories — arithmetic, stack, comparison, logic, I/O,
+- **250+ words** across 32 categories — arithmetic, stack, comparison, logic, I/O,
   math, strings, arrays, maps, JSON, file I/O, linear algebra, HTTP, MongoDB, observables, and more
 - **Colon definitions** — `: name ... ;` compiles to bytecode, executed by an inner interpreter
 - **Full control flow** — `if`/`else`/`then`, `do`/`loop`/`+loop`/`i`/`j`/`leave`,
@@ -219,12 +214,12 @@ libuv backend without the event loop overhead.
 Model Context Protocol server for programmatic AI interaction — run ETIL from Claude Code,
 custom agents, or any MCP client.
 
-- **21 tools** — `interpret`, `list_words`, `get_word_info`, `get_stack`, `set_weight`,
+- **22 tools** — `interpret`, `list_words`, `get_word_info`, `get_stack`, `set_weight`,
   `reset`, `get_session_stats`, `write_file`, `list_files`, `read_file`,
-  `list_sessions`, `kick_session`, `manage_allowlist`, plus 8 admin tools for
+  `list_sessions`, `kick_session`, `manage_allowlist`, plus 9 admin tools for
   role/user management (`admin_list_roles`, `admin_get_role`, `admin_set_role`,
   `admin_delete_role`, `admin_list_users`, `admin_set_user_role`,
-  `admin_delete_user`, `admin_reload_config`)
+  `admin_delete_user`, `admin_set_default_role`, `admin_reload_config`)
 - **4 resources** — `etil://dictionary`, `etil://word/{name}`, `etil://stack`,
   `etil://session/stats`
 - **HTTP Streamable Transport** — real-time SSE streaming for notifications during
@@ -245,7 +240,7 @@ OAuth login, script execution (`--exec`/`--execux`), and session logging.
 - **OAuth Device Flow** — GitHub + Google via RFC 8628. Three endpoints: `/auth/device`,
   `/auth/poll`, `/auth/token`. Stateless — provider tokens used once then discarded
 - **API key fallback** — backward-compatible Bearer token auth for simple deployments
-- **Admin tools** — 8 MCP tools for role/user management gated by `role_admin` permission;
+- **Admin tools** — 9 MCP tools for role/user management gated by `role_admin` permission;
   create/update/delete roles and user mappings with atomic file persistence and live reload
 - **Audit logging** — permission-denied events, session lifecycle, logins, user creation
   (backed by MongoDB)
@@ -262,7 +257,7 @@ OAuth login, script execution (`--exec`/`--execux`), and session logging.
 ### Introspection & Help
 
 - **`help <word>`** — description, stack effect, category, and examples for any word
-  (all 256 words documented in `data/help.til`)
+  (all words documented in `data/help.til`)
 - **`dump`** — deep-inspect TOS without consuming it (recursive, with truncation)
 - **`see <word>`** — decompile word definitions showing bytecode, primitives, or handler status
 - **Word metadata** — attach text, markdown, HTML, code, JSON, or JSONL to word concepts
@@ -345,7 +340,7 @@ LITE
 7. **MCP Server** — `etil_mcp` library with JSON-RPC 2.0, HTTP Streamable Transport,
    per-session profiling, dual-mode auth (JWT/API key)
 
-### Implemented Primitives (256 words)
+### Implemented Primitives
 
 | Category | Words |
 |----------|-------|
@@ -355,7 +350,7 @@ LITE
 | Logic | `true` `false` `not` `bool` `and` `or` `xor` `invert` `lshift` `rshift` `lroll` `rroll` |
 | I/O | `.` `.s` `cr` `emit` `space` `spaces` `words` |
 | Memory | `create` `,` `@` `!` `allot` `immediate` |
-| Math | `sqrt` `sin` `cos` `tan` `asin` `acos` `atan` `atan2` `log` `log2` `log10` `exp` `pow` `ceil` `floor` `round` `trunc` `fmin` `fmax` `pi` `f~` `random` `random-seed` `random-range` |
+| Math | `sqrt` `sin` `cos` `tan` `tanh` `asin` `acos` `atan` `atan2` `log` `log2` `log10` `exp` `pow` `ceil` `floor` `round` `trunc` `fmin` `fmax` `pi` `f~` `random` `random-seed` `random-range` |
 | String | `type` `s.` `s+` `s=` `s<>` `slength` `substr` `strim` `sfind` `sreplace` `ssplit` `sjoin` `sregex-find` `sregex-replace` `sregex-search` `sregex-match` `staint` `sprintf` |
 | Array | `array-new` `array-push` `array-pop` `array-get` `array-set` `array-length` `array-shift` `array-unshift` `array-compact` `array-reverse` |
 | ByteArray | `bytes-new` `bytes-get` `bytes-set` `bytes-length` `bytes-resize` `bytes->string` `string->bytes` |
@@ -386,74 +381,8 @@ LITE
 
 ## Building
 
-```bash
-# Debug build (with ASan + UBSan)
-mkdir build-debug && cd build-debug
-cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ..
-ninja
-
-# Release build
-mkdir build && cd build
-cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..
-ninja
-```
-
-### Build Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `ETIL_BUILD_TESTS` | ON | Build unit and integration tests |
-| `ETIL_BUILD_EXAMPLES` | ON | Build REPL, MCP server, benchmarks |
-| `ETIL_BUILD_HTTP_CLIENT` | OFF | HTTP client (`http-get`, `http-post`) — requires OpenSSL |
-| `ETIL_BUILD_JWT` | OFF | JWT authentication with RBAC |
-| `ETIL_BUILD_MONGODB` | OFF | MongoDB integration — requires `ETIL_BUILD_JWT` |
-
-### Dependencies
-
-Fetched automatically by CMake (or resolved from a pre-built prefix via `CMAKE_PREFIX_PATH`):
-
-- [Abseil C++](https://abseil.io/) — containers, synchronization
-- [nlohmann/json](https://github.com/nlohmann/json) — JSON handling
-- [spdlog](https://github.com/gabime/spdlog) — logging
-- [replxx](https://github.com/AmokHuginnworksys/replxx) — REPL line editing
-- [cpp-httplib](https://github.com/yhirose/cpp-httplib) — HTTP transport
-- [libuv](https://libuv.org/) — async file I/O
-- [Google Test](https://github.com/google/googletest) + [Google Benchmark](https://github.com/google/benchmark) — testing
-- [OpenBLAS](https://www.openblas.net/) — BLAS/LAPACK for linear algebra
-- [jwt-cpp](https://github.com/Thalhammer/jwt-cpp) + OpenSSL (when `ETIL_BUILD_JWT=ON`)
-- [mongocxx](https://www.mongodb.com/docs/drivers/cxx/) (when `ETIL_BUILD_MONGODB=ON`)
-
-### Docker (MCP Server)
-
-The MCP server runs inside Docker per project security rules:
-
-```bash
-# Build and run (API key auth)
-docker build -t etil-mcp .
-docker run -d --rm --read-only \
-  -p 127.0.0.1:8080:8080 \
-  -e ETIL_MCP_API_KEY=your-secret-key \
-  --tmpfs /tmp:size=10M \
-  etil-mcp --port 8080
-
-# Test it
-curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-secret-key" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
-```
-
-For JWT auth with RBAC, mount an auth config directory:
-```bash
-docker run -d --rm --read-only \
-  -p 127.0.0.1:8080:8080 \
-  -e ETIL_AUTH_CONFIG=/etc/etil \
-  -v /path/to/auth-config:/etc/etil \
-  --tmpfs /tmp:size=10M \
-  etil-mcp --port 8080
-```
-
-See `data/auth-config/*.json.example` for role/permission configuration.
+See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for prerequisites, build options,
+Docker setup, and troubleshooting.
 
 ---
 
@@ -475,8 +404,8 @@ REPL meta commands: `/help [word]`, `/quit`, `/clear`, `/words`, `/history`, `/d
 ### Running Tests
 
 ```bash
-ctest --test-dir build-debug --output-on-failure    # 1,171 tests (debug)
-ctest --test-dir build --output-on-failure           # 1,171 tests (release)
+ctest --test-dir build-debug --output-on-failure    # 1,272 tests (debug)
+ctest --test-dir build --output-on-failure           # 1,272 tests (release)
 ```
 
 ---
@@ -526,12 +455,811 @@ are not yet implemented:
 
 ---
 
+## Appendix A: Integers and Floats
+
+ETIL has two numeric types: 64-bit signed integers (`int64_t`) and 64-bit IEEE 754
+doubles (`double`). There is no single-cell/double-cell distinction — all integers are
+64 bits wide. Arithmetic operators auto-promote: if either operand is a float, the
+result is a float; two integers produce an integer. Division of two integers truncates
+toward zero (use `int->float` first for real-valued division).
+
+Booleans are a separate type (`true`/`false`). Arithmetic operators reject Boolean
+operands. Use `bool` to convert integers to Boolean, and comparisons to convert in the
+other direction.
+
+**Words:** `*` `+` `-` `/` `/mod` `0<` `0=` `0>` `1+` `1-` `<` `<=` `<>` `=` `>` `>=`
+`abs` `acos` `and` `asin` `atan` `atan2` `bool` `ceil` `cos` `emit` `exp` `f~` `false`
+`floor` `fmax` `fmin` `float->int` `int->float` `invert` `log` `log10` `log2` `lroll`
+`lshift` `max` `min` `mod` `negate` `not` `number->string` `or` `pi` `pow` `random`
+`random-range` `random-seed` `round` `rroll` `rshift` `sin` `sqrt` `string->number`
+`tan` `tanh` `true` `trunc` `xor`
+
+### Arithmetic
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `+` | `( a b -- a+b )` | Add | `3 4 +` → `7` |
+| `-` | `( a b -- a-b )` | Subtract | `10 3 -` → `7` |
+| `*` | `( a b -- a*b )` | Multiply | `6 7 *` → `42` |
+| `/` | `( a b -- a/b )` | Divide (truncating for ints) | `7 2 /` → `3` |
+| `mod` | `( a b -- a%b )` | Remainder | `7 3 mod` → `1` |
+| `/mod` | `( a b -- rem quot )` | Divide with remainder | `7 3 /mod` → `1 2` |
+| `negate` | `( n -- -n )` | Negate | `-5 negate` → `5` |
+| `abs` | `( n -- \|n\| )` | Absolute value | `-42 abs` → `42` |
+| `max` | `( a b -- max )` | Greater of two | `3 7 max` → `7` |
+| `min` | `( a b -- min )` | Lesser of two | `3 7 min` → `3` |
+| `1+` | `( n -- n+1 )` | Increment | `41 1+` → `42` |
+| `1-` | `( n -- n-1 )` | Decrement | `43 1-` → `42` |
+
+### Comparison
+
+All comparisons consume both operands and push a Boolean result.
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `=` | `( a b -- bool )` | Equal | `3 3 =` → `true` |
+| `<>` | `( a b -- bool )` | Not equal | `3 4 <>` → `true` |
+| `<` | `( a b -- bool )` | Less than | `3 4 <` → `true` |
+| `>` | `( a b -- bool )` | Greater than | `4 3 >` → `true` |
+| `<=` | `( a b -- bool )` | Less or equal | `3 3 <=` → `true` |
+| `>=` | `( a b -- bool )` | Greater or equal | `4 3 >=` → `true` |
+| `0=` | `( n -- bool )` | Is zero? | `0 0=` → `true` |
+| `0<` | `( n -- bool )` | Is negative? | `-1 0<` → `true` |
+| `0>` | `( n -- bool )` | Is positive? | `1 0>` → `true` |
+
+### Logic and Bitwise
+
+`and`/`or`/`xor` are overloaded: two Booleans give logical result (Boolean), two integers
+give bitwise result (integer). Mixed types are an error.
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `true` | `( -- bool )` | Push true | `true` → `true` |
+| `false` | `( -- bool )` | Push false | `false` → `false` |
+| `not` | `( x -- bool )` | Logical negation | `false not` → `true` |
+| `bool` | `( x -- bool )` | Convert to Boolean | `42 bool` → `true` |
+| `and` | `( a b -- c )` | Logical/bitwise AND | `true false and` → `false` |
+| `or` | `( a b -- c )` | Logical/bitwise OR | `true false or` → `true` |
+| `xor` | `( a b -- c )` | Logical/bitwise XOR | `0xFF 0x0F xor` → `240` |
+| `invert` | `( n -- ~n )` | Bitwise/logical NOT | `true invert` → `false` |
+| `lshift` | `( x u -- x<<u )` | Left shift | `1 8 lshift` → `256` |
+| `rshift` | `( x u -- x>>u )` | Logical right shift | `256 4 rshift` → `16` |
+| `lroll` | `( x u -- x' )` | Rotate left | `1 63 lroll` → `-9223372036854775808` |
+| `rroll` | `( x u -- x' )` | Rotate right | `1 1 rroll` → `-9223372036854775808` |
+
+### Math Functions
+
+All math functions promote integers to float and return float.
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `pi` | `( -- 3.14159... )` | Push pi | `pi .` → `3.14159` |
+| `sqrt` | `( x -- sqrt(x) )` | Square root | `144.0 sqrt` → `12.0` |
+| `sin` | `( x -- sin(x) )` | Sine (radians) | `pi 2.0 / sin` → `1.0` |
+| `cos` | `( x -- cos(x) )` | Cosine | `0.0 cos` → `1.0` |
+| `tan` | `( x -- tan(x) )` | Tangent | `pi 4.0 / tan` → `1.0` |
+| `tanh` | `( x -- tanh(x) )` | Hyperbolic tangent | `0.0 tanh` → `0.0` |
+| `asin` | `( x -- asin(x) )` | Arc sine | `1.0 asin` → `1.5708` |
+| `acos` | `( x -- acos(x) )` | Arc cosine | `1.0 acos` → `0.0` |
+| `atan` | `( x -- atan(x) )` | Arc tangent | `1.0 atan` → `0.785398` |
+| `atan2` | `( y x -- atan2(y,x) )` | Two-argument arc tangent | `1.0 1.0 atan2` → `0.785398` |
+| `log` | `( x -- ln(x) )` | Natural logarithm | `1.0 exp log` → `1.0` |
+| `log2` | `( x -- log2(x) )` | Base-2 logarithm | `1024.0 log2` → `10.0` |
+| `log10` | `( x -- log10(x) )` | Base-10 logarithm | `1000.0 log10` → `3.0` |
+| `exp` | `( x -- e^x )` | Exponential | `1.0 exp` → `2.71828` |
+| `pow` | `( b e -- b^e )` | Power | `2.0 10.0 pow` → `1024.0` |
+| `ceil` | `( x -- ceil(x) )` | Ceiling | `3.2 ceil` → `4.0` |
+| `floor` | `( x -- floor(x) )` | Floor | `3.8 floor` → `3.0` |
+| `round` | `( x -- round(x) )` | Round to nearest | `3.5 round` → `4.0` |
+| `trunc` | `( x -- trunc(x) )` | Truncate toward zero | `-3.7 trunc` → `-3.0` |
+| `fmin` | `( a b -- min )` | Float-safe minimum | `3.14 2.71 fmin` → `2.71` |
+| `fmax` | `( a b -- max )` | Float-safe maximum | `3.14 2.71 fmax` → `3.14` |
+| `f~` | `( r1 r2 tol -- bool )` | Approximate equality | `3.14 pi 0.01 f~` → `true` |
+
+### Random Numbers
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `random` | `( -- f )` | Random float in [0, 1) | `random .` → `0.839431` |
+| `random-seed` | `( n -- )` | Seed the PRNG | `42 random-seed` |
+| `random-range` | `( lo hi -- n )` | Random integer in [lo, hi) | `1 7 random-range` → `4` |
+
+### Conversion
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `int->float` | `( n -- f )` | Integer to float | `42 int->float` → `42.0` |
+| `float->int` | `( f -- n )` | Float to integer (truncates) | `3.9 float->int` → `3` |
+| `number->string` | `( n -- str )` | Number to string | `42 number->string` → `"42"` |
+| `string->number` | `( str -- val flag )` | Parse string as number | `s" 42" string->number` → `42 true` |
+
+---
+
+## Appendix B: Strings
+
+Strings in ETIL are immutable, heap-allocated, reference-counted UTF-8 byte sequences.
+The literal syntax is `s" hello"` (space after `s"` is required — it's a parsing word
+that reads to the closing `"`). The alternative `s|` syntax uses `|` as delimiter,
+useful when the string contains double-quote characters.
+
+String operations that produce new strings (concatenation, substring, replace) allocate
+new heap objects — the originals are never modified. Strings from untrusted sources (HTTP
+responses, file reads) carry a **taint bit** that propagates through concatenation,
+substring, split/join, and bytes conversion. Use `staint` to query it and `sregex-replace`
+to clear it (regex validation acts as sanitization).
+
+**Words:** `s"` `s|` `s+` `s.` `s<>` `s=` `sfind` `sjoin` `slength` `sprintf`
+`sreplace` `sregex-find` `sregex-match` `sregex-replace` `sregex-search` `ssplit`
+`staint` `strim` `substr` `type`
+
+### Creating and Printing
+
+| Word      | Stack Effect             | Description                                          | Example                                    |
+|-----------|--------------------------|------------------------------------------------------|--------------------------------------------|
+| `s"`      | `( -- str )`             | String literal (parse to `"`), no escaping           | `s" hello"` → `"hello"`                    |
+| `s\|`     | `( -- str )`             | String literal (parse to `\|`), supports \ escaping. | `s\| \\|hello\\|\n\| → "\|hello\|\n"`    |` → `"hello"`          |
+| `type`    | `( str -- )`             | Print string (consume)                               | `s" hello" type` prints `hello`            |
+| `s.`      | `( str -- )`             | Print string with trailing space                     | `s" hi" s.` prints `hi `                   |
+| `sprintf` | `( args... fmt -- str )` | C-style formatting                                   | `42 s" Value: %d" sprintf` → `"Value: 42"` |
+
+### Comparison and Properties
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `s=` | `( str1 str2 -- bool )` | String equality | `s" abc" s" abc" s=` → `true` |
+| `s<>` | `( str1 str2 -- bool )` | String inequality | `s" abc" s" xyz" s<>` → `true` |
+| `slength` | `( str -- n )` | Length in bytes | `s" hello" slength` → `5` |
+| `staint` | `( str -- bool )` | Is string tainted? | `s" safe" staint` → `false` |
+
+### Manipulation
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `s+` | `( str1 str2 -- str3 )` | Concatenate | `s" hello" s" world" s+` → `"helloworld"` |
+| `substr` | `( str start len -- sub )` | Extract substring | `s" hello" 1 3 substr` → `"ell"` |
+| `strim` | `( str -- trimmed )` | Trim whitespace | `s"  hi  " strim` → `"hi"` |
+| `sfind` | `( str needle -- index )` | Find substring (-1 if not found) | `s" hello" s" ll" sfind` → `2` |
+| `sreplace` | `( str old new -- result )` | Replace all occurrences | `s" aabaa" s" a" s" x" sreplace` → `"xxbxx"` |
+
+### Split and Join
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `ssplit` | `( str delim -- array )` | Split by delimiter | `s" a,b,c" s" ," ssplit` → array `["a","b","c"]` |
+| `sjoin` | `( array delim -- str )` | Join with delimiter | `array s" -" sjoin` → `"a-b-c"` |
+
+### Regular Expressions
+
+Regex uses the C++ `<regex>` library (ECMAScript syntax by default).
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `sregex-find` | `( str pattern -- match flag )` | First match | `s" abc123" s" [0-9]+" sregex-find` → `"123" true` |
+| `sregex-replace` | `( str pat repl -- result )` | Replace matches (clears taint) | `s" foo123bar" s" [0-9]+" s" NUM" sregex-replace` → `"fooNUMbar"` |
+| `sregex-search` | `( str pattern -- matches flag )` | Search with captures | `s" 2026-03-12" s" ([0-9]+)-([0-9]+)-([0-9]+)" sregex-search` → array `true` |
+| `sregex-match` | `( str pattern -- matches flag )` | Full string match | `s" hello" s" h.*o" sregex-match` → array `true` |
+
+---
+
+## Appendix C: Arrays
+
+Arrays are heap-allocated, reference-counted, dynamically-sized sequences of arbitrary
+values. Any ETIL value can be stored in an array — integers, floats, strings, other
+arrays (nesting), maps, JSON, matrices, or observables.
+
+Arrays are mutable: push, pop, set, shift, and unshift modify the array in place and
+return it for chaining. Index access is zero-based and bounds-checked.
+
+The four iteration words (`array-each`, `array-map`, `array-filter`, `array-reduce`)
+accept execution tokens (`xt`) for the callback, enabling functional-style data
+processing without observables.
+
+**Words:** `array-compact` `array-each` `array-filter` `array-get` `array-length`
+`array-map` `array-new` `array-pop` `array-push` `array-reduce` `array-reverse`
+`array-set` `array-shift` `array-unshift`
+
+### Creation and Access
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `array-new` | `( -- array )` | Create empty array | `array-new` → `[]` |
+| `array-push` | `( array val -- array )` | Append to end | `array-new 1 array-push 2 array-push` → `[1, 2]` |
+| `array-pop` | `( array -- array val )` | Remove from end | `[1,2,3] array-pop` → `[1,2] 3` |
+| `array-get` | `( array idx -- val )` | Get by index | `[10,20,30] 1 array-get` → `20` |
+| `array-set` | `( array idx val -- array )` | Set by index | `[10,20,30] 1 99 array-set` → `[10,99,30]` |
+| `array-length` | `( array -- array n )` | Element count (non-consuming) | `[1,2,3] array-length` → `[1,2,3] 3` |
+
+### Queue and Deque Operations
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `array-shift` | `( array -- array val )` | Remove from front | `[1,2,3] array-shift` → `[2,3] 1` |
+| `array-unshift` | `( array val -- array )` | Insert at front | `[2,3] 1 array-unshift` → `[1,2,3]` |
+
+### Transformation
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `array-reverse` | `( array -- array )` | Reverse in place | `[1,2,3] array-reverse` → `[3,2,1]` |
+| `array-compact` | `( array -- array )` | Remove zero/null entries | `[1,0,2,0,3] array-compact` → `[1,2,3]` |
+
+### Iteration (Functional)
+
+These words accept an execution token (xt) as the callback. Define the callback with
+`: name ... ;` and pass it with `'` (tick).
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `array-each` | `( array xt -- )` | Call xt for each element | `: show . space ; [1,2,3] ' show array-each` prints `1 2 3` |
+| `array-map` | `( array xt -- array )` | Transform each element | `: double dup + ; [1,2,3] ' double array-map` → `[2,4,6]` |
+| `array-filter` | `( array xt -- array )` | Keep elements where xt returns true | `: even? 2 mod 0= ; [1,2,3,4] ' even? array-filter` → `[2,4]` |
+| `array-reduce` | `( array xt init -- val )` | Fold to single value | `: add + ; [1,2,3,4] ' add 0 array-reduce` → `10` |
+
+---
+
+## Appendix D: Maps
+
+Maps are heap-allocated, reference-counted hash tables with string keys and arbitrary
+values. They provide O(1) average-case lookup, insertion, and deletion.
+
+Maps are mutable — `map-set` and `map-remove` modify the map in place and return it for
+chaining. Keys must be strings. Values can be any ETIL type.
+
+Maps interoperate with JSON (`map->json`, `json->map`) and can be passed directly to
+MongoDB words and HTTP client words as header collections.
+
+**Words:** `map-get` `map-has?` `map-keys` `map-length` `map-new` `map-remove` `map-set`
+`map-values`
+
+### Reference
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `map-new` | `( -- map )` | Create empty map | `map-new` → `{}` |
+| `map-set` | `( map key val -- map )` | Set key/value (returns map) | `map-new s" x" 42 map-set` → `{"x":42}` |
+| `map-get` | `( map key -- val )` | Get value by key (fails if missing) | `m s" x" map-get` → `42` |
+| `map-remove` | `( map key -- map )` | Remove key (fails if missing) | `m s" x" map-remove` → `{}` |
+| `map-length` | `( map -- n )` | Number of entries | `m map-length` → `2` |
+| `map-keys` | `( map -- array )` | All keys as array of strings | `m map-keys` → `["x","y"]` |
+| `map-values` | `( map -- array )` | All values as array | `m map-values` → `[1,2]` |
+| `map-has?` | `( map key -- bool )` | Key exists? | `m s" x" map-has?` → `true` |
+
+### Building a Map
+
+Maps are built by chaining `map-set` calls. Each call returns the map, so they compose
+naturally:
+
+```
+> map-new
+    s" name" s" Alice" map-set
+    s" age" 30 map-set
+    s" active" true map-set
+```
+
+### Using Maps as HTTP Headers
+
+```
+> s" https://api.example.com/data"
+  map-new s" Accept" s" application/json" map-set
+  http-get
+```
+
+---
+
+## Appendix E: JSON
+
+ETIL has first-class JSON values backed by `nlohmann::json`. JSON values live on the
+stack like any other heap type and can represent objects, arrays, strings, numbers,
+booleans, and null.
+
+The literal syntax `j| ... |` parses everything between `j|` and the closing `|` as JSON.
+This works in both interpret and compile mode.
+
+JSON interoperates with Maps and Arrays via bidirectional conversion words. MongoDB words
+accept JSON directly for filters, documents, and options.
+
+**Words:** `array->json` `j|` `json->array` `json->map` `json->value` `json-dump`
+`json-get` `json-keys` `json-length` `json-parse` `json-pretty` `json-type` `map->json`
+
+### Creating JSON
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `j\|` | `( -- json )` | JSON literal | `j\| {"a": 1, "b": [2,3]} \|` |
+| `json-parse` | `( str -- json )` | Parse JSON string | `s" [1,2,3]" json-parse` |
+
+### Inspecting JSON
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `json-get` | `( json key\|idx -- val )` | Object key or array index | `j\| {"x":42} \| s" x" json-get` → `42` |
+| `json-length` | `( json -- n )` | Array length or object size | `j\| [1,2,3] \| json-length` → `3` |
+| `json-type` | `( json -- str )` | Type name | `j\| "hello" \| json-type` → `"string"` |
+| `json-keys` | `( json -- array )` | Object keys | `j\| {"a":1,"b":2} \| json-keys` → `["a","b"]` |
+
+### Serializing JSON
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `json-dump` | `( json -- str )` | Compact string | `j\| {"a":1} \| json-dump` → `'{"a":1}'` |
+| `json-pretty` | `( json -- str )` | Indented string | `j\| {"a":1} \| json-pretty type` |
+
+### Converting Between Types
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `json->map` | `( json -- map )` | JSON object to Map (recursive) | `j\| {"x":1} \| json->map` |
+| `json->array` | `( json -- array )` | JSON array to Array (recursive) | `j\| [1,2,3] \| json->array` |
+| `map->json` | `( map -- json )` | Map to JSON object (recursive) | `m map->json` |
+| `array->json` | `( array -- json )` | Array to JSON array (recursive) | `a array->json` |
+| `json->value` | `( json -- val )` | Auto-unpack to native type | `j\| 42 \| json->value` → `42` |
+
+### Array Index Access
+
+`json-get` accepts both string keys (for objects) and integer indices (for arrays):
+
+```
+> j| [10, 20, 30] | 1 json-get .
+20
+> j| [{"name":"Alice"}, {"name":"Bob"}] | 1 json-get s" name" json-get type
+Bob
+```
+
+---
+
+## Appendix F: Matrices
+
+ETIL provides 43 words for dense linear algebra backed by LAPACK and OpenBLAS. Matrices
+are heap-allocated, reference-counted, column-major `double` arrays passed directly to
+BLAS/LAPACK routines with zero copy overhead.
+
+Matrices are used for numerical computation, machine learning (forward/backward pass
+primitives for building multilayer perceptrons), and data analysis. Solver and
+decomposition words return a Boolean success flag.
+
+Three TIL-level convenience words (`mat-xavier`, `mat-he`, `mat-mse`) are defined in
+`data/help.til` for neural network weight initialization and loss computation.
+
+**Words:** `json->mat` `mat+` `mat-` `mat*` `mat-add-col` `mat-apply` `mat-clip`
+`mat-col` `mat-col-sum` `mat-cols` `mat-cross-entropy` `mat-det` `mat-diag` `mat-eigen`
+`mat-eye` `mat-from-array` `mat-hadamard` `mat-he` `mat-inv` `mat-lstsq` `mat-mean`
+`mat-mse` `mat-new` `mat-norm` `mat-rand` `mat-randn` `mat-relu` `mat-relu'` `mat-row`
+`mat-rows` `mat-scale` `mat-sigmoid` `mat-sigmoid'` `mat-softmax` `mat-solve` `mat-sum`
+`mat-svd` `mat-tanh` `mat-tanh'` `mat-trace` `mat-transpose` `mat-xavier` `mat.`
+`mat->array` `mat->json`
+
+### Constructors
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `mat-new` | `( rows cols -- mat )` | Zero-filled matrix | `3 3 mat-new` |
+| `mat-eye` | `( n -- mat )` | Identity matrix | `3 mat-eye mat.` |
+| `mat-from-array` | `( array rows cols -- mat )` | From flat array (row-major) | `array-new 1.0 array-push 2.0 array-push 3.0 array-push 4.0 array-push 2 2 mat-from-array` |
+| `mat-diag` | `( array -- mat )` | Diagonal matrix | `array-new 1.0 array-push 2.0 array-push 3.0 array-push mat-diag` |
+| `mat-rand` | `( rows cols -- mat )` | Uniform random [0,1) | `3 3 mat-rand` |
+| `mat-randn` | `( rows cols -- mat )` | Standard normal random | `100 1 mat-randn` |
+
+### Accessors
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `mat-get` | `( mat row col -- val )` | Get element | `m 0 0 mat-get` → `1.0` |
+| `mat-set` | `( mat row col val -- mat )` | Set element (returns mat) | `m 0 0 9.0 mat-set` |
+| `mat-rows` | `( mat -- n )` | Row count | `m mat-rows` → `3` |
+| `mat-cols` | `( mat -- n )` | Column count | `m mat-cols` → `3` |
+| `mat-row` | `( mat i -- array )` | Extract row | `m 0 mat-row` → `[1.0, 0.0, 0.0]` |
+| `mat-col` | `( mat j -- array )` | Extract column | `m 0 mat-col` → `[1.0, 0.0, 0.0]` |
+
+### Arithmetic
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `mat*` | `( A B -- C )` | Matrix multiply (DGEMM) | `A B mat*` |
+| `mat+` | `( A B -- C )` | Element-wise add | `A B mat+` |
+| `mat-` | `( A B -- C )` | Element-wise subtract | `A B mat-` |
+| `mat-scale` | `( mat s -- mat )` | Scalar multiply | `m 2.0 mat-scale` |
+| `mat-transpose` | `( mat -- mat )` | Transpose | `m mat-transpose` |
+| `mat-hadamard` | `( A B -- C )` | Element-wise multiply | `A B mat-hadamard` |
+| `mat-add-col` | `( mat col -- mat )` | Broadcast-add column vector | `m bias mat-add-col` |
+| `mat-clip` | `( mat lo hi -- mat )` | Clamp elements to [lo, hi] | `m -1.0 1.0 mat-clip` |
+
+### Solvers and Decompositions
+
+All return a Boolean flag: `true` = success, `false` = singular or failed.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `mat-solve` | `( A b -- x flag )` | Solve Ax=b via LU (DGESV) |
+| `mat-inv` | `( mat -- inv flag )` | Matrix inverse via LU (DGETRF+DGETRI) |
+| `mat-det` | `( mat -- det flag )` | Determinant via LU |
+| `mat-eigen` | `( mat -- evals evecs flag )` | Eigendecomposition (DSYEV/DGEEV) |
+| `mat-svd` | `( mat -- U S Vt flag )` | Singular value decomposition (DGESVD) |
+| `mat-lstsq` | `( A b -- x flag )` | Least squares solve (DGELS) |
+
+```
+> # Solve [1 2; 3 4] x = [5; 6]
+> 2 2 mat-new 1.0 0 0 mat-set 2.0 0 1 mat-set
+                3.0 1 0 mat-set 4.0 1 1 mat-set
+> 2 1 mat-new 5.0 0 0 mat-set 6.0 1 0 mat-set
+> mat-solve drop mat.
+ -4.000
+  4.500
+```
+
+### Reductions
+
+| Word | Stack Effect | Description | Example |
+|------|-------------|-------------|---------|
+| `mat-sum` | `( mat -- scalar )` | Sum all elements | `3 mat-eye mat-sum` → `3.0` |
+| `mat-col-sum` | `( mat -- col )` | Sum across columns → column vector | `m mat-col-sum` |
+| `mat-mean` | `( mat -- scalar )` | Mean of all elements | `3 mat-eye mat-mean` → `0.333` |
+| `mat-norm` | `( mat -- val )` | Frobenius norm | `3 mat-eye mat-norm` → `1.732` |
+| `mat-trace` | `( mat -- val )` | Sum of diagonal | `3 mat-eye mat-trace` → `3.0` |
+
+### Neural Network Activations and Derivatives
+
+These words operate element-wise. The derivative words (`'` suffix) compute from
+the **pre-activation** input, not the activated output.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `mat-relu` | `( mat -- mat )` | max(0, x) |
+| `mat-sigmoid` | `( mat -- mat )` | 1/(1+exp(-x)) |
+| `mat-tanh` | `( mat -- mat )` | tanh(x) |
+| `mat-relu'` | `( mat -- mat )` | 1 if x>0, else 0 |
+| `mat-sigmoid'` | `( mat -- mat )` | sigmoid(x) * (1-sigmoid(x)) |
+| `mat-tanh'` | `( mat -- mat )` | 1 - tanh(x)^2 |
+| `mat-softmax` | `( mat -- mat )` | Column-wise softmax (numerically stable) |
+| `mat-cross-entropy` | `( pred actual -- scalar )` | Cross-entropy loss |
+| `mat-apply` | `( mat xt -- mat )` | Apply function per element |
+
+### Conversion and Display
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `mat.` | `( mat -- )` | Pretty-print (consumes) |
+| `mat->array` | `( mat -- array )` | To flat array (row-major) |
+| `mat->json` | `( mat -- json )` | To JSON `{rows, cols, data}` |
+| `json->mat` | `( json -- mat )` | From JSON `{rows, cols, data}` |
+
+### TIL-Level Convenience
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `mat-xavier` | `( rows cols -- mat )` | Xavier/Glorot initialization |
+| `mat-he` | `( rows cols -- mat )` | He initialization (for ReLU networks) |
+| `mat-mse` | `( predicted actual -- scalar )` | Mean squared error loss |
+
+---
+
+## Appendix G: Observables
+
+Observables are ETIL's reactive programming system — lazy, push-based, composable
+data pipelines inspired by RxJS. An observable represents a sequence of values that
+are produced on demand when a **terminal operator** is invoked.
+
+### How Observables Work
+
+An observable is a linked list of **pipeline nodes**. Each node represents one processing
+step: a source, a transformation, a filter, an accumulator, or a combinator. Building a
+pipeline is cheap — it just allocates nodes and links them. No values flow until a
+terminal operator (`obs-subscribe`, `obs-to-array`, `obs-reduce`, `obs-count`) triggers
+execution.
+
+When a terminal fires, ETIL walks the pipeline recursively from terminal back to source,
+then pushes values forward through each node. This is **push-based** execution: the
+source emits values one at a time, each value flows through the entire chain of
+transforms and filters, and the terminal collects or processes the result.
+
+```
+Source  ──emit──>  Transform  ──emit──>  Filter  ──emit──>  Terminal
+(range)            (map)                 (filter)           (to-array)
+```
+
+Each emission checks the interpreter's execution budget (`ctx.tick()`), so runaway
+pipelines are safely interrupted by instruction limits and timeouts.
+
+**Words:** `obs-concat` `obs-count` `obs-distinct` `obs-empty` `obs-filter`
+`obs-filter-with` `obs-from` `obs-kind` `obs-map` `obs-map-with` `obs-merge` `obs-of`
+`obs-range` `obs-reduce` `obs-scan` `obs-skip` `obs-subscribe` `obs-take` `obs-to-array`
+`obs-zip` `obs?`
+
+### Source Operators — Creating Observables
+
+Source operators create the head of a pipeline. Every pipeline begins with one.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-from` | `( array -- obs )` | Emit each array element in order |
+| `obs-of` | `( value -- obs )` | Emit a single value |
+| `obs-empty` | `( -- obs )` | Emit nothing (zero elements) |
+| `obs-range` | `( start end -- obs )` | Emit integers from start (inclusive) to end (exclusive) |
+
+```
+> # obs-from: emit each element of an array
+> array-new 10 array-push 20 array-push 30 array-push
+  obs-from obs-to-array
+  # Result: array [10, 20, 30]
+
+> # obs-of: single-element observable
+> 42 obs-of obs-to-array
+  # Result: array [42]
+
+> # obs-empty: produces nothing
+> obs-empty obs-count .
+0
+
+> # obs-range: integer sequence [start, end)
+> 1 6 obs-range obs-to-array
+  # Result: array [1, 2, 3, 4, 5]
+```
+
+### Transform Operators — Modifying Values
+
+Transform operators sit in the middle of a pipeline. They receive each value from
+upstream, process it, and pass the result downstream.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-map` | `( obs xt -- obs' )` | Transform each value by applying xt |
+| `obs-map-with` | `( obs xt ctx -- obs' )` | Transform with a bound context value |
+| `obs-filter` | `( obs xt -- obs' )` | Keep only values where xt returns true |
+| `obs-filter-with` | `( obs xt ctx -- obs' )` | Filter with a bound context value |
+
+**`obs-map`** applies a function to every emitted value. The function (execution token)
+pops one value and pushes one result:
+
+```
+> : double dup + ;
+> 1 6 obs-range ' double obs-map obs-to-array
+  # Result: array [2, 4, 6, 8, 10]
+  # Flow: 1→2, 2→4, 3→6, 4→8, 5→10
+```
+
+**`obs-filter`** keeps only values for which the predicate returns `true`:
+
+```
+> : even? 2 mod 0= ;
+> 1 11 obs-range ' even? obs-filter obs-to-array
+  # Result: array [2, 4, 6, 8, 10]
+  # Flow: 1→rejected, 2→kept, 3→rejected, 4→kept, ...
+```
+
+**`obs-map-with` and `obs-filter-with`** carry a context value that is pushed onto the
+stack before the xt executes. This enables closure-like data binding without language-level
+closures. The context value is stored per-node, so each pipeline stage can have its own:
+
+```
+> : multiply * ;
+> 1 6 obs-range ' multiply 10 obs-map-with obs-to-array
+  # Result: array [10, 20, 30, 40, 50]
+  # For each value v: push ctx (10), push v, call multiply → 10*v
+
+> : greater-than > ;
+> 1 11 obs-range ' greater-than 5 obs-filter-with obs-to-array
+  # Result: array [6, 7, 8, 9, 10]
+  # For each value v: push ctx (5), push v, call greater-than → v > 5
+```
+
+### Accumulation Operators — Running State
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-scan` | `( obs xt init -- obs' )` | Emit each intermediate accumulation |
+| `obs-reduce` | `( obs xt init -- result )` | Reduce to a single value (terminal) |
+
+**`obs-scan`** is like `reduce` but emits every intermediate result. It maintains an
+accumulator that starts at `init`. For each upstream value, it calls `xt` with the
+accumulator and the new value, pushes the updated accumulator downstream, and keeps it
+for the next emission:
+
+```
+> : add + ;
+> 1 6 obs-range ' add 0 obs-scan obs-to-array
+  # Result: array [1, 3, 6, 10, 15]
+  # Running sum: 0+1=1, 1+2=3, 3+3=6, 6+4=10, 10+5=15
+
+> : mul * ;
+> 1 6 obs-range ' mul 1 obs-scan obs-to-array
+  # Result: array [1, 2, 6, 24, 120]
+  # Running factorial: 1*1=1, 1*2=2, 2*3=6, 6*4=24, 24*5=120
+```
+
+**`obs-reduce`** is a **terminal operator** — it triggers execution and returns one value,
+not an observable:
+
+```
+> : add + ;
+> 1 11 obs-range ' add 0 obs-reduce .
+55
+  # Sum of 1..10 = 55
+```
+
+### Limiting Operators — Controlling Flow
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-take` | `( obs n -- obs' )` | Emit only the first n values |
+| `obs-skip` | `( obs n -- obs' )` | Skip the first n values |
+| `obs-distinct` | `( obs -- obs' )` | Suppress consecutive duplicates |
+
+**`obs-take`** is particularly powerful with infinite or very large sources — it short-circuits
+execution after n values, so the source never produces more than needed:
+
+```
+> # Take 3 from a range of a million
+> 0 1000000 obs-range 3 obs-take obs-to-array
+  # Result: array [0, 1, 2]
+  # Only 3 values were ever produced — the rest of the range is never evaluated
+
+> # Skip and take for pagination
+> 0 100 obs-range 20 obs-skip 10 obs-take obs-to-array
+  # Result: array [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+```
+
+**`obs-distinct`** suppresses runs of identical consecutive values:
+
+```
+> array-new 1 array-push 1 array-push 2 array-push 2 array-push 2 array-push 3 array-push 1 array-push
+  obs-from obs-distinct obs-to-array
+  # Result: array [1, 2, 3, 1]
+  # Note: the trailing 1 is kept because it's not consecutive with the earlier 1
+```
+
+### Combination Operators — Merging Pipelines
+
+| Word | Stack Effect | Description                           |
+|------|-------------|---------------------------------------|
+| `obs-merge` | `( obs-a obs-b max -- obs )` | Interleave two observables            |
+| `obs-concat` | `( obs-a obs-b -- obs )` | Emit all of A, then all of B          |
+| `obs-zip` | `( obs-a obs-b -- obs )` | Pair up elements into 2-element arrays |
+
+**`obs-concat`** is sequential — all values from the first observable, then all from the
+second:
+
+```
+> 1 4 obs-range 10 13 obs-range obs-concat obs-to-array
+  # Result: array [1, 2, 3, 10, 11, 12]
+```
+
+**`obs-zip`** pairs corresponding elements from two observables into 2-element arrays.
+It stops when either source is exhausted:
+
+```
+> 1 4 obs-range
+  array-new s" a" array-push s" b" array-push s" c" array-push obs-from
+  obs-zip obs-to-array
+  # Result: array [[1,"a"], [2,"b"], [3,"c"]]
+```
+
+**`obs-merge`** interleaves two observables. The `max` parameter controls concurrency
+(use 2 for simple interleaving, 0 for unlimited):
+
+```
+> 1 4 obs-range 10 13 obs-range 2 obs-merge obs-to-array
+  # Result: array [1, 10, 2, 11, 3, 12]
+  # Values alternate between the two sources
+```
+
+### Terminal Operators — Triggering Execution
+
+Terminal operators consume the pipeline and produce a concrete result. Until one of these
+is called, no values are emitted — the pipeline is just a description.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-subscribe` | `( obs xt -- )` | Call xt for each value (side effects) |
+| `obs-to-array` | `( obs -- array )` | Collect all values into an array |
+| `obs-count` | `( obs -- n )` | Count emitted values |
+| `obs-reduce` | `( obs xt init -- val )` | Fold to single value |
+
+```
+> # subscribe: execute side effects for each value
+> : show . space ;
+> 1 6 obs-range ' show obs-subscribe
+1 2 3 4 5
+
+> # to-array: materialize the pipeline
+> 1 4 obs-range obs-to-array
+  # Result: array [1, 2, 3]
+
+> # count: how many values passed through?
+> 1 1000001 obs-range ' even? obs-filter obs-count .
+500000
+
+> # reduce: fold to a single result
+> 1 101 obs-range ' add 0 obs-reduce .
+5050
+```
+
+### Introspection
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs?` | `( val -- bool )` | Is this value an observable? |
+| `obs-kind` | `( obs -- str )` | Node kind name (e.g. "range", "map", "filter") |
+
+```
+> 1 10 obs-range obs? .
+true
+> 42 obs? .
+false
+> 1 10 obs-range ' double obs-map obs-kind type
+map
+```
+
+### Composing Pipelines
+
+The real power of observables comes from chaining operators into complex data processing
+pipelines. Each operator returns an observable, so they compose naturally:
+
+```
+> # Sum of squares of even numbers from 1 to 100
+> : square dup * ;
+> : even? 2 mod 0= ;
+> : add + ;
+> 1 101 obs-range
+    ' even? obs-filter         # keep 2, 4, 6, ..., 100
+    ' square obs-map           # square each: 4, 16, 36, ..., 10000
+    ' add 0 obs-reduce .       # sum them all
+171700
+```
+
+```
+> # Moving average: scan to compute running sum, map to divide by position
+> : add + ;
+> array-new 10 array-push 20 array-push 30 array-push 40 array-push 50 array-push
+  obs-from
+  ' add 0 obs-scan            # running sums: 10, 30, 60, 100, 150
+  obs-to-array
+  # Result: array [10, 30, 60, 100, 150]
+```
+
+```
+> # Pipeline with skip/take for windowed processing
+> 0 1000000 obs-range          # million integers
+  ' even? obs-filter           # only evens
+  100 obs-skip                 # skip first 100 evens
+  5 obs-take                   # take next 5
+  obs-to-array
+  # Result: array [200, 202, 204, 206, 208]
+  # Only ~208 values were ever produced — the rest of the million is never touched
+```
+
+```
+> # Zip two sources and reduce pairs
+> : pair-sum 0 array-get swap 1 array-get + ;
+> 1 6 obs-range 10 60 obs-range obs-zip
+    ' pair-sum obs-map
+    obs-to-array
+  # Result: array [11, 22, 33, 44, 55]
+  # Pairs: [1,10], [2,20], [3,30], [4,40], [5,50] → sums
+```
+
+### Key Concepts
+
+- **Lazy evaluation**: No work happens until a terminal operator is called. Building
+  a pipeline of 10 operators is instantaneous — it just links nodes.
+- **Short-circuit**: `obs-take` stops the source early. A `take 5` on a million-element
+  range only produces 5 values.
+- **Budget-aware**: Every emission calls `ctx.tick()`, so observable pipelines respect
+  instruction budgets, execution deadlines, and cancellation — critical for MCP server
+  sandboxing.
+- **No closures needed**: The `-with` variants (`obs-map-with`, `obs-filter-with`)
+  carry a context value per node, providing closure-like data binding in a stack-based
+  language.
+- **Memory efficient**: Values flow through one at a time. A `filter` on a
+  million-element range never materializes the full sequence — each value is tested
+  and either passed downstream or discarded immediately.
+
+---
+
 ## References
 
 - **FORTH 2012 Standard**: http://www.forth200x.org/documents/forth-2012.pdf
 - **Threaded Interpretive Languages**: R.G. Loeliger, 1981
 - **Genetic Programming**: Koza, "Genetic Programming", 1992
-- **MCP Specification**: https://modelcontextprotocol.io/specification/2025-11-25
+- **MCP Specification**: https://modelcontextprotocol.io/specification/2024-11-05
 - **JSON-RPC Specification**: https://www.jsonrpc.org/specification
 
 ## License

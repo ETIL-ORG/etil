@@ -3,31 +3,29 @@
 ## Quick Start
 
 ```bash
-# Clone or extract project
+# Clone the project
+git clone https://github.com/krystalmonolith/evolutionary-til.git
 cd evolutionary-til
 
-# Create build directory
-mkdir build && cd build
-
-# Configure with CMake
-cmake -GNinja -DCMAKE_BUILD_TYPE=Release ..
+# Create a sibling build directory and configure
+mkdir ../build-debug && cd ../build-debug
+cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ../evolutionary-til
 
 # Build
 ninja
 
-# Run tests
-ctest
+# Run tests (1,272 tests)
+ctest --output-on-failure
 
-# Run examples
+# Run the REPL
 ./bin/etil_repl
 ```
 
 ## Prerequisites
 
-### Ubuntu/Debian (WSL2 or Native)
+### Ubuntu/Debian (24.04+ or WSL2)
 
 ```bash
-# System packages
 sudo apt update
 sudo apt install -y \
     build-essential \
@@ -37,36 +35,29 @@ sudo apt install -y \
     curl \
     wget
 
-# Install LLVM 18
+# LLVM 18 (required)
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
 sudo ./llvm.sh 18
 rm llvm.sh
 
-# Install development tools
 sudo apt install -y \
     llvm-18-dev \
     clang-18 \
     clang-format-18 \
-    clang-tidy-18 \
-    gdb \
-    valgrind
+    clang-tidy-18
 
-# Set clang as default (optional)
-sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
-sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+# OpenSSL (required for JWT and HTTP client features)
+sudo apt install -y libssl-dev
+
+# LAPACK (required for linear algebra)
+sudo apt install -y liblapacke-dev
 ```
 
 ### macOS
 
 ```bash
-# Install Homebrew (if not already installed)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install dependencies
-brew install cmake ninja llvm@18 tbb
-
-# Add LLVM to PATH
+brew install cmake ninja llvm@18 tbb openblas
 export PATH="/usr/local/opt/llvm@18/bin:$PATH"
 ```
 
@@ -76,25 +67,17 @@ export PATH="/usr/local/opt/llvm@18/bin:$PATH"
 
 ```bash
 mkdir build-debug && cd build-debug
-
-cmake -GNinja \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined" \
-    ..
-
+cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ../evolutionary-til
 ninja
 ```
+
+Debug builds automatically enable AddressSanitizer and UndefinedBehaviorSanitizer.
 
 ### Release Build (Optimized)
 
 ```bash
-mkdir build-release && cd build-release
-
-cmake -GNinja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS="-O3 -march=native -flto" \
-    ..
-
+mkdir build && cd build
+cmake -GNinja -DCMAKE_BUILD_TYPE=Release ../evolutionary-til
 ninja
 ```
 
@@ -102,29 +85,11 @@ ninja
 
 ```bash
 mkdir build-clang && cd build-clang
-
 cmake -GNinja \
     -DCMAKE_C_COMPILER=clang-18 \
     -DCMAKE_CXX_COMPILER=clang++-18 \
     -DCMAKE_BUILD_TYPE=Release \
-    ..
-
-ninja
-```
-
-### With jemalloc
-
-```bash
-# Install jemalloc
-sudo apt install libjemalloc-dev
-
-mkdir build && cd build
-
-cmake -GNinja \
-    -DETIL_USE_JEMALLOC=ON \
-    -DCMAKE_BUILD_TYPE=Release \
-    ..
-
+    ../evolutionary-til
 ninja
 ```
 
@@ -134,191 +99,103 @@ Configure with `-D<OPTION>=<VALUE>`:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `ETIL_BUILD_TESTS` | ON | Build unit tests |
-| `ETIL_BUILD_EXAMPLES` | ON | Build example programs |
-| `ETIL_ENABLE_PROFILING` | ON | Enable profiling support |
+| `ETIL_BUILD_TESTS` | ON | Build unit and integration tests |
+| `ETIL_BUILD_EXAMPLES` | ON | Build REPL, MCP server, benchmarks |
+| `ETIL_BUILD_HTTP_CLIENT` | OFF | HTTP client (`http-get`, `http-post`) — requires OpenSSL |
+| `ETIL_BUILD_JWT` | OFF | JWT authentication with RBAC — requires OpenSSL |
+| `ETIL_BUILD_MONGODB` | OFF | MongoDB integration — requires `ETIL_BUILD_JWT` |
+| `ETIL_ENABLE_PROFILING` | ON | Enable performance profiling support |
 | `ETIL_USE_JEMALLOC` | OFF | Use jemalloc allocator |
 | `CMAKE_BUILD_TYPE` | Debug | Build type: Debug, Release, RelWithDebInfo, MinSizeRel |
+
+### Full-featured build (all optional features)
+
+```bash
+cmake -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DETIL_BUILD_HTTP_CLIENT=ON \
+    -DETIL_BUILD_JWT=ON \
+    -DETIL_BUILD_MONGODB=ON \
+    ../evolutionary-til
+```
+
+## Dependencies
+
+All C++ dependencies are fetched automatically by CMake FetchContent on first build.
+See [ATTRIBUTION.md](ATTRIBUTION.md) for the complete list with versions and licenses.
+
+System dependencies (must be installed separately): LLVM 18+, OpenSSL (if JWT or HTTP
+enabled), LAPACK/OpenBLAS (for linear algebra).
+
+Dependencies can also be pre-built and resolved via `CMAKE_PREFIX_PATH` with
+`FETCHCONTENT_FULLY_DISCONNECTED=ON` to avoid network access during builds.
 
 ## Testing
 
 ### Run All Tests
 
 ```bash
-cd build
-ctest --output-on-failure
+ctest --test-dir build-debug --output-on-failure
 ```
 
-### Run Specific Test
+### Run Specific Tests
 
 ```bash
-./etil_tests --gtest_filter=DictionaryTest.*
-```
+# By test name pattern
+ctest --test-dir build-debug -R Dictionary
 
-### Run with Verbose Output
-
-```bash
-ctest -V
+# By GTest filter
+./build-debug/bin/etil_tests --gtest_filter=PrimitivesTest.*
 ```
 
 ### Run Benchmarks
 
 ```bash
-./bin/etil_benchmark
+./build-debug/bin/etil_benchmark
 ```
 
-## CLion Configuration
+## Docker (MCP Server)
 
-### 1. Open Project
-- `File` → `Open` → Select `evolutionary-til` directory
-- CLion will detect CMakeLists.txt and configure automatically
+The MCP server runs inside Docker per project security rules:
 
-### 2. Set Toolchain (WSL)
-- `File` → `Settings` → `Build, Execution, Deployment` → `Toolchains`
-- Add WSL toolchain (Ubuntu-24.04)
-- Move to top (default)
+```bash
+docker build -t etil-mcp .
+docker run -d --rm --read-only \
+  -p 127.0.0.1:8080:8080 \
+  -e ETIL_MCP_API_KEY=your-secret-key \
+  --tmpfs /tmp:size=10M \
+  etil-mcp --port 8080
+```
 
-### 3. Configure CMake Profile
-- `File` → `Settings` → `Build, Execution, Deployment` → `CMake`
-- Build type: `Debug` or `Release`
-- Generator: `Ninja`
-- Build options: `-j 8` (adjust for your CPU)
-
-### 4. Build and Run
-- Click hammer icon to build
-- Select `etil_repl` from run configurations dropdown
-- Click play button to run
+See `data/auth-config/*.json.example` for JWT/RBAC configuration.
 
 ## Troubleshooting
 
 ### LLVM Not Found
 
 ```bash
-# Verify LLVM installation
 llvm-config-18 --version
-
-# Set LLVM_DIR explicitly
-cmake -DLLVM_DIR=/usr/lib/llvm-18/cmake ..
+cmake -DLLVM_DIR=/usr/lib/llvm-18/cmake ../evolutionary-til
 ```
 
 ### Missing TBB
 
+TBB is fetched automatically by CMake. If you prefer the system package:
+
 ```bash
-# Install manually
 sudo apt install libtbb-dev
-
-# Or let CMake fetch it (automatic)
 ```
 
-### Compilation Errors
+### Clean Rebuild
 
 ```bash
-# Check compiler version
-g++ --version  # Should be 13+
-clang++ --version  # Should be 18+
-
-# Clean and rebuild
-rm -rf build
-mkdir build && cd build
-cmake -GNinja ..
+rm -rf build-debug
+mkdir build-debug && cd build-debug
+cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ../evolutionary-til
 ninja
 ```
-
-### Test Failures
-
-```bash
-# Run with verbose output
-ctest -V
-
-# Run with gdb
-gdb ./etil_tests
-(gdb) run
-```
-
-### Sanitizer Errors
-
-```bash
-# Disable sanitizers for initial testing
-cmake -DCMAKE_BUILD_TYPE=Debug ..
-ninja
-```
-
-## Performance Profiling
-
-### With perf (Linux)
-
-```bash
-# Build with profiling
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
-ninja
-
-# Run with perf
-perf record -g ./bin/etil_benchmark
-perf report
-```
-
-### With Valgrind
-
-```bash
-valgrind --tool=callgrind ./bin/etil_benchmark
-kcachegrind callgrind.out.*
-```
-
-### With gprof
-
-```bash
-cmake -DCMAKE_CXX_FLAGS="-pg" ..
-ninja
-./bin/etil_benchmark
-gprof ./bin/etil_benchmark gmon.out > analysis.txt
-```
-
-## Continuous Integration
-
-### GitHub Actions (planned)
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on: [push, pull_request]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential cmake ninja-build llvm-18-dev
-      - name: Build
-        run: |
-          mkdir build && cd build
-          cmake -GNinja ..
-          ninja
-      - name: Test
-        run: cd build && ctest --output-on-failure
-```
-
-## Docker Build
-
-If you prefer containerized builds, see the `docker/` directory in the dev environment setup package.
-
-## Next Steps
-
-After successful build:
-
-1. Run the REPL: `./bin/etil_repl`
-2. Run tests: `ctest`
-3. Run benchmarks: `./bin/etil_benchmark`
-4. Explore the code in `include/etil/`
-5. Read the architecture docs in `docs/`
 
 ## Support
 
-For build issues:
-- Check this document first
-- Review CMake output for specific errors
-- Ensure all prerequisites are installed
-- Try a clean build (`rm -rf build && mkdir build`)
+For build issues, open an issue at
+[github.com/krystalmonolith/evolutionary-til](https://github.com/krystalmonolith/evolutionary-til/issues).

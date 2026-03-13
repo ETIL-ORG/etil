@@ -2,6 +2,72 @@
 
 All notable changes to this project are documented here.
 
+## v0.9.1 — 2026-03-12
+
+- Security hardening Phase 4: JWT validation, input caps, SSRF domain blocklist
+- JWT: 60s clock-skew leeway, empty-subject rejection, iat future-token check, type-safe
+  claim extraction
+- Input: resource URI 1KB cap, `mkdir-tmp` prefix rejects `/` and `..` (path traversal fix)
+- Buffers: 1000 notification cap
+- SSRF domain blocklist (`*.internal`, `*.local`, `*.localhost`) checked before DNS resolution
+- 11 new tests (5 JWT + 6 SSRF domain)
+
+## v0.9.0 — 2026-03-12
+
+- **Observable type system** — RxJS-style reactive pipelines: lazy, push-based, composable
+- 21 new primitives: `obs-from`, `obs-of`, `obs-empty`, `obs-range`, `obs-map`, `obs-filter`,
+  `obs-scan`, `obs-reduce`, `obs-take`, `obs-skip`, `obs-distinct`, `obs-merge`, `obs-concat`,
+  `obs-zip`, `obs-subscribe`, `obs-to-array`, `obs-count`, `obs?`, `obs-kind`, plus `-with`
+  variants for closure-like data binding
+- 4 array iteration primitives: `array-each`, `array-map`, `array-filter`, `array-reduce`
+- Codebase refactoring and security hardening (Phases 1–3):
+  - Macro-generated math primitives, template `pop_heap_value<>()`, `pop_two_matrices()` helper
+  - Table-driven `register_primitives()` replacing 414-line function
+  - Merged 6 copy-paste pairs, consolidated sync/async file I/O duplication
+  - Extracted `init_auth()` / `init_database()` from McpServer constructor
+  - DNS rebinding fix (SSRF bypass): resolve once, connect by IP, set Host header
+  - Bytecode cache invalidation after `forget` via dictionary generation counter
+  - Size-limit constants for DoS prevention (matrix, byte array, JSON array)
+
+## v0.8.24 — 2026-03-11
+
+- Fix `pop_*` value leak on type mismatch — values were silently consumed instead of
+  pushed back, corrupting the stack
+- `.` now prints string content; `.s` shows string content truncated to 64 chars
+
+## v0.8.22 — 2026-03-10
+
+- 3 new conversion words: `mat->json`, `json->mat`, `mat->array`
+- Interpreter resilience: `load_file()` cleans up orphaned stack values on error lines
+
+## v0.8.21 — 2026-03-10
+
+- **MLP primitives** — 17 new matrix words for neural network forward/backward pass
+  and classification (`mat-relu`, `mat-sigmoid`, `mat-tanh`, derivatives, reductions,
+  `mat-softmax`, `mat-cross-entropy`, `mat-apply`, `mat-randn`, etc.)
+- `tanh` scalar primitive
+- TIL-level: `mat-xavier`, `mat-he`, `mat-mse`
+
+## v0.8.15 — 2026-03-08
+
+- **Admin MCP tools** — 9 tools for role/user management gated by `role_admin` permission
+- Thread-safe auth config reload via `shared_ptr<const>` with atomic swap
+
+## v0.8.14 — 2026-03-08
+
+- LAPACK solver/decomposition words return Boolean flags (not integer info codes)
+
+## v0.8.13 — 2026-03-08
+
+- **`http-post` primitive** — outbound HTTP POST with same security model as `http-get`
+- HeapMatrix always compiled (ETIL_BUILD_LINALG gate removed)
+- Deploy smoke test retry (3 attempts)
+
+## v0.8.9 — 2026-03-08
+
+- Pre-built CI dependencies — ~4-6 min savings per pipeline run
+- `http-get` now takes a headers map parameter
+
 ## v0.8.5 — 2026-03-07
 
 - Add BSD-3-Clause license, ATTRIBUTION.md, copyright headers on all source files
