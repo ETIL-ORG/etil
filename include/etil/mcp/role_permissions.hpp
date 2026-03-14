@@ -24,6 +24,7 @@ struct RolePermissions {
     bool send_system_notification = false;
     bool send_user_notification = false;
     bool role_admin = false;
+    int session_idle_timeout_seconds = 1800;  // 30 min default
 
     // --- LVFS (Little Virtual File System) ---
     // lvfs_read is always true (design invariant, not stored)

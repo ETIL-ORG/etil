@@ -90,6 +90,8 @@ void parse_roles(AuthConfig& config, const nlohmann::json& j) {
             read_bool(role_json, "send_user_notification",
                       perms.send_user_notification);
             read_bool(role_json, "role_admin", perms.role_admin);
+            read_int(role_json, "session_idle_timeout_seconds",
+                     perms.session_idle_timeout_seconds);
 
             // --- LVFS ---
             // Backward compat: file_io → lvfs_modify
@@ -268,6 +270,8 @@ AuthConfig::parse_role_permissions(const nlohmann::json& j) {
     read_bool(j, "send_system_notification", perms.send_system_notification);
     read_bool(j, "send_user_notification", perms.send_user_notification);
     read_bool(j, "role_admin", perms.role_admin);
+    read_int(j, "session_idle_timeout_seconds",
+             perms.session_idle_timeout_seconds);
     // LVFS
     bool has_file_io = j.contains("file_io") && j["file_io"].is_boolean();
     if (has_file_io) perms.lvfs_modify = j["file_io"].get<bool>();
@@ -310,6 +314,7 @@ nlohmann::json role_to_json(const RolePermissions& p) {
     j["send_system_notification"] = p.send_system_notification;
     j["send_user_notification"] = p.send_user_notification;
     j["role_admin"] = p.role_admin;
+    j["session_idle_timeout_seconds"] = p.session_idle_timeout_seconds;
     // LVFS
     j["lvfs_modify"] = p.lvfs_modify;
     j["disk_quota"] = p.disk_quota;

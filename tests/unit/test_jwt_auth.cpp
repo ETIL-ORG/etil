@@ -718,6 +718,91 @@ TEST_F(JwtAuthTest, FromDirectoryBadJsonThrows) {
     std::filesystem::remove_all(dir);
 }
 
+// ---------------------------------------------------------------------------
+// Per-role session idle timeout tests
+// ---------------------------------------------------------------------------
+
+TEST_F(JwtAuthTest, SessionIdleTimeoutDefaultIs1800) {
+    RolePermissions perms;
+    EXPECT_EQ(perms.session_idle_timeout_seconds, 1800);
+}
+
+TEST_F(JwtAuthTest, SessionIdleTimeoutJsonRoundTrip) {
+    auto pid = std::to_string(getpid());
+    auto path = std::filesystem::temp_directory_path() /
+                 ("etil_test_timeout_rt_" + pid + ".json");
+    nlohmann::json cfg = {
+        {"roles", {
+            {"short", {
+                {"session_idle_timeout_seconds", 600},
+                {"max_sessions", 3}
+            }},
+            {"long", {
+                {"session_idle_timeout_seconds", 7200},
+                {"max_sessions", 5}
+            }}
+        }},
+        {"default_role", "short"}
+    };
+    { std::ofstream ofs(path); ofs << cfg.dump(2); }
+
+    auto config = AuthConfig::from_file(path.string());
+
+    // Parse
+    ASSERT_TRUE(config.roles.count("short"));
+    EXPECT_EQ(config.roles.at("short").session_idle_timeout_seconds, 600);
+    ASSERT_TRUE(config.roles.count("long"));
+    EXPECT_EQ(config.roles.at("long").session_idle_timeout_seconds, 7200);
+
+    // Serialize → re-parse
+    auto j = config.roles_to_json();
+    auto config2 = AuthConfig();
+    // Re-parse the serialized JSON
+    auto j_str = j.dump();
+    auto j2 = nlohmann::json::parse(j_str);
+    // Use from_file-style parsing (parse_roles is called internally)
+    auto path2 = std::filesystem::temp_directory_path() /
+                  ("etil_test_timeout_rt2_" + pid + ".json");
+    { std::ofstream ofs(path2); ofs << j_str; }
+    config2 = AuthConfig::from_file(path2.string());
+
+    EXPECT_EQ(config2.roles.at("short").session_idle_timeout_seconds, 600);
+    EXPECT_EQ(config2.roles.at("long").session_idle_timeout_seconds, 7200);
+
+    std::filesystem::remove(path);
+    std::filesystem::remove(path2);
+}
+
+TEST_F(JwtAuthTest, SessionIdleTimeoutMissingUsesDefault) {
+    auto pid = std::to_string(getpid());
+    auto path = std::filesystem::temp_directory_path() /
+                 ("etil_test_timeout_def_" + pid + ".json");
+    // Config without session_idle_timeout_seconds
+    nlohmann::json cfg = {
+        {"roles", {
+            {"minimal", {{"max_sessions", 1}}}
+        }},
+        {"default_role", "minimal"}
+    };
+    { std::ofstream ofs(path); ofs << cfg.dump(2); }
+
+    auto config = AuthConfig::from_file(path.string());
+    EXPECT_EQ(config.roles.at("minimal").session_idle_timeout_seconds, 1800);
+
+    std::filesystem::remove(path);
+}
+
+TEST_F(JwtAuthTest, SessionIdleTimeoutParseRolePermissions) {
+    // Test parse_role_permissions() with the new field
+    nlohmann::json j = {
+        {"session_idle_timeout_seconds", 900},
+        {"max_sessions", 2}
+    };
+    auto perms = AuthConfig::parse_role_permissions(j);
+    EXPECT_EQ(perms.session_idle_timeout_seconds, 900);
+    EXPECT_EQ(perms.max_sessions, 2);
+}
+
 } // namespace etil::mcp
 
 #endif // ETIL_JWT_ENABLED

@@ -283,6 +283,15 @@ private:
     bool send_targeted_notification(const std::string& user_id,
                                     const std::string& msg);
 
+    // Compute the effective idle timeout for a session.
+    // Uses per-role config if available, else falls back to SESSION_IDLE_TIMEOUT.
+    static std::chrono::steady_clock::duration effective_timeout(const Session& s);
+
+    // Compute a warning threshold: max(timeout - 5min, timeout * 5/6),
+    // floored at timeout / 2.
+    static std::chrono::steady_clock::duration effective_warning(
+        std::chrono::steady_clock::duration timeout);
+
     // Internal: dispatch a parsed request (current_session_ must be set).
     std::optional<nlohmann::json> dispatch_request(const nlohmann::json& msg);
 

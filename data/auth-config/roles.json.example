@@ -9,6 +9,7 @@
       "send_system_notification": true,
       "send_user_notification": true,
       "role_admin": true,
+      "session_idle_timeout_seconds": 3600,
 
       "lvfs_modify": true,
       "disk_quota": 104857600,
@@ -35,6 +36,7 @@
       "session_kick": false,
       "send_system_notification": false,
       "send_user_notification": false,
+      "session_idle_timeout_seconds": 1800,
 
       "lvfs_modify": true,
       "disk_quota": 10485760,
@@ -61,6 +63,7 @@
       "session_kick": false,
       "send_system_notification": false,
       "send_user_notification": false,
+      "session_idle_timeout_seconds": 900,
 
       "lvfs_modify": false,
       "disk_quota": 1048576,

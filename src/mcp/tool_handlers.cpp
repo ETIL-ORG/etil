@@ -1295,6 +1295,14 @@ nlohmann::json McpServer::tool_list_sessions(
             } else {
                 entry["duration_seconds"] = 0.0;
             }
+            // Per-role idle timeout info
+            auto timeout = effective_timeout(*sess);
+            auto idle = std::chrono::steady_clock::now() - sess->last_activity;
+            entry["idle_timeout_seconds"] =
+                std::chrono::duration_cast<std::chrono::seconds>(timeout)
+                    .count();
+            entry["idle_seconds"] =
+                std::chrono::duration_cast<std::chrono::seconds>(idle).count();
             sessions_array.push_back(entry);
         }
     }

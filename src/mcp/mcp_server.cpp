@@ -175,7 +175,8 @@ std::string McpServer::create_session(const std::string& user_id,
         std::lock_guard<std::mutex> lock(sessions_mutex_);
         auto now = std::chrono::steady_clock::now();
         for (auto it = sessions_.begin(); it != sessions_.end(); ) {
-            if (now - it->second->last_activity > SESSION_IDLE_TIMEOUT) {
+            if (now - it->second->last_activity >
+                effective_timeout(*it->second)) {
                 it = sessions_.erase(it);
             } else {
                 ++it;
@@ -317,12 +318,37 @@ void McpServer::cleanup_idle_sessions() {
     std::lock_guard<std::mutex> lock(sessions_mutex_);
     auto now = std::chrono::steady_clock::now();
     for (auto it = sessions_.begin(); it != sessions_.end(); ) {
-        if (now - it->second->last_activity > SESSION_IDLE_TIMEOUT) {
+        if (now - it->second->last_activity > effective_timeout(*it->second)) {
             it = sessions_.erase(it);
         } else {
             ++it;
         }
     }
+}
+
+std::chrono::steady_clock::duration McpServer::effective_timeout(
+    const Session& s) {
+#ifdef ETIL_JWT_ENABLED
+    if (s.permissions_ptr && s.permissions_ptr->session_idle_timeout_seconds > 0) {
+        return std::chrono::seconds(
+            s.permissions_ptr->session_idle_timeout_seconds);
+    }
+#else
+    (void)s;
+#endif
+    return SESSION_IDLE_TIMEOUT;
+}
+
+std::chrono::steady_clock::duration McpServer::effective_warning(
+    std::chrono::steady_clock::duration timeout) {
+    using namespace std::chrono;
+    auto five_min = minutes(5);
+    auto minus_five = timeout - five_min;
+    auto five_sixths = timeout * 5 / 6;
+    auto half = timeout / 2;
+    // max(timeout - 5min, timeout * 5/6), floored at timeout / 2
+    auto result = std::max(minus_five, five_sixths);
+    return std::max(result, half);
 }
 
 bool McpServer::has_session(const std::string& session_id) const {
@@ -362,9 +388,11 @@ std::optional<nlohmann::json> McpServer::handle_message(
     current_session_ = session;
 
     // Warn if the session was approaching idle timeout
-    if (idle_duration > SESSION_IDLE_WARNING) {
+    auto timeout = effective_timeout(*session);
+    auto warning = effective_warning(timeout);
+    if (idle_duration > warning) {
         auto remaining = std::chrono::duration_cast<std::chrono::minutes>(
-            SESSION_IDLE_TIMEOUT - idle_duration);
+            timeout - idle_duration);
         auto mins = remaining.count();
         if (mins > 0) {
             emit_notification("Session was idle — would have expired in "
