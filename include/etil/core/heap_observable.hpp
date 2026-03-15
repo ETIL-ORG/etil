@@ -33,6 +33,25 @@ public:
         Take, Skip, Distinct,
         // Combination
         Merge, Concat, Zip,
+
+        // Tier 1: Core Temporal
+        Timer,          // delay in state_.as_int (us), period in param_ (us, 0=one-shot)
+        Delay,          // delay in param_ (us)
+        Timestamp,      // no extra state
+        TimeInterval,   // no extra state (delta computed at execution time)
+
+        // Tier 2: Rate-Limiting
+        DebounceTime,   // quiet window in param_ (us)
+        ThrottleTime,   // throttle window in param_ (us)
+        SampleTime,     // sample period in param_ (us)
+        Timeout,        // timeout limit in param_ (us)
+
+        // Tier 3: Windowed + Additional
+        BufferTime,     // window size in param_ (us)
+        TakeUntilTime,  // duration in param_ (us)
+        DelayEach,      // xt in operator_xt_
+        AuditTime,      // window in param_ (us)
+        RetryDelay,     // delay in state_.as_int (us), max retries in param_
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -69,6 +88,29 @@ public:
     static HeapObservable* merge(HeapObservable* a, HeapObservable* b, int64_t max_concurrent);
     static HeapObservable* concat(HeapObservable* a, HeapObservable* b);
     static HeapObservable* zip(HeapObservable* a, HeapObservable* b);
+
+    // Temporal — Creation
+    static HeapObservable* timer(int64_t delay_us, int64_t period_us);
+
+    // Temporal — Transform
+    static HeapObservable* delay(HeapObservable* source, int64_t delay_us);
+    static HeapObservable* timestamp(HeapObservable* source);
+    static HeapObservable* time_interval(HeapObservable* source);
+    static HeapObservable* delay_each(HeapObservable* source, WordImpl* xt);
+
+    // Temporal — Rate-Limiting
+    static HeapObservable* debounce_time(HeapObservable* source, int64_t quiet_us);
+    static HeapObservable* throttle_time(HeapObservable* source, int64_t window_us);
+    static HeapObservable* sample_time(HeapObservable* source, int64_t period_us);
+    static HeapObservable* timeout(HeapObservable* source, int64_t limit_us);
+    static HeapObservable* audit_time(HeapObservable* source, int64_t window_us);
+
+    // Temporal — Windowed + Limiting
+    static HeapObservable* buffer_time(HeapObservable* source, int64_t window_us);
+    static HeapObservable* take_until_time(HeapObservable* source, int64_t duration_us);
+
+    // Temporal — Error
+    static HeapObservable* retry_delay(HeapObservable* source, int64_t delay_us, int64_t max_retries);
 
     ~HeapObservable() override;
 

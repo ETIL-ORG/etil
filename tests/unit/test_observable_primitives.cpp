@@ -410,3 +410,321 @@ TEST_F(ObservablePrimitivesTest, DotSShowsObservable) {
     auto opt = ctx().data_stack().pop();
     if (opt) opt->release();
 }
+
+// =========================================================================
+// Temporal Operators
+// =========================================================================
+
+// --- Timer ---
+
+TEST_F(ObservablePrimitivesTest, TimerSingleShot) {
+    // delay=0, period=0 → emit 0, done
+    run("0 0 obs-timer obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 0);
+    arr->release();
+}
+
+TEST_F(ObservablePrimitivesTest, TimerRepeatingTake3) {
+    // delay=0, period=1us, take 3 → [0, 1, 2]
+    run("0 1 obs-timer 3 obs-take obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 3u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 0);
+    arr->get(1, v); EXPECT_EQ(v.as_int, 1);
+    arr->get(2, v); EXPECT_EQ(v.as_int, 2);
+    arr->release();
+}
+
+TEST_F(ObservablePrimitivesTest, TimerWithDelay) {
+    // Small delay, single shot
+    run("100 0 obs-timer obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 0);
+    arr->release();
+}
+
+TEST_F(ObservablePrimitivesTest, TimerKind) {
+    run("0 0 obs-timer obs-kind");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->as_string()->view(), "timer");
+    opt->release();
+}
+
+// --- Interval (self-hosted) ---
+
+TEST_F(ObservablePrimitivesTest, IntervalTake5) {
+    run(": obs-interval 0 swap obs-timer ;");
+    run("1 obs-interval 5 obs-take obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 5u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 0);
+    arr->get(4, v); EXPECT_EQ(v.as_int, 4);
+    arr->release();
+}
+
+// --- Delay ---
+
+TEST_F(ObservablePrimitivesTest, DelayZero) {
+    // Zero delay passes values through unchanged
+    run("42 obs-of 0 obs-delay obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 42);
+    arr->release();
+}
+
+TEST_F(ObservablePrimitivesTest, DelayPreservesValues) {
+    run("1 4 obs-range 1 obs-delay obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 3u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 1);
+    arr->get(2, v); EXPECT_EQ(v.as_int, 3);
+    arr->release();
+}
+
+// --- Timestamp ---
+
+TEST_F(ObservablePrimitivesTest, TimestampWrapsValue) {
+    run("42 obs-of obs-timestamp obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);
+    // Each element should be [time, value]
+    Value pair;
+    arr->get(0, pair);
+    ASSERT_EQ(pair.type, Value::Type::Array);
+    auto* p = pair.as_array();
+    ASSERT_EQ(p->length(), 2u);
+    Value tv, vv;
+    p->get(0, tv); EXPECT_GT(tv.as_int, 0);  // timestamp > 0
+    p->get(1, vv); EXPECT_EQ(vv.as_int, 42);
+    pair.release();
+    arr->release();
+}
+
+TEST_F(ObservablePrimitivesTest, TimestampMultiple) {
+    run("1 4 obs-range obs-timestamp obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 3u);
+    // Check the value portion of each pair
+    for (size_t i = 0; i < 3; ++i) {
+        Value pair;
+        arr->get(i, pair);
+        auto* p = pair.as_array();
+        Value vv;
+        p->get(1, vv);
+        EXPECT_EQ(vv.as_int, static_cast<int64_t>(i + 1));
+        pair.release();
+    }
+    arr->release();
+}
+
+// --- TimeInterval ---
+
+TEST_F(ObservablePrimitivesTest, TimeIntervalWrapsValue) {
+    run("42 obs-of obs-time-interval obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);
+    Value pair;
+    arr->get(0, pair);
+    ASSERT_EQ(pair.type, Value::Type::Array);
+    auto* p = pair.as_array();
+    ASSERT_EQ(p->length(), 2u);
+    Value ev, vv;
+    p->get(0, ev); EXPECT_GE(ev.as_int, 0);  // elapsed >= 0
+    p->get(1, vv); EXPECT_EQ(vv.as_int, 42);
+    pair.release();
+    arr->release();
+}
+
+// --- DebounceTime ---
+
+TEST_F(ObservablePrimitivesTest, DebounceTimeInstantaneous) {
+    // With instantaneous source, debounce emits last value
+    run("array-new 1 array-push 2 array-push 3 array-push obs-from 1000 obs-debounce-time obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 3);  // last value
+    arr->release();
+}
+
+TEST_F(ObservablePrimitivesTest, DebounceTimeEmpty) {
+    run("obs-empty 1000 obs-debounce-time obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->as_int, 0);
+}
+
+// --- ThrottleTime ---
+
+TEST_F(ObservablePrimitivesTest, ThrottleTimeZeroWindow) {
+    // Zero window = everything passes
+    run("1 6 obs-range 0 obs-throttle-time obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->as_int, 5);
+}
+
+TEST_F(ObservablePrimitivesTest, ThrottleTimeLargeWindow) {
+    // Large window on instantaneous source: only first value passes
+    run("1 6 obs-range 1000000 obs-throttle-time obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 1);
+    arr->release();
+}
+
+// --- SampleTime ---
+
+TEST_F(ObservablePrimitivesTest, SampleTimeZeroPeriod) {
+    // Zero period: sample on every emission
+    run("1 4 obs-range 0 obs-sample-time obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    // All values sampled
+    EXPECT_EQ(opt->as_int, 3);
+}
+
+// --- Timeout ---
+
+TEST_F(ObservablePrimitivesTest, TimeoutDoesNotExpireForFastSource) {
+    // Instantaneous source completes before timeout
+    run("1 4 obs-range 1000000 obs-timeout obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->as_int, 3);
+}
+
+// --- BufferTime ---
+
+TEST_F(ObservablePrimitivesTest, BufferTimeZeroWindow) {
+    // Zero window: each emission triggers a buffer emit, plus trailing
+    run("1 4 obs-range 0 obs-buffer-time obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_GE(opt->as_int, 1);  // at least one buffer
+}
+
+TEST_F(ObservablePrimitivesTest, BufferTimeLargeWindow) {
+    // Large window: everything ends up in one trailing buffer
+    run("1 4 obs-range 1000000 obs-buffer-time obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 1u);  // one buffer array
+    Value buf;
+    arr->get(0, buf);
+    ASSERT_EQ(buf.type, Value::Type::Array);
+    EXPECT_EQ(buf.as_array()->length(), 3u);  // [1, 2, 3]
+    buf.release();
+    arr->release();
+}
+
+// --- TakeUntilTime ---
+
+TEST_F(ObservablePrimitivesTest, TakeUntilTimeLargeDuration) {
+    // Large duration: all values pass through
+    run("1 4 obs-range 1000000 obs-take-until-time obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->as_int, 3);
+}
+
+// --- DelayEach ---
+
+TEST_F(ObservablePrimitivesTest, DelayEachZero) {
+    run(": zero-delay drop 0 ;");
+    run("1 4 obs-range ' zero-delay obs-delay-each obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 3u);
+    Value v;
+    arr->get(0, v); EXPECT_EQ(v.as_int, 1);
+    arr->get(2, v); EXPECT_EQ(v.as_int, 3);
+    arr->release();
+}
+
+// --- AuditTime ---
+
+TEST_F(ObservablePrimitivesTest, AuditTimeZeroWindow) {
+    // Zero window on instantaneous: trailing emit + intermediate emits
+    run("1 4 obs-range 0 obs-audit-time obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_GE(opt->as_int, 1);  // at least one emission
+}
+
+// --- RetryDelay ---
+
+TEST_F(ObservablePrimitivesTest, RetryDelaySuccessOnFirst) {
+    // Source succeeds on first attempt, no retries needed
+    run("1 4 obs-range 0 3 obs-retry-delay obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->as_int, 3);
+}
+
+// --- Pipeline Composition with Temporal ---
+
+TEST_F(ObservablePrimitivesTest, TimerTakeTimestamp) {
+    // Timer + take + timestamp pipeline
+    run("0 1 obs-timer 3 obs-take obs-timestamp obs-to-array");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* arr = opt->as_array();
+    ASSERT_EQ(arr->length(), 3u);
+    // Each is [time, counter]
+    for (size_t i = 0; i < 3; ++i) {
+        Value pair;
+        arr->get(i, pair);
+        auto* p = pair.as_array();
+        ASSERT_EQ(p->length(), 2u);
+        Value vv;
+        p->get(1, vv);
+        EXPECT_EQ(vv.as_int, static_cast<int64_t>(i));
+        pair.release();
+    }
+    arr->release();
+}
+
+TEST_F(ObservablePrimitivesTest, TimerThrottleCount) {
+    // Timer with throttle
+    run("0 1 obs-timer 5 obs-take 0 obs-throttle-time obs-count");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_GE(opt->as_int, 1);
+}

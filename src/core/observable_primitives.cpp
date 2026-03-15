@@ -12,8 +12,10 @@
 #include "etil/core/value_helpers.hpp"
 #include "etil/core/word_impl.hpp"
 
+#include <chrono>
 #include <functional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace etil::core {
@@ -50,6 +52,20 @@ const char* HeapObservable::kind_name() const {
     case Kind::Merge:     return "merge";
     case Kind::Concat:    return "concat";
     case Kind::Zip:       return "zip";
+    // Temporal
+    case Kind::Timer:         return "timer";
+    case Kind::Delay:         return "delay";
+    case Kind::Timestamp:     return "timestamp";
+    case Kind::TimeInterval:  return "time-interval";
+    case Kind::DebounceTime:  return "debounce-time";
+    case Kind::ThrottleTime:  return "throttle-time";
+    case Kind::SampleTime:    return "sample-time";
+    case Kind::Timeout:       return "timeout";
+    case Kind::BufferTime:    return "buffer-time";
+    case Kind::TakeUntilTime: return "take-until-time";
+    case Kind::DelayEach:     return "delay-each";
+    case Kind::AuditTime:     return "audit-time";
+    case Kind::RetryDelay:    return "retry-delay";
     }
     return "unknown";
 }
@@ -161,12 +177,118 @@ HeapObservable* HeapObservable::zip(HeapObservable* a, HeapObservable* b) {
     return o;
 }
 
+// --- Temporal factory methods ---
+
+HeapObservable* HeapObservable::timer(int64_t delay_us, int64_t period_us) {
+    auto* o = new HeapObservable(Kind::Timer);
+    o->state_ = Value(delay_us);
+    o->param_ = period_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::delay(HeapObservable* source, int64_t delay_us) {
+    auto* o = new HeapObservable(Kind::Delay);
+    source->add_ref(); o->source_ = source;
+    o->param_ = delay_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::timestamp(HeapObservable* source) {
+    auto* o = new HeapObservable(Kind::Timestamp);
+    source->add_ref(); o->source_ = source;
+    return o;
+}
+
+HeapObservable* HeapObservable::time_interval(HeapObservable* source) {
+    auto* o = new HeapObservable(Kind::TimeInterval);
+    source->add_ref(); o->source_ = source;
+    return o;
+}
+
+HeapObservable* HeapObservable::delay_each(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::DelayEach);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref();     o->operator_xt_ = xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::debounce_time(HeapObservable* source, int64_t quiet_us) {
+    auto* o = new HeapObservable(Kind::DebounceTime);
+    source->add_ref(); o->source_ = source;
+    o->param_ = quiet_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::throttle_time(HeapObservable* source, int64_t window_us) {
+    auto* o = new HeapObservable(Kind::ThrottleTime);
+    source->add_ref(); o->source_ = source;
+    o->param_ = window_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::sample_time(HeapObservable* source, int64_t period_us) {
+    auto* o = new HeapObservable(Kind::SampleTime);
+    source->add_ref(); o->source_ = source;
+    o->param_ = period_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::timeout(HeapObservable* source, int64_t limit_us) {
+    auto* o = new HeapObservable(Kind::Timeout);
+    source->add_ref(); o->source_ = source;
+    o->param_ = limit_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::audit_time(HeapObservable* source, int64_t window_us) {
+    auto* o = new HeapObservable(Kind::AuditTime);
+    source->add_ref(); o->source_ = source;
+    o->param_ = window_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::buffer_time(HeapObservable* source, int64_t window_us) {
+    auto* o = new HeapObservable(Kind::BufferTime);
+    source->add_ref(); o->source_ = source;
+    o->param_ = window_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::take_until_time(HeapObservable* source, int64_t duration_us) {
+    auto* o = new HeapObservable(Kind::TakeUntilTime);
+    source->add_ref(); o->source_ = source;
+    o->param_ = duration_us;
+    return o;
+}
+
+HeapObservable* HeapObservable::retry_delay(HeapObservable* source, int64_t delay_us, int64_t max_retries) {
+    auto* o = new HeapObservable(Kind::RetryDelay);
+    source->add_ref(); o->source_ = source;
+    o->state_ = Value(delay_us);
+    o->param_ = max_retries;
+    return o;
+}
+
 // ---------------------------------------------------------------------------
 // Execution engine
 // ---------------------------------------------------------------------------
 
 /// Observer callback: receives a value, returns true to continue, false to stop.
 using Observer = std::function<bool(Value, ExecutionContext&)>;
+
+/// Sleep until target time or until tick() fails (budget/deadline/cancel).
+/// Returns true if the target time was reached, false if interrupted.
+static bool sleep_until_or_tick(ExecutionContext& ctx,
+                                 std::chrono::steady_clock::time_point target) {
+    while (std::chrono::steady_clock::now() < target) {
+        if (!ctx.tick()) return false;
+        auto remaining = target - std::chrono::steady_clock::now();
+        if (remaining > std::chrono::milliseconds(1)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    return true;
+}
 
 /// Execute an observable pipeline, delivering each emission to the observer.
 /// Returns true if completed normally, false on error/cancel/stop.
@@ -373,6 +495,304 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         for (size_t j = (ok ? i + 1 : i); j < vals_a.size(); ++j) value_release(vals_a[j]);
         for (size_t j = (ok ? i + 1 : i); j < vals_b.size(); ++j) value_release(vals_b[j]);
         return ok;
+    }
+
+    // --- Temporal: Creation ---
+
+    case K::Timer: {
+        int64_t delay_us = obs->state().as_int;
+        int64_t period_us = obs->param();
+        // Initial delay
+        if (delay_us > 0) {
+            auto target = std::chrono::steady_clock::now()
+                        + std::chrono::microseconds(delay_us);
+            if (!sleep_until_or_tick(ctx, target)) return false;
+        }
+        // Emit 0
+        if (!observer(Value(int64_t(0)), ctx)) return true;
+        if (period_us <= 0) return true;  // one-shot
+        // Repeating emissions
+        int64_t counter = 1;
+        auto next_tick = std::chrono::steady_clock::now()
+                       + std::chrono::microseconds(period_us);
+        while (true) {
+            if (!sleep_until_or_tick(ctx, next_tick)) return false;
+            if (!observer(Value(counter++), ctx)) return true;
+            next_tick += std::chrono::microseconds(period_us);
+        }
+    }
+
+    // --- Temporal: Transform ---
+
+    case K::Delay: {
+        int64_t delay_us = obs->param();
+        return execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto target = std::chrono::steady_clock::now()
+                            + std::chrono::microseconds(delay_us);
+                if (!sleep_until_or_tick(c, target)) {
+                    value_release(v);
+                    return false;
+                }
+                return observer(v, c);
+            });
+    }
+
+    case K::Timestamp: {
+        return execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                auto* pair = new HeapArray();
+                pair->push_back(Value(int64_t(now_us)));
+                pair->push_back(v);
+                return observer(Value::from(pair), c);
+            });
+    }
+
+    case K::TimeInterval: {
+        auto last_time = std::chrono::steady_clock::now();
+        return execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                    now - last_time).count();
+                last_time = now;
+                auto* pair = new HeapArray();
+                pair->push_back(Value(int64_t(elapsed_us)));
+                pair->push_back(v);
+                return observer(Value::from(pair), c);
+            });
+    }
+
+    case K::DelayEach: {
+        auto* xt = obs->operator_xt();
+        return execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                // Push value, execute xt to get delay-us
+                value_addref(v);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) { value_release(v); return false; }
+                auto delay_opt = c.data_stack().pop();
+                if (!delay_opt) { value_release(v); return false; }
+                int64_t delay_us = delay_opt->as_int;
+                if (delay_us > 0) {
+                    auto target = std::chrono::steady_clock::now()
+                                + std::chrono::microseconds(delay_us);
+                    if (!sleep_until_or_tick(c, target)) {
+                        value_release(v);
+                        return false;
+                    }
+                }
+                return observer(v, c);
+            });
+    }
+
+    // --- Temporal: Rate-Limiting ---
+
+    case K::DebounceTime: {
+        int64_t quiet_us = obs->param();
+        Value last_value = {};
+        bool has_value = false;
+        auto last_emission_time = std::chrono::steady_clock::now();
+
+        bool completed = execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                if (has_value) value_release(last_value);
+                last_value = v;
+                value_addref(last_value);
+                has_value = true;
+                last_emission_time = std::chrono::steady_clock::now();
+                return true;
+            });
+
+        // Source completed; emit pending value if quiet period elapsed
+        if (has_value) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                now - last_emission_time).count();
+            // For synchronous sources (instantaneous), all emissions arrive at once,
+            // so elapsed ≈ 0, which is < quiet_us. Still emit on completion (RxJS behavior).
+            (void)elapsed;
+            observer(last_value, ctx);
+        }
+        return completed;
+    }
+
+    case K::ThrottleTime: {
+        int64_t window_us = obs->param();
+        auto gate_until = std::chrono::steady_clock::time_point::min();
+
+        return execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto now = std::chrono::steady_clock::now();
+                if (now >= gate_until) {
+                    gate_until = now + std::chrono::microseconds(window_us);
+                    return observer(v, c);
+                }
+                value_release(v);
+                return true;
+            });
+    }
+
+    case K::SampleTime: {
+        int64_t period_us = obs->param();
+        Value latest = {};
+        bool has_latest = false;
+        auto next_sample = std::chrono::steady_clock::now()
+                         + std::chrono::microseconds(period_us);
+
+        bool completed = execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                if (has_latest) value_release(latest);
+                latest = v;
+                value_addref(latest);
+                has_latest = true;
+
+                auto now = std::chrono::steady_clock::now();
+                while (has_latest && now >= next_sample) {
+                    if (!observer(latest, c)) {
+                        has_latest = false;
+                        return false;
+                    }
+                    has_latest = false;
+                    next_sample += std::chrono::microseconds(period_us);
+                    now = std::chrono::steady_clock::now();
+                }
+                return true;
+            });
+
+        if (has_latest) value_release(latest);
+        return completed;
+    }
+
+    case K::Timeout: {
+        int64_t limit_us = obs->param();
+        auto deadline = std::chrono::steady_clock::now()
+                      + std::chrono::microseconds(limit_us);
+
+        return execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto now = std::chrono::steady_clock::now();
+                if (now > deadline) {
+                    value_release(v);
+                    return false;  // timeout
+                }
+                // Reset deadline on each emission
+                deadline = now + std::chrono::microseconds(limit_us);
+                return observer(v, c);
+            });
+    }
+
+    case K::AuditTime: {
+        int64_t window_us = obs->param();
+        Value last_value = {};
+        bool has_value = false;
+        bool in_window = false;
+        auto window_end = std::chrono::steady_clock::time_point::min();
+
+        bool completed = execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                if (has_value) value_release(last_value);
+                last_value = v;
+                value_addref(last_value);
+                has_value = true;
+
+                auto now = std::chrono::steady_clock::now();
+                if (!in_window) {
+                    // First emission starts the window
+                    in_window = true;
+                    window_end = now + std::chrono::microseconds(window_us);
+                }
+
+                if (now >= window_end) {
+                    // Window elapsed, emit the last value seen
+                    Value emit_v = last_value;
+                    value_addref(emit_v);
+                    in_window = false;
+                    if (!observer(emit_v, c)) return false;
+                    // Start new window if this was also a trigger
+                    in_window = true;
+                    window_end = now + std::chrono::microseconds(window_us);
+                }
+                return true;
+            });
+
+        // Emit trailing value if window active
+        if (has_value && in_window) {
+            observer(last_value, ctx);
+            has_value = false;
+        }
+        if (has_value) value_release(last_value);
+        return completed;
+    }
+
+    // --- Temporal: Windowed ---
+
+    case K::BufferTime: {
+        int64_t window_us = obs->param();
+        auto* buffer = new HeapArray();
+        auto window_end = std::chrono::steady_clock::now()
+                        + std::chrono::microseconds(window_us);
+
+        bool completed = execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                buffer->push_back(v);
+
+                auto now = std::chrono::steady_clock::now();
+                if (now >= window_end) {
+                    // Emit the buffer and start a new one
+                    auto* emit_buf = buffer;
+                    buffer = new HeapArray();
+                    window_end = now + std::chrono::microseconds(window_us);
+                    return observer(Value::from(emit_buf), c);
+                }
+                return true;
+            });
+
+        // Emit remaining buffer if non-empty
+        if (buffer->length() > 0) {
+            observer(Value::from(buffer), ctx);
+        } else {
+            delete buffer;
+        }
+        return completed;
+    }
+
+    // --- Temporal: Limiting ---
+
+    case K::TakeUntilTime: {
+        int64_t duration_us = obs->param();
+        auto deadline = std::chrono::steady_clock::now()
+                      + std::chrono::microseconds(duration_us);
+
+        return execute_observable(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                if (std::chrono::steady_clock::now() > deadline) {
+                    value_release(v);
+                    return false;  // time's up
+                }
+                return observer(v, c);
+            });
+    }
+
+    // --- Temporal: Error Recovery ---
+
+    case K::RetryDelay: {
+        int64_t delay_us = obs->state().as_int;
+        int64_t max_retries = obs->param();
+
+        for (int64_t attempt = 0; attempt <= max_retries; ++attempt) {
+            if (attempt > 0 && delay_us > 0) {
+                auto target = std::chrono::steady_clock::now()
+                            + std::chrono::microseconds(delay_us);
+                if (!sleep_until_or_tick(ctx, target)) return false;
+            }
+            bool ok = execute_observable(obs->source(), ctx, observer);
+            if (ok) return true;
+            if (!ctx.tick()) return false;  // check cancellation between retries
+        }
+        return false;  // all retries exhausted
     }
 
     } // switch
@@ -699,6 +1119,171 @@ bool prim_obs_kind(ExecutionContext& ctx) {
     return true;
 }
 
+// --- Temporal: Creation ---
+
+// obs-timer ( delay-us period-us -- obs )
+bool prim_obs_timer(ExecutionContext& ctx) {
+    auto opt_period = ctx.data_stack().pop();
+    if (!opt_period) return false;
+    auto opt_delay = ctx.data_stack().pop();
+    if (!opt_delay) { ctx.data_stack().push(*opt_period); return false; }
+    auto* obs = HeapObservable::timer(opt_delay->as_int, opt_period->as_int);
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// --- Temporal: Transform ---
+
+// obs-delay ( obs delay-us -- obs' )
+bool prim_obs_delay(ExecutionContext& ctx) {
+    auto opt_delay = ctx.data_stack().pop();
+    if (!opt_delay) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_delay); return false; }
+    auto* obs = HeapObservable::delay(src, opt_delay->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-timestamp ( obs -- obs' )
+bool prim_obs_timestamp(ExecutionContext& ctx) {
+    auto* src = pop_observable(ctx);
+    if (!src) return false;
+    auto* obs = HeapObservable::timestamp(src);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-time-interval ( obs -- obs' )
+bool prim_obs_time_interval(ExecutionContext& ctx) {
+    auto* src = pop_observable(ctx);
+    if (!src) return false;
+    auto* obs = HeapObservable::time_interval(src);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-delay-each ( obs xt -- obs' )
+bool prim_obs_delay_each(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt) { ctx.data_stack().push(*xt_val); return false; }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::delay_each(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// --- Temporal: Rate-Limiting ---
+
+// obs-debounce-time ( obs quiet-us -- obs' )
+bool prim_obs_debounce_time(ExecutionContext& ctx) {
+    auto opt_quiet = ctx.data_stack().pop();
+    if (!opt_quiet) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_quiet); return false; }
+    auto* obs = HeapObservable::debounce_time(src, opt_quiet->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-throttle-time ( obs window-us -- obs' )
+bool prim_obs_throttle_time(ExecutionContext& ctx) {
+    auto opt_window = ctx.data_stack().pop();
+    if (!opt_window) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_window); return false; }
+    auto* obs = HeapObservable::throttle_time(src, opt_window->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-sample-time ( obs period-us -- obs' )
+bool prim_obs_sample_time(ExecutionContext& ctx) {
+    auto opt_period = ctx.data_stack().pop();
+    if (!opt_period) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_period); return false; }
+    auto* obs = HeapObservable::sample_time(src, opt_period->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-timeout ( obs limit-us -- obs' )
+bool prim_obs_timeout(ExecutionContext& ctx) {
+    auto opt_limit = ctx.data_stack().pop();
+    if (!opt_limit) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_limit); return false; }
+    auto* obs = HeapObservable::timeout(src, opt_limit->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-audit-time ( obs window-us -- obs' )
+bool prim_obs_audit_time(ExecutionContext& ctx) {
+    auto opt_window = ctx.data_stack().pop();
+    if (!opt_window) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_window); return false; }
+    auto* obs = HeapObservable::audit_time(src, opt_window->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// --- Temporal: Windowed + Limiting ---
+
+// obs-buffer-time ( obs window-us -- obs' )
+bool prim_obs_buffer_time(ExecutionContext& ctx) {
+    auto opt_window = ctx.data_stack().pop();
+    if (!opt_window) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_window); return false; }
+    auto* obs = HeapObservable::buffer_time(src, opt_window->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-take-until-time ( obs duration-us -- obs' )
+bool prim_obs_take_until_time(ExecutionContext& ctx) {
+    auto opt_dur = ctx.data_stack().pop();
+    if (!opt_dur) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_dur); return false; }
+    auto* obs = HeapObservable::take_until_time(src, opt_dur->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// --- Temporal: Error Recovery ---
+
+// obs-retry-delay ( obs delay-us max-retries -- obs' )
+bool prim_obs_retry_delay(ExecutionContext& ctx) {
+    auto opt_retries = ctx.data_stack().pop();
+    if (!opt_retries) return false;
+    auto opt_delay = ctx.data_stack().pop();
+    if (!opt_delay) { ctx.data_stack().push(*opt_retries); return false; }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_delay); ctx.data_stack().push(*opt_retries); return false; }
+    auto* obs = HeapObservable::retry_delay(src, opt_delay->as_int, opt_retries->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
@@ -767,6 +1352,42 @@ void register_observable_primitives(Dictionary& dict) {
         {T::Unknown}, {T::Unknown}));
     dict.register_word("obs-kind",    mk("prim_obs_kind", prim_obs_kind,
         {T::Unknown}, {T::Unknown}));
+
+    // Temporal: Creation
+    dict.register_word("obs-timer",   mk("prim_obs_timer", prim_obs_timer,
+        {T::Integer, T::Integer}, {T::Unknown}));
+
+    // Temporal: Transform
+    dict.register_word("obs-delay",   mk("prim_obs_delay", prim_obs_delay,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-timestamp", mk("prim_obs_timestamp", prim_obs_timestamp,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-time-interval", mk("prim_obs_time_interval", prim_obs_time_interval,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-delay-each", mk("prim_obs_delay_each", prim_obs_delay_each,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+
+    // Temporal: Rate-Limiting
+    dict.register_word("obs-debounce-time", mk("prim_obs_debounce_time", prim_obs_debounce_time,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-throttle-time", mk("prim_obs_throttle_time", prim_obs_throttle_time,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-sample-time", mk("prim_obs_sample_time", prim_obs_sample_time,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-timeout", mk("prim_obs_timeout", prim_obs_timeout,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-audit-time", mk("prim_obs_audit_time", prim_obs_audit_time,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+
+    // Temporal: Windowed + Limiting
+    dict.register_word("obs-buffer-time", mk("prim_obs_buffer_time", prim_obs_buffer_time,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-take-until-time", mk("prim_obs_take_until_time", prim_obs_take_until_time,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+
+    // Temporal: Error Recovery
+    dict.register_word("obs-retry-delay", mk("prim_obs_retry_delay", prim_obs_retry_delay,
+        {T::Unknown, T::Integer, T::Integer}, {T::Unknown}));
 }
 
 } // namespace etil::core

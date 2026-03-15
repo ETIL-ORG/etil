@@ -1750,3 +1750,81 @@ s" obs-kind" s" description" s" text" s" Return the kind name of an observable n
 s" obs-kind" s" stack-effect" s" text" s" ( obs -- string )" meta! drop
 s" obs-kind" s" category" s" text" s" observable" meta! drop
 s" obs-kind" s" examples" s" code" s| 1 5 obs-range obs-kind s. cr| meta! drop
+
+# --- Observable Temporal ---
+
+# Tier 1: Core Temporal
+
+s" obs-timer" s" description" s" text" s" Create a temporal observable. After delay-us microseconds, emit 0. If period-us > 0, repeat emitting 1, 2, 3... on cadence. Period 0 = single shot. Infinite source — use obs-take or obs-timeout to limit" meta! drop
+s" obs-timer" s" stack-effect" s" text" s" ( delay-us period-us -- obs )" meta! drop
+s" obs-timer" s" category" s" text" s" observable" meta! drop
+s" obs-timer" s" examples" s" code" s" 0 0 obs-timer obs-to-array array-length ." meta! drop
+
+s" obs-interval" s" description" s" text" s" Create an observable that emits 0, 1, 2... on a fixed cadence. Sugar for '0 swap obs-timer'. Infinite source — use obs-take to limit" meta! drop
+s" obs-interval" s" stack-effect" s" text" s" ( period-us -- obs )" meta! drop
+s" obs-interval" s" category" s" text" s" observable" meta! drop
+s" obs-interval" s" examples" s" code" s" 1000 obs-interval 3 obs-take obs-to-array array-length ." meta! drop
+
+s" obs-delay" s" description" s" text" s" Shift each upstream emission forward by delay-us microseconds. Each value is held for the delay period before being forwarded" meta! drop
+s" obs-delay" s" stack-effect" s" text" s" ( obs delay-us -- obs' )" meta! drop
+s" obs-delay" s" category" s" text" s" observable" meta! drop
+s" obs-delay" s" examples" s" code" s" 42 obs-of 0 obs-delay obs-to-array 0 array-get ." meta! drop
+
+s" obs-timestamp" s" description" s" text" s" Wrap each emitted value as a 2-element array [time-us, value] where time-us is the wall-clock time in microseconds since epoch" meta! drop
+s" obs-timestamp" s" stack-effect" s" text" s" ( obs -- obs' )" meta! drop
+s" obs-timestamp" s" category" s" text" s" observable" meta! drop
+s" obs-timestamp" s" examples" s" code" s" 42 obs-of obs-timestamp obs-to-array 0 array-get array-length ." meta! drop
+
+# Tier 2: Rate-Limiting
+
+s" obs-debounce-time" s" description" s" text" s" Emit a value only after quiet-us microseconds of silence from upstream. With instantaneous sources, emits only the last value on completion (RxJS behavior)" meta! drop
+s" obs-debounce-time" s" stack-effect" s" text" s" ( obs quiet-us -- obs' )" meta! drop
+s" obs-debounce-time" s" category" s" text" s" observable" meta! drop
+s" obs-debounce-time" s" examples" s" code" s" array-new 1 array-push 2 array-push 3 array-push obs-from 1000 obs-debounce-time obs-to-array 0 array-get ." meta! drop
+
+s" obs-throttle-time" s" description" s" text" s" Emit first value, then suppress emissions for window-us microseconds. Leading-edge throttle" meta! drop
+s" obs-throttle-time" s" stack-effect" s" text" s" ( obs window-us -- obs' )" meta! drop
+s" obs-throttle-time" s" category" s" text" s" observable" meta! drop
+s" obs-throttle-time" s" examples" s" code" s" 1 6 obs-range 0 obs-throttle-time obs-count ." meta! drop
+
+s" obs-sample-time" s" description" s" text" s" On each period-us tick, emit the most recent upstream value (if any new). Useful for down-sampling high-frequency sources" meta! drop
+s" obs-sample-time" s" stack-effect" s" text" s" ( obs period-us -- obs' )" meta! drop
+s" obs-sample-time" s" category" s" text" s" observable" meta! drop
+s" obs-sample-time" s" examples" s" code" s" 1 6 obs-range 0 obs-sample-time obs-count ." meta! drop
+
+s" obs-timeout" s" description" s" text" s" If no upstream emission arrives within limit-us microseconds, cancel the pipeline. Resets the timer on each emission" meta! drop
+s" obs-timeout" s" stack-effect" s" text" s" ( obs limit-us -- obs' )" meta! drop
+s" obs-timeout" s" category" s" text" s" observable" meta! drop
+s" obs-timeout" s" examples" s" code" s" 1 4 obs-range 1000000 obs-timeout obs-count ." meta! drop
+
+s" obs-audit-time" s" description" s" text" s" After first emission, wait window-us microseconds, then emit the last value seen during that window. Trailing-edge rate-limiter (opposite of throttle)" meta! drop
+s" obs-audit-time" s" stack-effect" s" text" s" ( obs window-us -- obs' )" meta! drop
+s" obs-audit-time" s" category" s" text" s" observable" meta! drop
+s" obs-audit-time" s" examples" s" code" s" 1 6 obs-range 0 obs-audit-time obs-count ." meta! drop
+
+# Tier 3: Windowed + Additional
+
+s" obs-buffer-time" s" description" s" text" s" Collect upstream emissions into arrays, emitting each array at window-us boundaries. Remaining items emitted on completion" meta! drop
+s" obs-buffer-time" s" stack-effect" s" text" s" ( obs window-us -- obs' )" meta! drop
+s" obs-buffer-time" s" category" s" text" s" observable" meta! drop
+s" obs-buffer-time" s" examples" s" code" s" 1 6 obs-range 0 obs-buffer-time obs-count ." meta! drop
+
+s" obs-time-interval" s" description" s" text" s" Wrap each value as [elapsed-us, value] where elapsed-us is the time since the previous emission in microseconds" meta! drop
+s" obs-time-interval" s" stack-effect" s" text" s" ( obs -- obs' )" meta! drop
+s" obs-time-interval" s" category" s" text" s" observable" meta! drop
+s" obs-time-interval" s" examples" s" code" s" 42 obs-of obs-time-interval obs-to-array 0 array-get array-length ." meta! drop
+
+s" obs-take-until-time" s" description" s" text" s" Forward upstream emissions for duration-us microseconds, then complete. Simpler alternative to composing obs-take with obs-timer" meta! drop
+s" obs-take-until-time" s" stack-effect" s" text" s" ( obs duration-us -- obs' )" meta! drop
+s" obs-take-until-time" s" category" s" text" s" observable" meta! drop
+s" obs-take-until-time" s" examples" s" code" s" 1 4 obs-range 1000000 obs-take-until-time obs-count ." meta! drop
+
+s" obs-delay-each" s" description" s" text" s" Per-item delay: xt receives each value and returns a delay in microseconds. Analog of RxJS delayWhen" meta! drop
+s" obs-delay-each" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-delay-each" s" category" s" text" s" observable" meta! drop
+s" obs-delay-each" s" examples" s" code" s" : zero-delay drop 0 ;  1 4 obs-range ' zero-delay obs-delay-each obs-count ." meta! drop
+
+s" obs-retry-delay" s" description" s" text" s" On pipeline failure, wait delay-us microseconds and retry up to max-retries times. Useful for transient errors" meta! drop
+s" obs-retry-delay" s" stack-effect" s" text" s" ( obs delay-us max-retries -- obs' )" meta! drop
+s" obs-retry-delay" s" category" s" text" s" observable" meta! drop
+s" obs-retry-delay" s" examples" s" code" s" 1 4 obs-range 0 3 obs-retry-delay obs-count ." meta! drop

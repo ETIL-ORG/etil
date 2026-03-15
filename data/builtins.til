@@ -51,3 +51,7 @@
 : time-iso-us time-us us->iso-us ;
 : time-jd time-us us->jd ;
 : time-mjd time-us us->mjd ;
+
+# --- Observable convenience words ---
+
+: obs-interval 0 swap obs-timer ;

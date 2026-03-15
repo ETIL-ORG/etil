@@ -149,3 +149,126 @@ obs-empty obs? expect-true
 
 ." take-from-large-range: "
 0 1000000 obs-range 5 obs-take obs-count 5 expect-eq
+
+# =========================================================================
+# Temporal Operators
+# =========================================================================
+
+# --- Timer ---
+
+." obs-timer single-shot: "
+0 0 obs-timer obs-to-array
+dup array-length 1 expect-eq
+0 array-get 0 expect-eq
+
+." obs-timer repeating take 3: "
+0 1 obs-timer 3 obs-take obs-to-array
+dup array-length 3 expect-eq
+dup 0 array-get 0 expect-eq
+dup 1 array-get 1 expect-eq
+2 array-get 2 expect-eq
+
+." obs-timer kind: "
+0 0 obs-timer obs-kind s" timer" s= expect-true
+
+# --- Interval (self-hosted) ---
+
+." obs-interval take 3: "
+1 obs-interval 3 obs-take obs-to-array
+dup array-length 3 expect-eq
+dup 0 array-get 0 expect-eq
+dup 1 array-get 1 expect-eq
+2 array-get 2 expect-eq
+
+# --- Delay ---
+
+." obs-delay zero: "
+42 obs-of 0 obs-delay obs-to-array
+0 array-get 42 expect-eq
+
+." obs-delay values: "
+1 4 obs-range 1 obs-delay obs-to-array
+dup array-length 3 expect-eq
+0 array-get 1 expect-eq
+
+# --- Timestamp ---
+
+." obs-timestamp wraps: "
+42 obs-of obs-timestamp obs-to-array
+0 array-get
+dup array-length 2 expect-eq
+1 array-get 42 expect-eq
+
+." obs-timestamp count: "
+1 4 obs-range obs-timestamp obs-count 3 expect-eq
+
+# --- TimeInterval ---
+
+." obs-time-interval wraps: "
+42 obs-of obs-time-interval obs-to-array
+0 array-get
+dup array-length 2 expect-eq
+1 array-get 42 expect-eq
+
+# --- Debounce ---
+
+." obs-debounce-time last value: "
+array-new 1 array-push 2 array-push 3 array-push obs-from 1000 obs-debounce-time obs-to-array
+dup array-length 1 expect-eq
+0 array-get 3 expect-eq
+
+." obs-debounce-time empty: "
+obs-empty 1000 obs-debounce-time obs-count 0 expect-eq
+
+# --- Throttle ---
+
+." obs-throttle-time zero window: "
+1 6 obs-range 0 obs-throttle-time obs-count 5 expect-eq
+
+." obs-throttle-time large window: "
+1 6 obs-range 1000000 obs-throttle-time obs-to-array
+dup array-length 1 expect-eq
+0 array-get 1 expect-eq
+
+# --- Timeout ---
+
+." obs-timeout fast source: "
+1 4 obs-range 1000000 obs-timeout obs-count 3 expect-eq
+
+# --- BufferTime ---
+
+." obs-buffer-time large window: "
+1 4 obs-range 1000000 obs-buffer-time obs-to-array
+dup array-length 1 expect-eq
+0 array-get array-length 3 expect-eq
+
+# --- TakeUntilTime ---
+
+." obs-take-until-time large duration: "
+1 4 obs-range 1000000 obs-take-until-time obs-count 3 expect-eq
+
+# --- DelayEach ---
+
+: zero-delay drop 0 ;
+
+." obs-delay-each zero: "
+1 4 obs-range ' zero-delay obs-delay-each obs-to-array
+dup array-length 3 expect-eq
+0 array-get 1 expect-eq
+
+# --- AuditTime ---
+
+." obs-audit-time: "
+1 4 obs-range 0 obs-audit-time obs-count 0 > expect-true
+
+# --- RetryDelay ---
+
+." obs-retry-delay success: "
+1 4 obs-range 0 3 obs-retry-delay obs-count 3 expect-eq
+
+# --- Pipeline Composition with Temporal ---
+
+." timer-take-timestamp pipeline: "
+0 1 obs-timer 3 obs-take obs-timestamp obs-to-array
+dup array-length 3 expect-eq
+0 array-get 1 array-get 0 expect-eq
