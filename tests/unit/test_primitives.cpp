@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 278u);  // +25 matrix + 16 neural net + 3 conversion + 4 array iteration + 21 observable
+    EXPECT_EQ(dict.concept_count(), 291u);  // +25 matrix + 16 neural net + 3 conversion + 4 array iteration + 21 observable + 13 temporal observable
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());
