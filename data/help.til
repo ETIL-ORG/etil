@@ -180,6 +180,11 @@ s" 0=" s" examples" s" code" s" 0 0= .| zero? | .\n=> zero? -1 " meta! drop
 s" 0<" s" examples" s" code" s" -1 0< .| negative? | .\n=> negative? -1 " meta! drop
 s" 0>" s" examples" s" code" s" 1 0> .| positive? | .\n=> positive? -1 " meta! drop
 
+s" within" s" description" s" text" s" Test if n is in range [lo, hi)" meta! drop
+s" within" s" stack-effect" s" text" s" ( n lo hi -- bool )" meta! drop
+s" within" s" category" s" text" s" comparison" meta! drop
+s" within" s" examples" s" code" s" 5 0 10 within .  3 3 5 within .  5 3 5 within .\n=> true true false " meta! drop
+
 # --- Logic ---
 
 s" and" s" description" s" text" s" Both Boolean: logical AND (returns bool). Both Integer: bitwise AND (returns int). Mixed types: error." meta! drop
@@ -257,6 +262,21 @@ s" emit" s" examples" s" code" s" 65 emit .| <-- ASCII 65|\n=> A<-- ASCII 65" me
 s" space" s" examples" s" code" s" 1 . space 2 .\n=> 1 2" meta! drop
 s" spaces" s" examples" s" code" s" 10 spaces 42 ." meta! drop
 s" words" s" examples" s" code" s" words" meta! drop
+
+s" hex." s" description" s" text" s" Print integer in hexadecimal with 0x prefix" meta! drop
+s" hex." s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" hex." s" category" s" text" s" i/o" meta! drop
+s" hex." s" examples" s" code" s" 255 hex.\n=> 0xFF" meta! drop
+
+s" bin." s" description" s" text" s" Print integer in binary with 0b prefix" meta! drop
+s" bin." s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" bin." s" category" s" text" s" i/o" meta! drop
+s" bin." s" examples" s" code" s" 42 bin.\n=> 0b101010" meta! drop
+
+s" oct." s" description" s" text" s" Print integer in octal with 0o prefix" meta! drop
+s" oct." s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" oct." s" category" s" text" s" i/o" meta! drop
+s" oct." s" examples" s" code" s" 255 oct.\n=> 0o377" meta! drop
 
 # --- Handler words: compiling ---
 
@@ -653,6 +673,11 @@ s" mjd->us" s" examples" s" code" s" 60723.0 mjd->us us->iso type cr" meta! drop
 s" time-jd" s" examples" s" code" s" time-jd ." meta! drop
 s" time-mjd" s" examples" s" code" s" time-mjd ." meta! drop
 
+s" elapsed" s" description" s" text" s" Execute an xt and push elapsed wall-clock time in microseconds" meta! drop
+s" elapsed" s" stack-effect" s" text" s" ( xt -- us )" meta! drop
+s" elapsed" s" category" s" text" s" time" meta! drop
+s" elapsed" s" examples" s" code" s" ' cr elapsed ." meta! drop
+
 # --- Input Reading ---
 
 s" word-read" s" description" s" text" s" Read next whitespace-delimited token" meta! drop
@@ -843,6 +868,16 @@ s" staint" s" stack-effect" s" text" s" ( string -- bool )" meta! drop
 s" staint" s" category" s" text" s" string" meta! drop
 s" staint" s" examples" s" code" s| s" hello" staint .  => 0 (literal is clean)| meta! drop
 
+s" s>upper" s" description" s" text" s" Convert string to uppercase" meta! drop
+s" s>upper" s" stack-effect" s" text" s" ( str -- str' )" meta! drop
+s" s>upper" s" category" s" text" s" string" meta! drop
+s" s>upper" s" examples" s" code" s| s" hello" s>upper s.| meta! drop
+
+s" s>lower" s" description" s" text" s" Convert string to lowercase" meta! drop
+s" s>lower" s" stack-effect" s" text" s" ( str -- str' )" meta! drop
+s" s>lower" s" category" s" text" s" string" meta! drop
+s" s>lower" s" examples" s" code" s| s" HELLO" s>lower s.| meta! drop
+
 # --- Array ---
 
 s" array-new" s" description" s" text" s" Create a new empty array" meta! drop
@@ -884,6 +919,11 @@ s" array-compact" s" category" s" text" s" array" meta! drop
 s" array-reverse" s" description" s" text" s" Reverse array in-place" meta! drop
 s" array-reverse" s" stack-effect" s" text" s" ( array -- array )" meta! drop
 s" array-reverse" s" category" s" text" s" array" meta! drop
+
+s" array-sort" s" description" s" text" s" Sort array in-place. Numeric values sort by value, strings lexicographically. Mixed types: numbers < booleans < strings" meta! drop
+s" array-sort" s" stack-effect" s" text" s" ( array -- array )" meta! drop
+s" array-sort" s" category" s" text" s" array" meta! drop
+s" array-sort" s" examples" s" code" s" array-new 3 array-push 1 array-push 2 array-push array-sort dump drop\n=> [1, 2, 3]" meta! drop
 
 s" array-each" s" description" s" text" s" Execute xt for each element. Terminal operator" meta! drop
 s" array-each" s" stack-effect" s" text" s" ( array xt -- )" meta! drop

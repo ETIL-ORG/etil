@@ -86,6 +86,9 @@ public:
     /// Direct read access to elements.
     const std::vector<Value>& elements() const { return elements_; }
 
+    /// Direct mutable access to elements (for sort, etc.).
+    std::vector<Value>& mutable_elements() { return elements_; }
+
 private:
     std::vector<Value> elements_;
 };

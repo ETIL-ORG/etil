@@ -597,7 +597,7 @@ TEST_F(ObservablePrimitivesTest, ThrottleTimeZeroWindow) {
 
 TEST_F(ObservablePrimitivesTest, ThrottleTimeLargeWindow) {
     // Large window on instantaneous source: only first value passes
-    run("1 6 obs-range 1000000 obs-throttle-time obs-to-array");
+    run("1 6 obs-range 10000000 obs-throttle-time obs-to-array");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* arr = opt->as_array();
@@ -622,7 +622,7 @@ TEST_F(ObservablePrimitivesTest, SampleTimeZeroPeriod) {
 
 TEST_F(ObservablePrimitivesTest, TimeoutDoesNotExpireForFastSource) {
     // Instantaneous source completes before timeout
-    run("1 4 obs-range 1000000 obs-timeout obs-count");
+    run("1 4 obs-range 10000000 obs-timeout obs-count");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_EQ(opt->as_int, 3);
@@ -640,7 +640,7 @@ TEST_F(ObservablePrimitivesTest, BufferTimeZeroWindow) {
 
 TEST_F(ObservablePrimitivesTest, BufferTimeLargeWindow) {
     // Large window: everything ends up in one trailing buffer
-    run("1 4 obs-range 1000000 obs-buffer-time obs-to-array");
+    run("1 4 obs-range 10000000 obs-buffer-time obs-to-array");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     auto* arr = opt->as_array();
@@ -657,7 +657,7 @@ TEST_F(ObservablePrimitivesTest, BufferTimeLargeWindow) {
 
 TEST_F(ObservablePrimitivesTest, TakeUntilTimeLargeDuration) {
     // Large duration: all values pass through
-    run("1 4 obs-range 1000000 obs-take-until-time obs-count");
+    run("1 4 obs-range 10000000 obs-take-until-time obs-count");
     auto opt = ctx().data_stack().pop();
     ASSERT_TRUE(opt.has_value());
     EXPECT_EQ(opt->as_int, 3);
