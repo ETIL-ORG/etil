@@ -287,6 +287,36 @@ static bool prim_minmax(ExecutionContext& ctx, bool want_max) {
 bool prim_max(ExecutionContext& ctx) { return prim_minmax(ctx, true); }
 bool prim_min(ExecutionContext& ctx) { return prim_minmax(ctx, false); }
 
+// within ( n lo hi -- flag ) — true if lo <= n < hi
+bool prim_within(ExecutionContext& ctx) {
+    Value hi, lo, n;
+    auto opt_hi = ctx.data_stack().pop();
+    if (!opt_hi) return false;
+    hi = *opt_hi;
+    auto opt_lo = ctx.data_stack().pop();
+    if (!opt_lo) { ctx.data_stack().push(hi); return false; }
+    lo = *opt_lo;
+    auto opt_n = ctx.data_stack().pop();
+    if (!opt_n) { ctx.data_stack().push(lo); ctx.data_stack().push(hi); return false; }
+    n = *opt_n;
+
+    // All must be numeric (Integer or Float)
+    auto to_double = [](const Value& v, double& out) -> bool {
+        if (v.type == Value::Type::Integer) { out = static_cast<double>(v.as_int); return true; }
+        if (v.type == Value::Type::Float) { out = v.as_float; return true; }
+        return false;
+    };
+    double dn, dlo, dhi;
+    if (!to_double(n, dn) || !to_double(lo, dlo) || !to_double(hi, dhi)) {
+        ctx.data_stack().push(n);
+        ctx.data_stack().push(lo);
+        ctx.data_stack().push(hi);
+        return false;
+    }
+    ctx.data_stack().push(Value(dlo <= dn && dn < dhi));
+    return true;
+}
+
 // --- Stack manipulation primitives ---
 
 bool prim_dup(ExecutionContext& ctx) {
@@ -715,6 +745,59 @@ bool prim_dot(ExecutionContext& ctx) {
         ctx.out() << "<dataref> ";
     }
     v.release();
+    return true;
+}
+
+// hex. ( n -- ) — print integer in hexadecimal
+bool prim_hex_dot(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    if (opt->type != Value::Type::Integer) {
+        ctx.err() << "Error: hex. expects an integer\n";
+        opt->release();
+        return false;
+    }
+    auto n = static_cast<uint64_t>(opt->as_int);
+    ctx.out() << "0x" << std::hex << std::uppercase << n << std::dec << " ";
+    return true;
+}
+
+// bin. ( n -- ) — print integer in binary
+bool prim_bin_dot(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    if (opt->type != Value::Type::Integer) {
+        ctx.err() << "Error: bin. expects an integer\n";
+        opt->release();
+        return false;
+    }
+    auto n = static_cast<uint64_t>(opt->as_int);
+    // Find the highest set bit to avoid leading zeros (but always show at least "0")
+    if (n == 0) {
+        ctx.out() << "0b0 ";
+    } else {
+        ctx.out() << "0b";
+        bool started = false;
+        for (int i = 63; i >= 0; --i) {
+            if (n & (uint64_t(1) << i)) started = true;
+            if (started) ctx.out() << ((n >> i) & 1);
+        }
+        ctx.out() << " ";
+    }
+    return true;
+}
+
+// oct. ( n -- ) — print integer in octal
+bool prim_oct_dot(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    if (opt->type != Value::Type::Integer) {
+        ctx.err() << "Error: oct. expects an integer\n";
+        opt->release();
+        return false;
+    }
+    auto n = static_cast<uint64_t>(opt->as_int);
+    ctx.out() << "0o" << std::oct << n << std::dec << " ";
     return true;
 }
 
@@ -1913,6 +1996,44 @@ bool prim_sleep(ExecutionContext& ctx) {
     return true;
 }
 
+// elapsed ( xt -- us ) — execute xt and push elapsed microseconds
+bool prim_elapsed(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    if (opt->type != Value::Type::Xt || !opt->as_ptr) {
+        opt->release();
+        ctx.err() << "Error: elapsed expects an xt\n";
+        return false;
+    }
+    auto* impl = opt->as_xt_impl();
+
+    auto start = std::chrono::steady_clock::now();
+
+    bool ok = true;
+    if (impl->native_code()) {
+        ok = impl->native_code()(ctx);
+    } else if (impl->bytecode()) {
+        if (!ctx.enter_call()) {
+            ctx.err() << "Error: maximum call depth exceeded\n";
+            impl->release();
+            return false;
+        }
+        ok = execute_compiled(*impl->bytecode(), ctx);
+        ctx.exit_call();
+    } else {
+        ctx.err() << "Error: xt has no executable code\n";
+        ok = false;
+    }
+    impl->release();
+
+    if (!ok) return false;
+
+    auto end = std::chrono::steady_clock::now();
+    auto us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    ctx.data_stack().push(Value(static_cast<int64_t>(us)));
+    return true;
+}
+
 bool prim_sys_notification(ExecutionContext& ctx) {
     // Check send_system_notification permission
     auto* perms = ctx.permissions();
@@ -2457,6 +2578,7 @@ static const PrimEntry prim_table[] = {
     {"abs",     prim_abs,     1, 1, {T::Unknown},                       {T::Unknown}},
     {"max",     prim_max,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
     {"min",     prim_min,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
+    {"within",  prim_within,  3, 1, {T::Unknown, T::Unknown, T::Unknown},{T::Unknown}},
     // Stack
     {"dup",     prim_dup,     1, 2, {T::Unknown},                       {T::Unknown, T::Unknown}},
     {"drop",    prim_drop,    1, 0, {T::Unknown},                       {}},
@@ -2500,6 +2622,9 @@ static const PrimEntry prim_table[] = {
     {"space",    prim_space,   0, 0, {},                                 {}},
     {"spaces",   prim_spaces,  1, 0, {T::Integer},                       {}},
     {"words",    prim_words,   0, 0, {},                                 {}},
+    {"hex.",     prim_hex_dot, 1, 0, {T::Integer},                       {}},
+    {"bin.",     prim_bin_dot, 1, 0, {T::Integer},                       {}},
+    {"oct.",     prim_oct_dot, 1, 0, {T::Integer},                       {}},
     // Memory
     {"create",   prim_create,  0, 0, {},                                 {}},
     {",",        prim_comma,   1, 0, {T::Unknown},                       {}},
@@ -2549,6 +2674,7 @@ static const PrimEntry prim_table[] = {
     {"us->mjd",    prim_us_to_mjd,   1, 1, {T::Integer},{T::Float}},
     {"mjd->us",    prim_mjd_to_us,   1, 1, {T::Unknown},{T::Integer}},
     {"sleep",      prim_sleep,       1, 0, {T::Integer},{}},
+    {"elapsed",    prim_elapsed,     1, 1, {T::Unknown},{T::Integer}},
     // Input-reading
     {"word-read",        prim_word_read,        0, 2, {},          {T::Unknown, T::Integer}},
     {"string-read-delim",prim_string_read_delim,1, 2, {T::Integer},{T::Unknown, T::Integer}},

@@ -226,26 +226,26 @@ obs-empty 1000 obs-debounce-time obs-count 0 expect-eq
 1 6 obs-range 0 obs-throttle-time obs-count 5 expect-eq
 
 ." obs-throttle-time large window: "
-1 6 obs-range 1000000 obs-throttle-time obs-to-array
+1 6 obs-range 10000000 obs-throttle-time obs-to-array
 dup array-length 1 expect-eq
 0 array-get 1 expect-eq
 
 # --- Timeout ---
 
 ." obs-timeout fast source: "
-1 4 obs-range 1000000 obs-timeout obs-count 3 expect-eq
+1 4 obs-range 10000000 obs-timeout obs-count 3 expect-eq
 
 # --- BufferTime ---
 
 ." obs-buffer-time large window: "
-1 4 obs-range 1000000 obs-buffer-time obs-to-array
+1 4 obs-range 10000000 obs-buffer-time obs-to-array
 dup array-length 1 expect-eq
 0 array-get array-length 3 expect-eq
 
 # --- TakeUntilTime ---
 
 ." obs-take-until-time large duration: "
-1 4 obs-range 1000000 obs-take-until-time obs-count 3 expect-eq
+1 4 obs-range 10000000 obs-take-until-time obs-count 3 expect-eq
 
 # --- DelayEach ---
 

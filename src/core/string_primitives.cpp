@@ -873,6 +873,34 @@ bool prim_staint(ExecutionContext& ctx) {
     return true;
 }
 
+// s>upper ( str -- str' ) — convert to uppercase
+bool prim_s_upper(ExecutionContext& ctx) {
+    auto* s = pop_string(ctx);
+    if (!s) return false;
+    std::string result(s->view());
+    bool tainted = s->is_tainted();
+    s->release();
+    for (auto& c : result) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    auto* hs = HeapString::create(result);
+    if (tainted) hs->set_tainted(true);
+    ctx.data_stack().push(Value::from(hs));
+    return true;
+}
+
+// s>lower ( str -- str' ) — convert to lowercase
+bool prim_s_lower(ExecutionContext& ctx) {
+    auto* s = pop_string(ctx);
+    if (!s) return false;
+    std::string result(s->view());
+    bool tainted = s->is_tainted();
+    s->release();
+    for (auto& c : result) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    auto* hs = HeapString::create(result);
+    if (tainted) hs->set_tainted(true);
+    ctx.data_stack().push(Value::from(hs));
+    return true;
+}
+
 // s. ( str -- ) — print string (alias for type)
 bool prim_sdot(ExecutionContext& ctx) {
     return prim_type(ctx);
@@ -919,6 +947,10 @@ void register_string_primitives(Dictionary& dict) {
         {T::String}, {T::String}));
     dict.register_word("staint", make_primitive("staint", prim_staint,
         {T::String}, {T::Integer}));
+    dict.register_word("s>upper", make_primitive("s>upper", prim_s_upper,
+        {T::String}, {T::String}));
+    dict.register_word("s>lower", make_primitive("s>lower", prim_s_lower,
+        {T::String}, {T::String}));
 }
 
 } // namespace etil::core

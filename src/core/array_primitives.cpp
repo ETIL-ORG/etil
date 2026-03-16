@@ -12,6 +12,7 @@
 #include "etil/core/value_helpers.hpp"
 #include "etil/core/word_impl.hpp"
 
+#include <algorithm>
 #include <string>
 
 namespace etil::core {
@@ -150,6 +151,42 @@ bool prim_array_reverse(ExecutionContext& ctx) {
     auto* arr = pop_array(ctx);
     if (!arr) return false;
     arr->reverse();
+    ctx.data_stack().push(Value::from(arr));
+    return true;
+}
+
+// array-sort ( arr -- arr ) — sort array in-place (numeric/lexicographic)
+// Integers and floats compare numerically. Strings compare lexicographically.
+// Mixed types: Integer < Float < Boolean < String < other
+bool prim_array_sort(ExecutionContext& ctx) {
+    auto* arr = pop_array(ctx);
+    if (!arr) return false;
+    auto& elems = arr->mutable_elements();
+    std::sort(elems.begin(), elems.end(), [](const Value& a, const Value& b) {
+        // Same-type fast paths
+        if (a.type == b.type) {
+            switch (a.type) {
+            case Value::Type::Integer: return a.as_int < b.as_int;
+            case Value::Type::Float:   return a.as_float < b.as_float;
+            case Value::Type::Boolean: return !a.as_bool() && b.as_bool();
+            case Value::Type::String:
+                if (a.as_ptr && b.as_ptr)
+                    return a.as_string()->view() < b.as_string()->view();
+                return !a.as_ptr && b.as_ptr;
+            default:
+                return false;  // stable for non-comparable types
+            }
+        }
+        // Cross-type: promote int/float for numeric comparison
+        if ((a.type == Value::Type::Integer || a.type == Value::Type::Float) &&
+            (b.type == Value::Type::Integer || b.type == Value::Type::Float)) {
+            double da = (a.type == Value::Type::Integer) ? static_cast<double>(a.as_int) : a.as_float;
+            double db = (b.type == Value::Type::Integer) ? static_cast<double>(b.as_int) : b.as_float;
+            return da < db;
+        }
+        // Type ordering: Integer(0) < Float(1) < Boolean(2) < String(3) < others
+        return static_cast<int>(a.type) < static_cast<int>(b.type);
+    });
     ctx.data_stack().push(Value::from(arr));
     return true;
 }
@@ -324,6 +361,8 @@ void register_array_primitives(Dictionary& dict) {
     dict.register_word("array-compact", make_primitive("array-compact", prim_array_compact,
         {T::Array}, {T::Array}));
     dict.register_word("array-reverse", make_primitive("array-reverse", prim_array_reverse,
+        {T::Array}, {T::Array}));
+    dict.register_word("array-sort", make_primitive("array-sort", prim_array_sort,
         {T::Array}, {T::Array}));
     dict.register_word("array-each", make_primitive("array-each", prim_array_each,
         {T::Array, T::Unknown}, {}));
