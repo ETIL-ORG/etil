@@ -42,7 +42,7 @@ for arg in "$@"; do
     esac
 done
 
-# --- Check if deps are up to date ---
+# --- Check which modes need building ---
 SOURCE_MANIFEST="$ETIL_PROJECT_DIR/ci/deps/manifest.json"
 INSTALLED_MANIFEST="$ETIL_DEPS_PREFIX/manifest.json"
 
@@ -50,23 +50,41 @@ if [[ ! -f "$SOURCE_MANIFEST" ]]; then
     etil_die "Source manifest not found: $SOURCE_MANIFEST"
 fi
 
-if [[ "$FORCE" == false && -f "$INSTALLED_MANIFEST" ]]; then
-    if diff -q "$SOURCE_MANIFEST" "$INSTALLED_MANIFEST" >/dev/null 2>&1; then
-        etil_log "Dependencies up to date ($ETIL_DEPS_PREFIX)"
-        exit 0
-    fi
-    etil_log "Manifest changed — rebuilding dependencies"
-else
-    if [[ "$FORCE" == true ]]; then
-        etil_log "Force rebuild requested"
-    else
-        etil_log "No installed manifest — building dependencies"
-    fi
+MANIFEST_STALE=false
+if [[ ! -f "$INSTALLED_MANIFEST" ]] || ! diff -q "$SOURCE_MANIFEST" "$INSTALLED_MANIFEST" >/dev/null 2>&1; then
+    MANIFEST_STALE=true
 fi
 
-# --- Build ---
-etil_log "Building dependencies: mode=$MODE prefix=$ETIL_DEPS_PREFIX"
+# Determine which modes are requested
+case "$MODE" in
+    debug)   REQUESTED_MODES="debug" ;;
+    release) REQUESTED_MODES="release" ;;
+    all)     REQUESTED_MODES="debug release" ;;
+esac
 
-"$ETIL_PROJECT_DIR/ci/deps/build-deps.sh" "$ETIL_DEPS_PREFIX" "$MODE"
+# Filter to only modes that need building
+MODES_TO_BUILD=""
+for m in $REQUESTED_MODES; do
+    local_dir="$ETIL_DEPS_PREFIX/$m"
+    if [[ "$FORCE" == true ]]; then
+        MODES_TO_BUILD="$MODES_TO_BUILD $m"
+    elif [[ "$MANIFEST_STALE" == true ]]; then
+        MODES_TO_BUILD="$MODES_TO_BUILD $m"
+    elif [[ ! -d "$local_dir/lib" ]]; then
+        MODES_TO_BUILD="$MODES_TO_BUILD $m"
+    fi
+done
+MODES_TO_BUILD="${MODES_TO_BUILD# }"  # trim leading space
+
+if [[ -z "$MODES_TO_BUILD" ]]; then
+    etil_log "Dependencies up to date ($ETIL_DEPS_PREFIX)"
+    exit 0
+fi
+
+# --- Build needed modes ---
+for m in $MODES_TO_BUILD; do
+    etil_log "Building $m dependencies → $ETIL_DEPS_PREFIX/$m"
+    "$ETIL_PROJECT_DIR/ci/deps/build-deps.sh" "$ETIL_DEPS_PREFIX" "$m"
+done
 
 etil_log "Dependencies built successfully"
