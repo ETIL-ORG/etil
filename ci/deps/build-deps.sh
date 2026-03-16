@@ -12,13 +12,26 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX="${1:-/opt/etil-deps/v1}"
+MODE_ARG="${2:-all}"  # debug|release|all
 
 echo "=== Building ETIL dependencies ==="
 echo "Prefix: $PREFIX"
+echo "Mode:   $MODE_ARG"
 echo "Script: $SCRIPT_DIR/CMakeLists.txt"
 echo ""
 
-for MODE in debug release; do
+# Determine which modes to build
+case "$MODE_ARG" in
+    debug)   MODES="debug" ;;
+    release) MODES="release" ;;
+    all)     MODES="debug release" ;;
+    *)
+        echo "Error: invalid mode '$MODE_ARG' (expected: debug|release|all)"
+        exit 1
+        ;;
+esac
+
+for MODE in $MODES; do
     INSTALL_DIR="$PREFIX/$MODE"
     BUILD_DIR="/tmp/etil-deps-build-$MODE"
 

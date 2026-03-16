@@ -24,6 +24,11 @@ ETIL_WORKSPACE_DIR="$(cd "$ETIL_PROJECT_DIR/.." && pwd)"
 ETIL_BUILD_DEBUG_DIR="$ETIL_WORKSPACE_DIR/build-debug"
 ETIL_BUILD_RELEASE_DIR="$ETIL_WORKSPACE_DIR/build"
 
+# --- Pre-built dependencies ---
+ETIL_DEPS_PREFIX="${ETIL_DEPS_PREFIX:-$ETIL_WORKSPACE_DIR/lib}"
+ETIL_DEPS_DEBUG_DIR="$ETIL_DEPS_PREFIX/debug"
+ETIL_DEPS_RELEASE_DIR="$ETIL_DEPS_PREFIX/release"
+
 # --- SSH (configure for your deployment target) ---
 ETIL_SSH_KEY="${ETIL_SSH_KEY:-$ETIL_PROJECT_DIR/.ssh/deploy.ed25519}"
 ETIL_SSH_HOST="${ETIL_SSH_HOST:-deploy@your-server.example.com}"
@@ -93,6 +98,30 @@ etil_version_bump_patch() {
     ETIL_VERSION_PATCH="$new_patch"
 
     echo "$new_version"
+}
+
+etil_compare_versions() {
+    # Compare two semver strings: v1 vs v2
+    # Returns: 0=equal, 1=v1>v2, 2=v1<v2
+    local v1="$1" v2="$2"
+
+    local v1_major="${v1%%.*}"
+    local v1_rest="${v1#*.}"
+    local v1_minor="${v1_rest%%.*}"
+    local v1_patch="${v1_rest#*.}"
+
+    local v2_major="${v2%%.*}"
+    local v2_rest="${v2#*.}"
+    local v2_minor="${v2_rest%%.*}"
+    local v2_patch="${v2_rest#*.}"
+
+    if (( v1_major > v2_major )); then return 1; fi
+    if (( v1_major < v2_major )); then return 2; fi
+    if (( v1_minor > v2_minor )); then return 1; fi
+    if (( v1_minor < v2_minor )); then return 2; fi
+    if (( v1_patch > v2_patch )); then return 1; fi
+    if (( v1_patch < v2_patch )); then return 2; fi
+    return 0
 }
 
 # --- Parse version on source ---

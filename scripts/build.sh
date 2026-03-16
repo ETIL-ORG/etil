@@ -57,6 +57,20 @@ build_target() {
         build_dir="$ETIL_BUILD_RELEASE_DIR"
     fi
 
+    # Detect pre-built dependencies
+    local deps_dir
+    if [[ "$build_type" == "Debug" ]]; then
+        deps_dir="$ETIL_DEPS_DEBUG_DIR"
+    else
+        deps_dir="$ETIL_DEPS_RELEASE_DIR"
+    fi
+
+    local deps_flags=""
+    if [[ -d "$deps_dir" ]]; then
+        deps_flags="-DCMAKE_PREFIX_PATH=$deps_dir -DFETCHCONTENT_FULLY_DISCONNECTED=ON"
+        etil_log "Using pre-built deps: $deps_dir"
+    fi
+
     etil_log "Building $build_type → $build_dir"
 
     # Clean if requested
@@ -71,6 +85,7 @@ build_target() {
         cmake -GNinja \
             -DCMAKE_BUILD_TYPE="$build_type" \
             $ETIL_CMAKE_COMMON_FLAGS \
+            $deps_flags \
             -S "$ETIL_PROJECT_DIR" \
             -B "$build_dir"
     fi
