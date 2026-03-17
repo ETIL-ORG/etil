@@ -1925,3 +1925,17 @@ s" obs-write-file" s" category" s" text" s" observable" meta! drop
 s" obs-append-file" s" description" s" text" s" Terminal: append all observable string/byte emissions to a file" meta! drop
 s" obs-append-file" s" stack-effect" s" text" s" ( obs path -- )" meta! drop
 s" obs-append-file" s" category" s" text" s" observable" meta! drop
+
+# --- Observable AVO Phase 3: Streaming HTTP ---
+
+s" obs-http-get" s" description" s" text" s" Streaming HTTP GET: emit response body as byte array chunks. Same SSRF/allowlist/budget enforcement as http-get" meta! drop
+s" obs-http-get" s" stack-effect" s" text" s" ( url headers-map -- obs )" meta! drop
+s" obs-http-get" s" category" s" text" s" observable" meta! drop
+
+s" obs-http-post" s" description" s" text" s" HTTP POST: emit response body as single byte array. Same security as http-post" meta! drop
+s" obs-http-post" s" stack-effect" s" text" s" ( url headers-map body-bytes -- obs )" meta! drop
+s" obs-http-post" s" category" s" text" s" observable" meta! drop
+
+s" obs-http-sse" s" description" s" text" s" SSE client: connect to Server-Sent Events endpoint, emit each event as HeapJson or string. Naturally infinite — compose with obs-take or obs-timeout" meta! drop
+s" obs-http-sse" s" stack-effect" s" text" s" ( url headers-map -- obs )" meta! drop
+s" obs-http-sse" s" category" s" text" s" observable" meta! drop

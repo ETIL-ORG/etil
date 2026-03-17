@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 311u);  // +7: obs-read-bytes/lines/json/csv, obs-readdir, obs-write-file, obs-append-file
+    EXPECT_EQ(dict.concept_count(), 314u);  // +3: obs-http-get, obs-http-post, obs-http-sse
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

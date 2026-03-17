@@ -10,6 +10,8 @@
 namespace etil::core {
 
 class HeapArray;
+class HeapByteArray;
+class HeapString;
 class WordImpl;
 
 /// Heap-allocated Observable node.
@@ -65,6 +67,11 @@ public:
         ReadJson,       // fs path in state_ (HeapString)
         ReadCsv,        // fs path in state_ (HeapString), separator in source_array_ (single HeapString)
         ReadDir,        // fs path in state_ (HeapString)
+
+        // AVO Phase 3: Streaming HTTP
+        HttpGet,        // URL data in source_array_ (HeapArray: [scheme_host_port, path, hostname, resolved_ip, headers...])
+        HttpPost,       // URL data in source_array_, request body in state_ (HeapByteArray)
+        HttpSse,        // URL data in source_array_ (same as HttpGet)
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -137,6 +144,11 @@ public:
     static HeapObservable* read_json(HeapString* fs_path);
     static HeapObservable* read_csv(HeapString* fs_path, HeapString* separator);
     static HeapObservable* read_dir(HeapString* fs_path);
+
+    // AVO Phase 3 — Streaming HTTP (url_data is [scheme_host_port, path, hostname, resolved_ip, header_k, header_v, ...])
+    static HeapObservable* http_get(HeapArray* url_data);
+    static HeapObservable* http_post(HeapArray* url_data, HeapByteArray* body, HeapString* content_type);
+    static HeapObservable* http_sse(HeapArray* url_data);
 
     ~HeapObservable() override;
 

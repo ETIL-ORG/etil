@@ -14,8 +14,15 @@
 
 #include "etil/core/heap_byte_array.hpp"
 #include "etil/core/heap_json.hpp"
+#include "etil/core/heap_map.hpp"
 #include "etil/lvfs/lvfs.hpp"
+#include "etil/net/http_client_config.hpp"
+#include "etil/net/url_validation.hpp"
 #include "etil/mcp/role_permissions.hpp"
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+#include <httplib.h>
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -85,6 +92,9 @@ const char* HeapObservable::kind_name() const {
     case Kind::ReadJson:      return "read-json";
     case Kind::ReadCsv:       return "read-csv";
     case Kind::ReadDir:       return "read-dir";
+    case Kind::HttpGet:       return "http-get";
+    case Kind::HttpPost:      return "http-post";
+    case Kind::HttpSse:       return "http-sse";
     }
     return "unknown";
 }
@@ -358,6 +368,35 @@ HeapObservable* HeapObservable::read_dir(HeapString* fs_path) {
     auto* o = new HeapObservable(Kind::ReadDir);
     fs_path->add_ref();
     o->state_ = Value::from(fs_path);
+    return o;
+}
+
+// AVO Phase 3 factories
+
+HeapObservable* HeapObservable::http_get(HeapArray* url_data) {
+    auto* o = new HeapObservable(Kind::HttpGet);
+    url_data->add_ref();
+    o->source_array_ = url_data;
+    return o;
+}
+
+HeapObservable* HeapObservable::http_post(HeapArray* url_data, HeapByteArray* body, HeapString* content_type) {
+    auto* o = new HeapObservable(Kind::HttpPost);
+    url_data->add_ref();
+    o->source_array_ = url_data;
+    // Store body as Value in state_
+    body->add_ref();
+    o->state_ = Value::from(body);
+    // Store content_type: use param_ as flag, add content_type to url_data
+    content_type->add_ref();
+    url_data->push_back(Value::from(content_type));  // last element
+    return o;
+}
+
+HeapObservable* HeapObservable::http_sse(HeapArray* url_data) {
+    auto* o = new HeapObservable(Kind::HttpSse);
+    url_data->add_ref();
+    o->source_array_ = url_data;
     return o;
 }
 
@@ -1126,6 +1165,163 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return true;
     }
 
+    // --- AVO Phase 3: Streaming HTTP ---
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+    case K::HttpGet:
+    case K::HttpSse: {
+        // Extract URL data from source_array_: [scheme_host_port, path, hostname, resolved_ip, hdr_k, hdr_v, ...]
+        auto* arr = obs->source_array();
+        Value v0, v1, v2, v3;
+        if (!arr->get(0, v0) || !arr->get(1, v1) || !arr->get(2, v2) || !arr->get(3, v3)) {
+            ctx.err() << "Error: obs-http-get: malformed URL data\n";
+            return false;
+        }
+        std::string shp(v0.as_string()->view()); v0.release();
+        std::string path(v1.as_string()->view()); v1.release();
+        std::string hostname(v2.as_string()->view()); v2.release();
+        std::string resolved_ip(v3.as_string()->view()); v3.release();
+
+        httplib::Headers headers;
+        for (size_t i = 4; i + 1 < arr->length(); i += 2) {
+            Value hk, hv;
+            if (arr->get(i, hk) && arr->get(i + 1, hv)) {
+                if (hk.type == Value::Type::String && hv.type == Value::Type::String) {
+                    headers.emplace(std::string(hk.as_string()->view()),
+                                    std::string(hv.as_string()->view()));
+                }
+                hk.release(); hv.release();
+            }
+        }
+
+        httplib::Client cli(shp);
+        if (!resolved_ip.empty()) {
+            cli.set_hostname_addr_map({{hostname, resolved_ip}});
+        }
+        cli.set_connection_timeout(10, 0);
+        cli.set_read_timeout(30, 0);
+        cli.set_follow_location(false);
+
+        if (obs->obs_kind() == K::HttpSse) {
+            // SSE: accept text/event-stream
+            headers.emplace("Accept", "text/event-stream");
+        }
+
+        // Stream response chunks
+        bool stopped = false;
+        auto result = cli.Get(path, headers,
+            [&](const char* data, size_t len) -> bool {
+                if (!ctx.tick()) { stopped = true; return false; }
+
+                if (obs->obs_kind() == K::HttpSse) {
+                    // SSE: accumulate lines, emit on double-newline
+                    // For simplicity, emit each data: payload as a HeapString
+                    std::string chunk(data, len);
+                    // Split into lines and process
+                    std::istringstream iss(chunk);
+                    std::string line;
+                    while (std::getline(iss, line)) {
+                        if (!line.empty() && line.back() == '\r') line.pop_back();
+                        if (line.rfind("data:", 0) == 0) {
+                            std::string payload = line.substr(5);
+                            if (!payload.empty() && payload[0] == ' ') payload = payload.substr(1);
+                            try {
+                                auto j = nlohmann::json::parse(payload);
+                                auto* hj = new HeapJson(std::move(j));
+                                if (!observer(Value::from(hj), ctx)) { stopped = true; return false; }
+                            } catch (...) {
+                                // Non-JSON data line: emit as string
+                                auto* hs = HeapString::create(payload);
+                                hs->set_tainted(true);
+                                if (!observer(Value::from(hs), ctx)) { stopped = true; return false; }
+                            }
+                        }
+                    }
+                    return true;
+                } else {
+                    // Regular GET: emit each chunk as HeapByteArray
+                    auto* ba = new HeapByteArray(len);
+                    std::memcpy(ba->data(), data, len);
+                    ba->set_tainted(true);
+                    if (!observer(Value::from(ba), ctx)) { stopped = true; return false; }
+                    return true;
+                }
+            });
+
+        if (stopped) return !ctx.tick() ? false : true;  // cancelled vs observer-stopped
+        if (!result) {
+            ctx.err() << "Error: obs-http-get: " << httplib::to_string(result.error()) << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    case K::HttpPost: {
+        auto* arr = obs->source_array();
+        Value v0, v1, v2, v3;
+        if (!arr->get(0, v0) || !arr->get(1, v1) || !arr->get(2, v2) || !arr->get(3, v3)) {
+            ctx.err() << "Error: obs-http-post: malformed URL data\n";
+            return false;
+        }
+        std::string shp(v0.as_string()->view()); v0.release();
+        std::string path(v1.as_string()->view()); v1.release();
+        std::string hostname(v2.as_string()->view()); v2.release();
+        std::string resolved_ip(v3.as_string()->view()); v3.release();
+
+        httplib::Headers headers;
+        // Last element is content_type; headers are pairs before it
+        size_t header_end = arr->length() - 1;  // last is content_type
+        for (size_t i = 4; i + 1 < header_end; i += 2) {
+            Value hk, hv;
+            if (arr->get(i, hk) && arr->get(i + 1, hv)) {
+                if (hk.type == Value::Type::String && hv.type == Value::Type::String) {
+                    headers.emplace(std::string(hk.as_string()->view()),
+                                    std::string(hv.as_string()->view()));
+                }
+                hk.release(); hv.release();
+            }
+        }
+
+        // Get content type (last element of source_array)
+        Value ct_val;
+        arr->get(arr->length() - 1, ct_val);
+        std::string content_type(ct_val.as_string()->view());
+        ct_val.release();
+
+        // Get body from state_
+        auto* body_ba = obs->state().as_byte_array();
+        std::string body_str(reinterpret_cast<const char*>(body_ba->data()), body_ba->length());
+
+        httplib::Client cli(shp);
+        if (!resolved_ip.empty()) {
+            cli.set_hostname_addr_map({{hostname, resolved_ip}});
+        }
+        cli.set_connection_timeout(10, 0);
+        cli.set_read_timeout(30, 0);
+        cli.set_follow_location(false);
+
+        auto result = cli.Post(path, headers, body_str, content_type);
+        if (!result) {
+            ctx.err() << "Error: obs-http-post: " << httplib::to_string(result.error()) << "\n";
+            return false;
+        }
+
+        // Emit response body as single HeapByteArray
+        auto& rb = result->body;
+        auto* ba = new HeapByteArray(rb.size());
+        std::memcpy(ba->data(), rb.data(), rb.size());
+        ba->set_tainted(true);
+        observer(Value::from(ba), ctx);
+        return true;
+    }
+#else
+    case K::HttpGet:
+    case K::HttpPost:
+    case K::HttpSse:
+        ctx.err() << "Error: HTTP client not compiled (ETIL_BUILD_HTTP_CLIENT=OFF)\n";
+        return false;
+#endif
+
     } // switch
     return false;
 }
@@ -1877,6 +2073,140 @@ bool prim_obs_append_file(ExecutionContext& ctx) {
     return ok;
 }
 
+// --- AVO Phase 3: Streaming HTTP primitives ---
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+// Helper: pop URL + headers-map, validate, build url_data array.
+// Returns nullptr on failure (error printed, stack handled).
+static HeapArray* pop_and_validate_http(ExecutionContext& ctx) {
+    // Pop headers map (TOS)
+    auto hdr_opt = ctx.data_stack().pop();
+    if (!hdr_opt) return nullptr;
+    if (hdr_opt->type != Value::Type::Map || !hdr_opt->as_ptr) {
+        ctx.err() << "Error: expected Map for headers\n";
+        value_release(*hdr_opt);
+        return nullptr;
+    }
+    auto* hdr_map = hdr_opt->as_map();
+
+    // Pop URL string
+    auto* hs = pop_string(ctx);
+    if (!hs) { hdr_map->release(); return nullptr; }
+    std::string url(hs->view());
+    hs->release();
+
+    // Check permissions
+    auto* perms = ctx.permissions();
+    if (perms && !perms->net_client_allowed) {
+        ctx.err() << "Error: HTTP not permitted\n";
+        hdr_map->release();
+        return nullptr;
+    }
+
+    auto* http_state = ctx.http_client_state();
+    if (!http_state || !http_state->config || !http_state->config->enabled()) {
+        ctx.err() << "Error: HTTP client not configured\n";
+        hdr_map->release();
+        return nullptr;
+    }
+    if (!http_state->can_fetch()) {
+        ctx.err() << "Error: fetch budget exceeded\n";
+        hdr_map->release();
+        return nullptr;
+    }
+
+    etil::net::ParsedUrl parsed;
+    std::string error;
+    if (!etil::net::validate_url(url, *http_state->config, parsed, error)) {
+        ctx.err() << "Error: " << error << "\n";
+        hdr_map->release();
+        return nullptr;
+    }
+
+    http_state->record_fetch();
+
+    // Build url_data array: [scheme_host_port, path, hostname, resolved_ip, hdr_k, hdr_v, ...]
+    std::string shp = parsed.scheme + "://" + parsed.host;
+    if (parsed.port != 0) shp += ":" + std::to_string(parsed.port);
+
+    auto* arr = new HeapArray();
+    arr->push_back(Value::from(HeapString::create(shp)));
+    arr->push_back(Value::from(HeapString::create(parsed.path)));
+    arr->push_back(Value::from(HeapString::create(parsed.host)));
+    arr->push_back(Value::from(HeapString::create(parsed.resolved_ip)));
+
+    for (const auto& [key, val] : hdr_map->entries()) {
+        if (val.type == Value::Type::String && val.as_ptr) {
+            arr->push_back(Value::from(HeapString::create(key)));
+            value_addref(val);
+            arr->push_back(val);
+        }
+    }
+    hdr_map->release();
+    return arr;
+}
+
+// obs-http-get ( url headers -- obs )
+bool prim_obs_http_get(ExecutionContext& ctx) {
+    auto* url_data = pop_and_validate_http(ctx);
+    if (!url_data) return false;
+    auto* obs = HeapObservable::http_get(url_data);
+    url_data->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-http-post ( url headers body -- obs )
+bool prim_obs_http_post(ExecutionContext& ctx) {
+    // Pop body (TOS)
+    auto* body = pop_byte_array(ctx);
+    if (!body) return false;
+
+    auto* url_data = pop_and_validate_http(ctx);
+    if (!url_data) { body->release(); return false; }
+
+    // Extract Content-Type from headers if present, default to application/octet-stream
+    auto* ct = HeapString::create("application/octet-stream");
+    // Check if headers had Content-Type (it's in url_data pairs starting at index 4)
+    for (size_t i = 4; i + 1 < url_data->length(); i += 2) {
+        Value hk;
+        if (url_data->get(i, hk) && hk.type == Value::Type::String) {
+            std::string key(hk.as_string()->view());
+            hk.release();
+            // Case-insensitive Content-Type check
+            std::string lower_key = key;
+            for (auto& c : lower_key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (lower_key == "content-type") {
+                Value hv;
+                if (url_data->get(i + 1, hv) && hv.type == Value::Type::String) {
+                    ct->release();
+                    ct = HeapString::create(std::string(hv.as_string()->view()));
+                    hv.release();
+                }
+                break;
+            }
+        }
+    }
+
+    auto* obs = HeapObservable::http_post(url_data, body, ct);
+    url_data->release();
+    body->release();
+    ct->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-http-sse ( url headers -- obs )
+bool prim_obs_http_sse(ExecutionContext& ctx) {
+    auto* url_data = pop_and_validate_http(ctx);
+    if (!url_data) return false;
+    auto* obs = HeapObservable::http_sse(url_data);
+    url_data->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+#endif  // ETIL_HTTP_CLIENT_ENABLED
+
 // obs-to-string ( obs -- string ) — concatenate all string emissions
 bool prim_obs_to_string(ExecutionContext& ctx) {
     auto* obs = pop_observable(ctx);
@@ -2028,6 +2358,16 @@ void register_observable_primitives(Dictionary& dict) {
         {T::Unknown, T::String}, {}));
     dict.register_word("obs-append-file", mk("prim_obs_append_file", prim_obs_append_file,
         {T::Unknown, T::String}, {}));
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+    // AVO Phase 3: Streaming HTTP
+    dict.register_word("obs-http-get", mk("prim_obs_http_get", prim_obs_http_get,
+        {T::String, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-http-post", mk("prim_obs_http_post", prim_obs_http_post,
+        {T::String, T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-http-sse", mk("prim_obs_http_sse", prim_obs_http_sse,
+        {T::String, T::Unknown}, {T::Unknown}));
+#endif
 }
 
 } // namespace etil::core
