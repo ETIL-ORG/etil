@@ -262,7 +262,8 @@ OAuth login, script execution (`--exec`/`--execux`), and session logging.
 
 - **JWT with RBAC** — RS256 JWTs with clock-skew tolerance, issued-at validation,
   type-safe claim extraction, and per-role permissions: HTTP domain allowlists,
-  instruction budgets, file I/O gates, MongoDB access, session quotas
+  instruction budgets, per-call and cumulative execution time limits, file I/O gates,
+  MongoDB access, session quotas
 - **OAuth Device Flow** — GitHub + Google via RFC 8628. Three endpoints: `/auth/device`,
   `/auth/poll`, `/auth/token`. Stateless — provider tokens used once then discarded
 - **API key fallback** — backward-compatible Bearer token auth for simple deployments

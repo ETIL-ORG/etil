@@ -383,27 +383,38 @@ std::optional<nlohmann::json> McpServer::handle_message(
         session->last_activity = now;
     }
 
-    // Lock the session for the duration of request processing
-    std::lock_guard<std::mutex> session_lock(session->mutex);
-    current_session_ = session;
+    // Lock the session for request processing; scope block so we can
+    // destroy the session after releasing the lock if force_terminate is set.
+    bool should_terminate = false;
+    std::optional<nlohmann::json> result;
+    {
+        std::lock_guard<std::mutex> session_lock(session->mutex);
+        current_session_ = session;
 
-    // Warn if the session was approaching idle timeout
-    auto timeout = effective_timeout(*session);
-    auto warning = effective_warning(timeout);
-    if (idle_duration > warning) {
-        auto remaining = std::chrono::duration_cast<std::chrono::minutes>(
-            timeout - idle_duration);
-        auto mins = remaining.count();
-        if (mins > 0) {
-            emit_notification("Session was idle — would have expired in "
-                              + std::to_string(mins) + " minute"
-                              + (mins == 1 ? "" : "s")
-                              + ". Timer reset.");
+        // Warn if the session was approaching idle timeout
+        auto timeout = effective_timeout(*session);
+        auto warning = effective_warning(timeout);
+        if (idle_duration > warning) {
+            auto remaining = std::chrono::duration_cast<std::chrono::minutes>(
+                timeout - idle_duration);
+            auto mins = remaining.count();
+            if (mins > 0) {
+                emit_notification("Session was idle — would have expired in "
+                                  + std::to_string(mins) + " minute"
+                                  + (mins == 1 ? "" : "s")
+                                  + ". Timer reset.");
+            }
         }
+
+        result = dispatch_request(msg);
+        current_session_ = nullptr;
+        should_terminate = session->force_terminate;
     }
 
-    auto result = dispatch_request(msg);
-    current_session_ = nullptr;
+    if (should_terminate) {
+        destroy_session(session_id);
+    }
+
     return result;
 }
 

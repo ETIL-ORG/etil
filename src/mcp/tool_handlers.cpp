@@ -473,22 +473,26 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     // Set execution limits before running
     auto& ctx = session.interp->context();
     uint64_t budget = MCP_INSTRUCTION_BUDGET;
+    double timeout_seconds = MCP_TIMEOUT_SECONDS;
 
 #ifdef ETIL_JWT_ENABLED
-    // Override instruction budget from role permissions if authenticated
-    if (!session.role.empty()) {
-        auto* server = this;  // access auth_config_ via enclosing McpServer
-        if (server->auth_config_) {
-            auto* perms = server->auth_config_->permissions_for(session.user_id);
-            if (perms && perms->instruction_budget > 0) {
+    // Override limits from role permissions if authenticated
+    if (!session.role.empty() && auth_config_) {
+        auto* perms = auth_config_->permissions_for(session.user_id);
+        if (perms) {
+            if (perms->instruction_budget > 0)
                 budget = static_cast<uint64_t>(perms->instruction_budget);
-            }
+            if (perms->interpret_execution_limit > 0)
+                timeout_seconds =
+                    static_cast<double>(perms->interpret_execution_limit);
+            else if (perms->interpret_execution_limit == 0)
+                timeout_seconds = 86400.0 * 365;  // effectively unlimited
         }
     }
 #endif
 
     ctx.set_limits(budget, MCP_MAX_STACK_DEPTH,
-                   MCP_MAX_CALL_DEPTH, MCP_TIMEOUT_SECONDS);
+                   MCP_MAX_CALL_DEPTH, timeout_seconds);
 
 #ifdef ETIL_HTTP_CLIENT_ENABLED
     // Reset per-interpret HTTP fetch counter
@@ -555,6 +559,27 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     if (session.stats.current_rss_bytes > session.stats.peak_rss_bytes) {
         session.stats.peak_rss_bytes = session.stats.current_rss_bytes;
     }
+
+#ifdef ETIL_JWT_ENABLED
+    // Check cumulative session execution limit
+    if (!session.role.empty() && auth_config_) {
+        auto* perms = auth_config_->permissions_for(session.user_id);
+        if (perms && perms->session_execution_limit > 0) {
+            double cumulative_s =
+                static_cast<double>(session.stats.interpret_wall_ns) / 1e9;
+            double limit_s =
+                static_cast<double>(perms->session_execution_limit);
+            if (cumulative_s >= limit_s) {
+                session.interp_err
+                    << "Error: session execution limit exceeded ("
+                    << static_cast<int>(cumulative_s) << "s used, "
+                    << perms->session_execution_limit
+                    << "s limit). Session terminated.\n";
+                session.force_terminate = true;
+            }
+        }
+    }
+#endif
 
     // Extract output — take() moves the string out, leaving the
     // CappedStringBuf empty with no heap allocation.

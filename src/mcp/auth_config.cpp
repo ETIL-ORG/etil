@@ -92,6 +92,10 @@ void parse_roles(AuthConfig& config, const nlohmann::json& j) {
             read_bool(role_json, "role_admin", perms.role_admin);
             read_int(role_json, "session_idle_timeout_seconds",
                      perms.session_idle_timeout_seconds);
+            read_int(role_json, "interpret_execution_limit",
+                     perms.interpret_execution_limit);
+            read_int(role_json, "session_execution_limit",
+                     perms.session_execution_limit);
 
             // --- LVFS ---
             // Backward compat: file_io → lvfs_modify
@@ -272,6 +276,10 @@ AuthConfig::parse_role_permissions(const nlohmann::json& j) {
     read_bool(j, "role_admin", perms.role_admin);
     read_int(j, "session_idle_timeout_seconds",
              perms.session_idle_timeout_seconds);
+    read_int(j, "interpret_execution_limit",
+             perms.interpret_execution_limit);
+    read_int(j, "session_execution_limit",
+             perms.session_execution_limit);
     // LVFS
     bool has_file_io = j.contains("file_io") && j["file_io"].is_boolean();
     if (has_file_io) perms.lvfs_modify = j["file_io"].get<bool>();
@@ -315,6 +323,8 @@ nlohmann::json role_to_json(const RolePermissions& p) {
     j["send_user_notification"] = p.send_user_notification;
     j["role_admin"] = p.role_admin;
     j["session_idle_timeout_seconds"] = p.session_idle_timeout_seconds;
+    j["interpret_execution_limit"] = p.interpret_execution_limit;
+    j["session_execution_limit"] = p.session_execution_limit;
     // LVFS
     j["lvfs_modify"] = p.lvfs_modify;
     j["disk_quota"] = p.disk_quota;

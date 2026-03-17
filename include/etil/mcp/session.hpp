@@ -76,6 +76,7 @@ struct Session {
     /// Called by McpServer after session construction when JWT auth is active.
     void apply_role_permissions(const struct RolePermissions& perms);
 #endif
+    bool force_terminate = false;
     SessionStats stats;
     std::mutex mutex;  // Serializes requests to this session
     std::chrono::steady_clock::time_point last_activity;
