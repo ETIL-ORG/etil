@@ -223,19 +223,17 @@ Bidirectional conversion between JSON, Map, and Array (`json->map`, `json->array
 
 ### File I/O
 
-26 words — 13 async (libuv thread pool with cooperative `await`) and 13 sync (libuv
-synchronous mode):
+13 file I/O words using libuv's thread pool with cooperative await, plus 7 observable
+streaming words (`obs-read-lines`, `obs-read-csv`, `obs-write-file`, etc.):
 
 ```
-> s" /home/output.txt" s" Hello from ETIL!" write-file-sync
+> s" Hello from ETIL!" s" /home/output.txt" write-file
   if ." Written" cr then
-> s" /home/output.txt" read-file-sync
-  if bytes->string type cr then
+> s" /home/output.txt" obs-read-lines obs-count .
+  # Count lines in a file via observable pipeline
 ```
 
-Async words (`read-file`, `write-file`, `exists?`, `mkdir`, `readdir`, etc.) are cancellable
-via execution limits. Sync words (`read-file-sync`, `write-file-sync`, etc.) use the same
-libuv backend without the event loop overhead.
+All file I/O is cancellable via execution limits and sandboxed through the LVFS.
 
 ### MCP Server
 
@@ -395,8 +393,7 @@ LITE
 | Execution | `'` `execute` `xt?` `>name` `xt-body` |
 | Conversion | `int->float` `float->int` `number->string` `string->number` |
 | Debug | `dump` `see` |
-| File I/O (async) | `exists?` `read-file` `write-file` `append-file` `copy-file` `rename-file` `lstat` `readdir` `mkdir` `mkdir-tmp` `rmdir` `rm` `truncate` |
-| File I/O (sync) | `exists-sync` `read-file-sync` `write-file-sync` `append-file-sync` `copy-file-sync` `rename-sync` `lstat-sync` `readdir-sync` `mkdir-sync` `mkdir-tmp-sync` `rmdir-sync` `rm-sync` `truncate-sync` |
+| File I/O | `exists?` `read-file` `write-file` `append-file` `copy-file` `rename-file` `lstat` `readdir` `mkdir` `mkdir-tmp` `rmdir` `rm` `truncate` |
 | HTTP Client | `http-get` `http-post` |
 | Observable | `obs-from` `obs-of` `obs-empty` `obs-range` `obs-map` `obs-map-with` `obs-filter` `obs-filter-with` `obs-scan` `obs-reduce` `obs-take` `obs-skip` `obs-distinct` `obs-merge` `obs-concat` `obs-zip` `obs-subscribe` `obs-to-array` `obs-count` `obs?` `obs-kind` |
 | Array Iteration | `array-each` `array-map` `array-filter` `array-reduce` |
@@ -462,19 +459,19 @@ are not yet implemented:
 | [D](#appendix-d-maps) | Maps | 8 |
 | [E](#appendix-e-json) | JSON | 13 |
 | [F](#appendix-f-matrices) | Matrices | 45 |
-| [G](#appendix-g-observables) | Observables | 21 |
-| [H](#appendix-h-stack-manipulation) | Stack Manipulation | 12 |
-| [I](#appendix-i-io-and-printing) | I/O and Printing | 8 |
-| [J](#appendix-j-variables-constants-and-defining-words) | Variables, Constants, and Defining Words | 11 |
-| [K](#appendix-k-control-flow) | Control Flow | 20 |
-| [L](#appendix-l-execution-tokens-and-evaluation) | Execution Tokens and Evaluation | 6 |
-| [M](#appendix-m-dictionary-operations) | Dictionary Operations | 12 |
-| [N](#appendix-n-metadata) | Metadata | 12 |
-| [O](#appendix-o-byte-arrays) | Byte Arrays | 7 |
-| [P](#appendix-p-file-io) | File I/O | 26 |
-| [Q](#appendix-q-lvfs-virtual-filesystem) | LVFS (Virtual Filesystem) | 6 |
-| [R](#appendix-r-http-client-and-mongodb) | HTTP Client and MongoDB | 7 |
-| [S](#appendix-s-system-time-and-debug) | System, Time, and Debug | 21 |
+| [G](#appendix-g-stack-manipulation) | Stack Manipulation | 12 |
+| [H](#appendix-h-io-and-printing) | I/O and Printing | 8 |
+| [I](#appendix-i-variables-constants-and-defining-words) | Variables, Constants, and Defining Words | 11 |
+| [J](#appendix-j-control-flow) | Control Flow | 20 |
+| [K](#appendix-k-execution-tokens-and-evaluation) | Execution Tokens and Evaluation | 6 |
+| [L](#appendix-l-dictionary-operations) | Dictionary Operations | 12 |
+| [M](#appendix-m-metadata) | Metadata | 12 |
+| [N](#appendix-n-byte-arrays) | Byte Arrays | 7 |
+| [O](#appendix-o-file-io) | File I/O | 13 |
+| [P](#appendix-p-lvfs-virtual-filesystem) | LVFS (Virtual Filesystem) | 6 |
+| [Q](#appendix-q-http-client-and-mongodb) | HTTP Client and MongoDB | 7 |
+| [R](#appendix-r-system-time-and-debug) | System, Time, and Debug | 21 |
+| [S](#appendix-s-observables) | Observables | 60 |
 
 ---
 
@@ -955,329 +952,7 @@ the **pre-activation** input, not the activated output.
 
 ---
 
-## Appendix G: Observables
-
-Observables are ETIL's reactive programming system — lazy, push-based, composable
-data pipelines inspired by RxJS. An observable represents a sequence of values that
-are produced on demand when a **terminal operator** is invoked.
-
-### How Observables Work
-
-An observable is a linked list of **pipeline nodes**. Each node represents one processing
-step: a source, a transformation, a filter, an accumulator, or a combinator. Building a
-pipeline is cheap — it just allocates nodes and links them. No values flow until a
-terminal operator (`obs-subscribe`, `obs-to-array`, `obs-reduce`, `obs-count`) triggers
-execution.
-
-When a terminal fires, ETIL walks the pipeline recursively from terminal back to source,
-then pushes values forward through each node. This is **push-based** execution: the
-source emits values one at a time, each value flows through the entire chain of
-transforms and filters, and the terminal collects or processes the result.
-
-```
-Source  ──emit──>  Transform  ──emit──>  Filter  ──emit──>  Terminal
-(range)            (map)                 (filter)           (to-array)
-```
-
-Each emission checks the interpreter's execution budget (`ctx.tick()`), so runaway
-pipelines are safely interrupted by instruction limits and timeouts.
-
-**Words:** `obs-concat` `obs-count` `obs-distinct` `obs-empty` `obs-filter`
-`obs-filter-with` `obs-from` `obs-kind` `obs-map` `obs-map-with` `obs-merge` `obs-of`
-`obs-range` `obs-reduce` `obs-scan` `obs-skip` `obs-subscribe` `obs-take` `obs-to-array`
-`obs-zip` `obs?`
-
-### Source Operators — Creating Observables
-
-Source operators create the head of a pipeline. Every pipeline begins with one.
-
-| Word | Stack Effect | Description |
-|------|-------------|-------------|
-| `obs-from` | `( array -- obs )` | Emit each array element in order |
-| `obs-of` | `( value -- obs )` | Emit a single value |
-| `obs-empty` | `( -- obs )` | Emit nothing (zero elements) |
-| `obs-range` | `( start end -- obs )` | Emit integers from start (inclusive) to end (exclusive) |
-
-```
-> # obs-from: emit each element of an array
-> array-new 10 array-push 20 array-push 30 array-push
-  obs-from obs-to-array
-  # Result: array [10, 20, 30]
-
-> # obs-of: single-element observable
-> 42 obs-of obs-to-array
-  # Result: array [42]
-
-> # obs-empty: produces nothing
-> obs-empty obs-count .
-0
-
-> # obs-range: integer sequence [start, end)
-> 1 6 obs-range obs-to-array
-  # Result: array [1, 2, 3, 4, 5]
-```
-
-### Transform Operators — Modifying Values
-
-Transform operators sit in the middle of a pipeline. They receive each value from
-upstream, process it, and pass the result downstream.
-
-| Word | Stack Effect | Description |
-|------|-------------|-------------|
-| `obs-map` | `( obs xt -- obs' )` | Transform each value by applying xt |
-| `obs-map-with` | `( obs xt ctx -- obs' )` | Transform with a bound context value |
-| `obs-filter` | `( obs xt -- obs' )` | Keep only values where xt returns true |
-| `obs-filter-with` | `( obs xt ctx -- obs' )` | Filter with a bound context value |
-
-**`obs-map`** applies a function to every emitted value. The function (execution token)
-pops one value and pushes one result:
-
-```
-> : double dup + ;
-> 1 6 obs-range ' double obs-map obs-to-array
-  # Result: array [2, 4, 6, 8, 10]
-  # Flow: 1→2, 2→4, 3→6, 4→8, 5→10
-```
-
-**`obs-filter`** keeps only values for which the predicate returns `true`:
-
-```
-> : even? 2 mod 0= ;
-> 1 11 obs-range ' even? obs-filter obs-to-array
-  # Result: array [2, 4, 6, 8, 10]
-  # Flow: 1→rejected, 2→kept, 3→rejected, 4→kept, ...
-```
-
-**`obs-map-with` and `obs-filter-with`** carry a context value that is pushed onto the
-stack before the xt executes. This enables closure-like data binding without language-level
-closures. The context value is stored per-node, so each pipeline stage can have its own:
-
-```
-> : multiply * ;
-> 1 6 obs-range ' multiply 10 obs-map-with obs-to-array
-  # Result: array [10, 20, 30, 40, 50]
-  # For each value v: push ctx (10), push v, call multiply → 10*v
-
-> : greater-than > ;
-> 1 11 obs-range ' greater-than 5 obs-filter-with obs-to-array
-  # Result: array [6, 7, 8, 9, 10]
-  # For each value v: push ctx (5), push v, call greater-than → v > 5
-```
-
-### Accumulation Operators — Running State
-
-| Word | Stack Effect | Description |
-|------|-------------|-------------|
-| `obs-scan` | `( obs xt init -- obs' )` | Emit each intermediate accumulation |
-| `obs-reduce` | `( obs xt init -- result )` | Reduce to a single value (terminal) |
-
-**`obs-scan`** is like `reduce` but emits every intermediate result. It maintains an
-accumulator that starts at `init`. For each upstream value, it calls `xt` with the
-accumulator and the new value, pushes the updated accumulator downstream, and keeps it
-for the next emission:
-
-```
-> : add + ;
-> 1 6 obs-range ' add 0 obs-scan obs-to-array
-  # Result: array [1, 3, 6, 10, 15]
-  # Running sum: 0+1=1, 1+2=3, 3+3=6, 6+4=10, 10+5=15
-
-> : mul * ;
-> 1 6 obs-range ' mul 1 obs-scan obs-to-array
-  # Result: array [1, 2, 6, 24, 120]
-  # Running factorial: 1*1=1, 1*2=2, 2*3=6, 6*4=24, 24*5=120
-```
-
-**`obs-reduce`** is a **terminal operator** — it triggers execution and returns one value,
-not an observable:
-
-```
-> : add + ;
-> 1 11 obs-range ' add 0 obs-reduce .
-55
-  # Sum of 1..10 = 55
-```
-
-### Limiting Operators — Controlling Flow
-
-| Word | Stack Effect | Description |
-|------|-------------|-------------|
-| `obs-take` | `( obs n -- obs' )` | Emit only the first n values |
-| `obs-skip` | `( obs n -- obs' )` | Skip the first n values |
-| `obs-distinct` | `( obs -- obs' )` | Suppress consecutive duplicates |
-
-**`obs-take`** is particularly powerful with infinite or very large sources — it short-circuits
-execution after n values, so the source never produces more than needed:
-
-```
-> # Take 3 from a range of a million
-> 0 1000000 obs-range 3 obs-take obs-to-array
-  # Result: array [0, 1, 2]
-  # Only 3 values were ever produced — the rest of the range is never evaluated
-
-> # Skip and take for pagination
-> 0 100 obs-range 20 obs-skip 10 obs-take obs-to-array
-  # Result: array [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
-```
-
-**`obs-distinct`** suppresses runs of identical consecutive values:
-
-```
-> array-new 1 array-push 1 array-push 2 array-push 2 array-push 2 array-push 3 array-push 1 array-push
-  obs-from obs-distinct obs-to-array
-  # Result: array [1, 2, 3, 1]
-  # Note: the trailing 1 is kept because it's not consecutive with the earlier 1
-```
-
-### Combination Operators — Merging Pipelines
-
-| Word | Stack Effect | Description                           |
-|------|-------------|---------------------------------------|
-| `obs-merge` | `( obs-a obs-b max -- obs )` | Interleave two observables            |
-| `obs-concat` | `( obs-a obs-b -- obs )` | Emit all of A, then all of B          |
-| `obs-zip` | `( obs-a obs-b -- obs )` | Pair up elements into 2-element arrays |
-
-**`obs-concat`** is sequential — all values from the first observable, then all from the
-second:
-
-```
-> 1 4 obs-range 10 13 obs-range obs-concat obs-to-array
-  # Result: array [1, 2, 3, 10, 11, 12]
-```
-
-**`obs-zip`** pairs corresponding elements from two observables into 2-element arrays.
-It stops when either source is exhausted:
-
-```
-> 1 4 obs-range
-  array-new s" a" array-push s" b" array-push s" c" array-push obs-from
-  obs-zip obs-to-array
-  # Result: array [[1,"a"], [2,"b"], [3,"c"]]
-```
-
-**`obs-merge`** interleaves two observables. The `max` parameter controls concurrency
-(use 2 for simple interleaving, 0 for unlimited):
-
-```
-> 1 4 obs-range 10 13 obs-range 2 obs-merge obs-to-array
-  # Result: array [1, 10, 2, 11, 3, 12]
-  # Values alternate between the two sources
-```
-
-### Terminal Operators — Triggering Execution
-
-Terminal operators consume the pipeline and produce a concrete result. Until one of these
-is called, no values are emitted — the pipeline is just a description.
-
-| Word | Stack Effect | Description |
-|------|-------------|-------------|
-| `obs-subscribe` | `( obs xt -- )` | Call xt for each value (side effects) |
-| `obs-to-array` | `( obs -- array )` | Collect all values into an array |
-| `obs-count` | `( obs -- n )` | Count emitted values |
-| `obs-reduce` | `( obs xt init -- val )` | Fold to single value |
-
-```
-> # subscribe: execute side effects for each value
-> : show . space ;
-> 1 6 obs-range ' show obs-subscribe
-1 2 3 4 5
-
-> # to-array: materialize the pipeline
-> 1 4 obs-range obs-to-array
-  # Result: array [1, 2, 3]
-
-> # count: how many values passed through?
-> 1 1000001 obs-range ' even? obs-filter obs-count .
-500000
-
-> # reduce: fold to a single result
-> 1 101 obs-range ' add 0 obs-reduce .
-5050
-```
-
-### Introspection
-
-| Word | Stack Effect | Description |
-|------|-------------|-------------|
-| `obs?` | `( val -- bool )` | Is this value an observable? |
-| `obs-kind` | `( obs -- str )` | Node kind name (e.g. "range", "map", "filter") |
-
-```
-> 1 10 obs-range obs? .
-true
-> 42 obs? .
-false
-> 1 10 obs-range ' double obs-map obs-kind type
-map
-```
-
-### Composing Pipelines
-
-The real power of observables comes from chaining operators into complex data processing
-pipelines. Each operator returns an observable, so they compose naturally:
-
-```
-> # Sum of squares of even numbers from 1 to 100
-> : square dup * ;
-> : even? 2 mod 0= ;
-> : add + ;
-> 1 101 obs-range
-    ' even? obs-filter         # keep 2, 4, 6, ..., 100
-    ' square obs-map           # square each: 4, 16, 36, ..., 10000
-    ' add 0 obs-reduce .       # sum them all
-171700
-```
-
-```
-> # Moving average: scan to compute running sum, map to divide by position
-> : add + ;
-> array-new 10 array-push 20 array-push 30 array-push 40 array-push 50 array-push
-  obs-from
-  ' add 0 obs-scan            # running sums: 10, 30, 60, 100, 150
-  obs-to-array
-  # Result: array [10, 30, 60, 100, 150]
-```
-
-```
-> # Pipeline with skip/take for windowed processing
-> 0 1000000 obs-range          # million integers
-  ' even? obs-filter           # only evens
-  100 obs-skip                 # skip first 100 evens
-  5 obs-take                   # take next 5
-  obs-to-array
-  # Result: array [200, 202, 204, 206, 208]
-  # Only ~208 values were ever produced — the rest of the million is never touched
-```
-
-```
-> # Zip two sources and reduce pairs
-> : pair-sum 0 array-get swap 1 array-get + ;
-> 1 6 obs-range 10 60 obs-range obs-zip
-    ' pair-sum obs-map
-    obs-to-array
-  # Result: array [11, 22, 33, 44, 55]
-  # Pairs: [1,10], [2,20], [3,30], [4,40], [5,50] → sums
-```
-
-### Key Concepts
-
-- **Lazy evaluation**: No work happens until a terminal operator is called. Building
-  a pipeline of 10 operators is instantaneous — it just links nodes.
-- **Short-circuit**: `obs-take` stops the source early. A `take 5` on a million-element
-  range only produces 5 values.
-- **Budget-aware**: Every emission calls `ctx.tick()`, so observable pipelines respect
-  instruction budgets, execution deadlines, and cancellation — critical for MCP server
-  sandboxing.
-- **No closures needed**: The `-with` variants (`obs-map-with`, `obs-filter-with`)
-  carry a context value per node, providing closure-like data binding in a stack-based
-  language.
-- **Memory efficient**: Values flow through one at a time. A `filter` on a
-  million-element range never materializes the full sequence — each value is tested
-  and either passed downstream or discarded immediately.
-
----
-
-## Appendix H: Stack Manipulation
+## Appendix G: Stack Manipulation
 
 ETIL's data stack is the primary mechanism for passing values between words. These
 12 words rearrange stack values without modifying them. All work in both interpret and
@@ -1315,7 +990,7 @@ compile mode.
 
 ---
 
-## Appendix I: I/O and Printing
+## Appendix H: I/O and Printing
 
 Words for outputting text and characters. `."` and `.|` are parsing words that read a
 string literal from the input stream and print it immediately. Both work in interpret
@@ -1367,7 +1042,7 @@ Hello, World!
 
 ---
 
-## Appendix J: Variables, Constants, and Defining Words
+## Appendix I: Variables, Constants, and Defining Words
 
 ETIL supports user-defined data storage and word creation. `:` and `;` create compiled
 word definitions (colon definitions). `create` and `does>` build custom defining words
@@ -1451,7 +1126,7 @@ executes, with the data field reference pushed onto the stack:
 
 ---
 
-## Appendix K: Control Flow
+## Appendix J: Control Flow
 
 All control flow words are **compile-only** — they can only be used inside colon
 definitions (`: name ... ;`). Attempting to use them at the top level produces an error.
@@ -1769,7 +1444,7 @@ compile time, avoiding the dictionary lookup at runtime.
 
 ---
 
-## Appendix L: Execution Tokens and Evaluation
+## Appendix K: Execution Tokens and Evaluation
 
 Execution tokens (XTs) are first-class references to word implementations. They enable
 higher-order programming: passing words as arguments to other words, storing them in
@@ -1893,7 +1568,7 @@ tracking prevents infinite recursion.
 
 ---
 
-## Appendix M: Dictionary Operations
+## Appendix L: Dictionary Operations
 
 Words for managing the dictionary — loading files, removing words, creating checkpoints,
 and low-level input parsing. `forget` and `forget-all` are self-hosted (defined in
@@ -1963,7 +1638,7 @@ self-hosted defining words (e.g., `forget` uses `word-read` to read the word nam
 
 ---
 
-## Appendix N: Metadata
+## Appendix M: Metadata
 
 ETIL's metadata system attaches key-value pairs to words at two levels:
 **concept-level** (shared across all implementations of a word) and
@@ -2022,7 +1697,7 @@ implementations and each needs its own source location or notes.
 
 ---
 
-## Appendix O: Byte Arrays
+## Appendix N: Byte Arrays
 
 Byte arrays are heap-allocated, reference-counted, mutable buffers of raw bytes.
 They are used for binary data, HTTP request/response bodies, and conversions
@@ -2071,37 +1746,32 @@ processing:
 
 ---
 
-## Appendix P: File I/O
+## Appendix O: File I/O
 
-ETIL provides 13 file operations in both asynchronous and synchronous variants (26
-words total). Async words use libuv's thread pool with cooperative await; sync words
-block. All paths are virtual — `/home` is writable (per-session), `/library` is
-read-only (shared).
+ETIL provides 13 file I/O words using libuv's thread pool with cooperative await.
+All paths are virtual — `/home` is writable (per-session), `/library` is read-only (shared).
+For streaming file I/O, see [Appendix S: Observables](#appendix-s-observables).
 
-**Async words:** `append-file` `copy-file` `exists?` `lstat` `mkdir` `mkdir-tmp`
+**Words:** `append-file` `copy-file` `exists?` `lstat` `mkdir` `mkdir-tmp`
 `read-file` `readdir` `rename-file` `rm` `rmdir` `truncate` `write-file`
-
-**Sync words:** `append-file-sync` `copy-file-sync` `exists-sync` `lstat-sync`
-`mkdir-sync` `mkdir-tmp-sync` `read-file-sync` `readdir-sync` `rename-sync`
-`rm-sync` `rmdir-sync` `truncate-sync` `write-file-sync`
 
 ### File Operations
 
-| Operation | Async | Sync | Stack Effect |
-|-----------|-------|------|-------------|
-| Check existence | `exists?` | `exists-sync` | `( path -- flag )` |
-| Read file | `read-file` | `read-file-sync` | `( path -- string? flag )` |
-| Write file | `write-file` | `write-file-sync` | `( string path -- flag )` |
-| Append file | `append-file` | `append-file-sync` | `( string path -- flag )` |
-| Copy file | `copy-file` | `copy-file-sync` | `( src dest -- flag )` |
-| Rename/move | `rename-file` | `rename-sync` | `( old new -- flag )` |
-| File status | `lstat` | `lstat-sync` | `( path -- array? flag )` |
-| List directory | `readdir` | `readdir-sync` | `( path -- array? flag )` |
-| Make directory | `mkdir` | `mkdir-sync` | `( path -- flag )` |
-| Make temp dir | `mkdir-tmp` | `mkdir-tmp-sync` | `( prefix -- string? flag )` |
-| Remove dir | `rmdir` | `rmdir-sync` | `( path -- flag )` |
-| Remove file/tree | `rm` | `rm-sync` | `( path -- flag )` |
-| Truncate | `truncate` | `truncate-sync` | `( path -- flag )` |
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `exists?` | `( path -- flag )` | Check if path exists |
+| `read-file` | `( path -- string? flag )` | Read file contents |
+| `write-file` | `( string path -- flag )` | Write string to file (truncate) |
+| `append-file` | `( string path -- flag )` | Append string to file |
+| `copy-file` | `( src dest -- flag )` | Copy file |
+| `rename-file` | `( old new -- flag )` | Rename/move file |
+| `lstat` | `( path -- array? flag )` | File metadata |
+| `readdir` | `( path -- array? flag )` | List directory |
+| `mkdir` | `( path -- flag )` | Create directory (recursive) |
+| `mkdir-tmp` | `( prefix -- string? flag )` | Create temp directory |
+| `rmdir` | `( path -- flag )` | Remove empty directory |
+| `rm` | `( path -- flag )` | Remove file/tree |
+| `truncate` | `( path -- flag )` | Truncate to zero length |
 
 ### Read and Write Example
 
@@ -2134,7 +1804,7 @@ REPL use.
 
 ---
 
-## Appendix Q: LVFS (Virtual Filesystem)
+## Appendix P: LVFS (Virtual Filesystem)
 
 The Little Virtual File System provides shell-like navigation within the sandboxed
 `/home` (writable, per-session) and `/library` (read-only, shared) directories.
@@ -2176,7 +1846,7 @@ examples/  help.til  builtins.til
 
 ---
 
-## Appendix R: HTTP Client and MongoDB
+## Appendix Q: HTTP Client and MongoDB
 
 ### HTTP Client
 
@@ -2246,7 +1916,7 @@ Options support: `skip`, `limit`, `sort`, `projection`, `hint`, `collation`,
 
 ---
 
-## Appendix S: System, Time, and Debug
+## Appendix R: System, Time, and Debug
 
 ### System Words
 
@@ -2331,6 +2001,556 @@ objects, data field for `create`d words). Unlike `.`, it does not consume the va
   1: Call +
 ;
 ```
+
+---
+
+## Appendix S: Observables
+
+Observables are ETIL's reactive programming system — lazy, push-based, composable
+data pipelines inspired by RxJS. An observable represents a sequence of values that
+are produced on demand when a **terminal operator** is invoked.
+
+### How Observables Work
+
+An observable is a linked list of **pipeline nodes**. Each node represents one processing
+step: a source, a transformation, a filter, an accumulator, or a combinator. Building a
+pipeline is cheap — it just allocates nodes and links them. No values flow until a
+terminal operator (`obs-subscribe`, `obs-to-array`, `obs-reduce`, `obs-count`) triggers
+execution.
+
+When a terminal fires, ETIL walks the pipeline recursively from terminal back to source,
+then pushes values forward through each node. This is **push-based** execution: the
+source emits values one at a time, each value flows through the entire chain of
+transforms and filters, and the terminal collects or processes the result.
+
+```
+Source  ──emit──>  Transform  ──emit──>  Filter  ──emit──>  Terminal
+(range)            (map)                 (filter)           (to-array)
+```
+
+Each emission checks the interpreter's execution budget (`ctx.tick()`), so runaway
+pipelines are safely interrupted by instruction limits and timeouts.
+
+### Source Operators — Creating Observables
+
+Source operators create the head of a pipeline. Every pipeline begins with one.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-from` | `( array -- obs )` | Emit each array element in order |
+| `obs-of` | `( value -- obs )` | Emit a single value |
+| `obs-empty` | `( -- obs )` | Emit nothing (zero elements) |
+| `obs-range` | `( start end -- obs )` | Emit integers from start (inclusive) to end (exclusive) |
+
+```
+> # obs-from: emit each element of an array
+> array-new 10 array-push 20 array-push 30 array-push
+  obs-from obs-to-array
+  # Result: array [10, 20, 30]
+
+> # obs-of: single-element observable
+> 42 obs-of obs-to-array
+  # Result: array [42]
+
+> # obs-empty: produces nothing
+> obs-empty obs-count .
+0
+
+> # obs-range: integer sequence [start, end)
+> 1 6 obs-range obs-to-array
+  # Result: array [1, 2, 3, 4, 5]
+```
+
+### Transform Operators — Modifying Values
+
+Transform operators sit in the middle of a pipeline. They receive each value from
+upstream, process it, and pass the result downstream.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-map` | `( obs xt -- obs' )` | Transform each value by applying xt |
+| `obs-map-with` | `( obs xt ctx -- obs' )` | Transform with a bound context value |
+| `obs-filter` | `( obs xt -- obs' )` | Keep only values where xt returns true |
+| `obs-filter-with` | `( obs xt ctx -- obs' )` | Filter with a bound context value |
+
+**`obs-map`** applies a function to every emitted value:
+
+```
+> : double dup + ;
+> 1 6 obs-range ' double obs-map obs-to-array
+  # Result: array [2, 4, 6, 8, 10]
+```
+
+**`obs-filter`** keeps only values for which the predicate returns `true`:
+
+```
+> : even? 2 mod 0= ;
+> 1 11 obs-range ' even? obs-filter obs-to-array
+  # Result: array [2, 4, 6, 8, 10]
+```
+
+**`obs-map-with` and `obs-filter-with`** carry a context value that is pushed onto the
+stack before the xt executes, enabling closure-like data binding:
+
+```
+> : multiply * ;
+> 1 6 obs-range ' multiply 10 obs-map-with obs-to-array
+  # Result: array [10, 20, 30, 40, 50]
+
+> : greater-than > ;
+> 1 11 obs-range ' greater-than 5 obs-filter-with obs-to-array
+  # Result: array [6, 7, 8, 9, 10]
+```
+
+### Accumulation Operators — Running State
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-scan` | `( obs xt init -- obs' )` | Emit each intermediate accumulation |
+| `obs-reduce` | `( obs xt init -- result )` | Reduce to a single value (terminal) |
+
+```
+> : add + ;
+> 1 6 obs-range ' add 0 obs-scan obs-to-array
+  # Result: array [1, 3, 6, 10, 15]
+  # Running sum: 0+1=1, 1+2=3, 3+3=6, 6+4=10, 10+5=15
+
+> 1 11 obs-range ' add 0 obs-reduce .
+55
+  # Sum of 1..10 = 55 (obs-reduce is a terminal operator)
+```
+
+### Limiting Operators — Controlling Flow
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-take` | `( obs n -- obs' )` | Emit only the first n values |
+| `obs-skip` | `( obs n -- obs' )` | Skip the first n values |
+| `obs-distinct` | `( obs -- obs' )` | Suppress duplicate values |
+| `obs-first` | `( obs -- obs' )` | Emit only the first value |
+| `obs-last` | `( obs -- obs' )` | Emit only the final value |
+| `obs-take-while` | `( obs xt -- obs' )` | Emit while predicate returns true |
+| `obs-distinct-until` | `( obs -- obs' )` | Suppress consecutive duplicates only |
+
+```
+> # Take 3 from a range of a million — only 3 values ever produced
+> 0 1000000 obs-range 3 obs-take obs-to-array
+  # Result: array [0, 1, 2]
+
+> # Skip and take for pagination
+> 0 100 obs-range 20 obs-skip 10 obs-take obs-to-array
+  # Result: array [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+
+> # First and last
+> 1 10 obs-range obs-first obs-to-array    # Result: [1]
+> 1 10 obs-range obs-last obs-to-array     # Result: [9]
+
+> # Take while predicate holds
+> : less-than-5 5 < ;
+> 1 10 obs-range ' less-than-5 obs-take-while obs-to-array
+  # Result: array [1, 2, 3, 4]
+
+> # Distinct-until vs distinct
+> array-new 1 array-push 1 array-push 2 array-push 2 array-push 1 array-push obs-from
+  obs-distinct-until obs-to-array
+  # Result: array [1, 2, 1] — only consecutive duplicates suppressed
+```
+
+### Combination Operators — Merging Pipelines
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-merge` | `( obs-a obs-b max -- obs )` | Interleave two observables |
+| `obs-concat` | `( obs-a obs-b -- obs )` | Emit all of A, then all of B |
+| `obs-zip` | `( obs-a obs-b -- obs )` | Pair up elements into 2-element arrays |
+| `obs-start-with` | `( obs value -- obs' )` | Prepend a value before source emissions |
+
+```
+> 1 4 obs-range 10 13 obs-range obs-concat obs-to-array
+  # Result: array [1, 2, 3, 10, 11, 12]
+
+> 1 4 obs-range 10 13 obs-range 2 obs-merge obs-to-array
+  # Result: array [1, 10, 2, 11, 3, 12]
+
+> 1 4 obs-range 0 obs-start-with obs-to-array
+  # Result: array [0, 1, 2, 3]
+```
+
+### Buffer and Composition Operators
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-buffer` | `( obs n -- obs' )` | Collect n emissions into arrays |
+| `obs-buffer-when` | `( obs xt -- obs' )` | Buffer until predicate fires |
+| `obs-window` | `( obs n -- obs' )` | Sliding window of n elements |
+| `obs-flat-map` | `( obs xt -- obs' )` | Map to sub-observable, flatten (concatMap) |
+| `obs-switch-map` | `( obs xt -- obs' )` | Map to sub-observable, last wins |
+| `obs-pairwise` | `( obs -- obs' )` | Emit consecutive `[prev, curr]` pairs |
+
+**`obs-buffer`** collects n emissions into arrays, emitting each batch. Trailing partial
+batches are emitted on completion:
+
+```
+> 1 8 obs-range 3 obs-buffer obs-to-array
+  # Result: array [[1, 2, 3], [4, 5, 6], [7]]
+```
+
+**`obs-flat-map`** maps each upstream value to a sub-observable and flattens the results
+into a single stream (concatMap semantics — each inner runs to completion):
+
+```
+> : expand dup * obs-of ;
+> 1 4 obs-range ' expand obs-flat-map obs-to-array
+  # Result: array [1, 4, 9]
+  # Each value mapped to obs-of its square, flattened
+```
+
+**`obs-switch-map`** is like `obs-flat-map` but only forwards emissions from the last
+inner observable (for synchronous sources, only the last upstream value's inner runs):
+
+```
+> : to-obs obs-of ;
+> 1 4 obs-range ' to-obs obs-switch-map obs-to-array
+  # Result: array [3] — only the last value's inner is forwarded
+```
+
+**`obs-pairwise`** emits consecutive pairs as 2-element arrays:
+
+```
+> 1 5 obs-range obs-pairwise obs-to-array
+  # Result: array [[1, 2], [2, 3], [3, 4]]
+```
+
+**`obs-window`** maintains a sliding window:
+
+```
+> 1 6 obs-range 3 obs-window obs-to-array
+  # Result: array [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
+```
+
+### Terminal Operators — Triggering Execution
+
+Terminal operators consume the pipeline and produce a concrete result. Until one of these
+is called, no values are emitted.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-subscribe` | `( obs xt -- )` | Call xt for each value (side effects) |
+| `obs-to-array` | `( obs -- array )` | Collect all values into an array |
+| `obs-count` | `( obs -- n )` | Count emitted values |
+| `obs-reduce` | `( obs xt init -- val )` | Fold to single value |
+| `obs-to-string` | `( obs -- string )` | Concatenate all string emissions |
+
+```
+> : show . space ;
+> 1 6 obs-range ' show obs-subscribe
+1 2 3 4 5
+
+> 1 1000001 obs-range ' even? obs-filter obs-count .
+500000
+
+> 1 101 obs-range ' add 0 obs-reduce .
+5050
+```
+
+### Utility Operators
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-tap` | `( obs xt -- obs' )` | Side-effect without modifying stream |
+| `obs-finalize` | `( obs xt -- obs' )` | Execute cleanup on completion/error |
+| `obs-catch` | `( obs xt -- obs' )` | Recover from errors with fallback observable |
+
+**`obs-tap`** executes an xt for each emission as a side-effect (logging, counting) but
+passes the original value through unchanged:
+
+```
+> 1 4 obs-range ' . obs-tap obs-count .
+1 2 3 3
+  # Side-effect: printed 1, 2, 3. Then obs-count printed 3.
+```
+
+**`obs-finalize`** executes a cleanup xt when the pipeline completes (success or error):
+
+```
+> variable cleaned
+> : mark-clean true cleaned ! ;
+> false cleaned !
+> 1 4 obs-range ' mark-clean obs-finalize obs-count .
+3
+> cleaned @ .
+true
+```
+
+**`obs-catch`** recovers from pipeline errors by calling a recovery xt that returns a
+fallback observable:
+
+```
+> : fallback 42 obs-of ;
+> 1 4 obs-range ' fallback obs-catch obs-count .
+3   # No error occurred, catch passed through normally
+```
+
+### Introspection
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs?` | `( val -- bool )` | Is this value an observable? |
+| `obs-kind` | `( obs -- str )` | Node kind name (e.g. "range", "map") |
+
+```
+> 1 10 obs-range obs? .
+true
+> 42 obs? .
+false
+```
+
+### Temporal Operators — Wall-Clock Time
+
+Temporal operators introduce real wall-clock time into observable pipelines: timers,
+delays, rate-limiting, and time-stamping. All use microseconds as their time unit.
+
+#### Creation
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-timer` | `( delay-us period-us -- obs )` | Emit after delay, then every period (0=one-shot) |
+| `obs-interval` | `( period-us -- obs )` | Repeating timer with no initial delay (self-hosted) |
+
+```
+> # One-shot timer after 100ms
+> 100000 0 obs-timer obs-to-array
+  # Result: array [0] — emits 0 after 100ms
+
+> # Repeating timer: emit 0, 1, 2 every 500ms, take 3
+> 0 500000 obs-timer 3 obs-take obs-to-array
+  # Result: array [0, 1, 2]
+```
+
+#### Transform
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-delay` | `( obs delay-us -- obs' )` | Delay each emission |
+| `obs-timestamp` | `( obs -- obs' )` | Wrap each value in `[time-us, value]` |
+| `obs-time-interval` | `( obs -- obs' )` | Wrap each value in `[elapsed-us, value]` |
+| `obs-delay-each` | `( obs xt -- obs' )` | Per-item delay: xt returns delay in us |
+
+```
+> # Timestamp: attach wall-clock time to each emission
+> 1 4 obs-range obs-timestamp obs-to-array
+  # Result: array [[1710000000123, 1], [1710000000124, 2], [1710000000125, 3]]
+```
+
+#### Rate-Limiting
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-debounce-time` | `( obs quiet-us -- obs' )` | Emit after quiet period |
+| `obs-throttle-time` | `( obs window-us -- obs' )` | One emission per window |
+| `obs-sample-time` | `( obs period-us -- obs' )` | Emit latest at regular intervals |
+| `obs-timeout` | `( obs limit-us -- obs' )` | Error if gap exceeds limit |
+| `obs-audit-time` | `( obs window-us -- obs' )` | Emit latest after silence |
+
+```
+> # Throttle: only the first value in each 1-second window passes
+> 0 100000 obs-timer 20 obs-take 1000000 obs-throttle-time obs-count .
+  # Result: ~2 (only ~2 values pass through 2 one-second windows)
+```
+
+#### Windowed and Limiting
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-buffer-time` | `( obs window-us -- obs' )` | Collect into time-based batches |
+| `obs-take-until-time` | `( obs duration-us -- obs' )` | Complete after duration |
+| `obs-retry-delay` | `( obs delay-us max -- obs' )` | Retry on error with delay |
+
+### Streaming File I/O
+
+Observable-based file I/O reads and writes files as streams of chunks, lines, or records.
+All paths are resolved through the LVFS sandbox.
+
+#### Reading
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-read-bytes` | `( path chunk-size -- obs )` | Stream file as byte array chunks |
+| `obs-read-lines` | `( path -- obs )` | Stream file as one string per line |
+| `obs-read-json` | `( path -- obs )` | Parse JSON file, emit as HeapJson |
+| `obs-read-csv` | `( path separator -- obs )` | Stream CSV file as arrays of fields |
+| `obs-readdir` | `( path -- obs )` | Stream directory entries (sorted) |
+
+```
+> # Count lines in a file
+> s" /home/data.txt" obs-read-lines obs-count .
+
+> # Read CSV, take first 5 rows
+> s" /home/users.csv" s" ," obs-read-csv 5 obs-take obs-to-array
+
+> # Stream large file in 64KB chunks
+> s" /home/big.bin" 65536 obs-read-bytes obs-count .
+```
+
+#### Writing
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-write-file` | `( obs path -- )` | Write all emissions to file (truncate) |
+| `obs-append-file` | `( obs path -- )` | Append all emissions to file |
+
+```
+> # Generate numbers, write as lines
+> 1 11 obs-range ' number->string obs-map s" /home/numbers.txt" obs-write-file
+```
+
+### Streaming HTTP
+
+Observable-based HTTP performs streaming requests with the same SSRF protection, domain
+allowlist, and fetch budget enforcement as the standard `http-get`/`http-post` words.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `obs-http-get` | `( url headers -- obs )` | Stream GET response as byte chunks |
+| `obs-http-post` | `( url headers body -- obs )` | POST, stream response as byte chunks |
+| `obs-http-sse` | `( url headers -- obs )` | SSE client: emit events as HeapJson/string |
+
+```
+> # Streaming download
+> s" https://example.com/data.csv" map-new obs-http-get
+    obs-to-array   # collect all chunks
+
+> # SSE event stream with timeout
+> s" https://api.example.com/events" map-new obs-http-sse
+    30000000 obs-timeout   # 30-second timeout
+    5 obs-take             # take first 5 events
+    obs-to-array
+```
+
+### Composing Pipelines
+
+The real power of observables comes from chaining operators into complex data processing
+pipelines:
+
+```
+> # Sum of squares of even numbers from 1 to 100
+> : square dup * ;
+> : even? 2 mod 0= ;
+> : add + ;
+> 1 101 obs-range
+    ' even? obs-filter
+    ' square obs-map
+    ' add 0 obs-reduce .
+171700
+
+> # Pipeline with skip/take for windowed processing
+> 0 1000000 obs-range          # million integers
+  ' even? obs-filter           # only evens
+  100 obs-skip                 # skip first 100 evens
+  5 obs-take                   # take next 5
+  obs-to-array
+  # Result: array [200, 202, 204, 206, 208]
+  # Only ~208 values were ever produced
+
+> # Read CSV, filter, count
+> s" /home/data.csv" s" ," obs-read-csv
+    ' 0 array-get s" ERROR" sfind 0 >= obs-filter
+    obs-count .
+  # Count rows where first field contains "ERROR"
+```
+
+### Key Concepts
+
+- **Lazy evaluation**: No work happens until a terminal operator is called
+- **Short-circuit**: `obs-take` stops the source early
+- **Budget-aware**: Every emission calls `ctx.tick()` for instruction/timeout enforcement
+- **No closures needed**: `-with` variants carry a context value per node
+- **Memory efficient**: Values flow through one at a time — no full materialization
+- **LVFS sandboxed**: All file I/O paths resolved through the virtual filesystem
+- **SSRF protected**: HTTP words enforce domain allowlists and fetch budgets
+
+### Observable Word Index
+
+#### By Category
+
+| Category | Words |
+|----------|-------|
+| [Source](#source-operators--creating-observables) | `obs-from` `obs-of` `obs-empty` `obs-range` `obs-timer` `obs-interval` |
+| [Transform](#transform-operators--modifying-values) | `obs-map` `obs-map-with` `obs-filter` `obs-filter-with` `obs-tap` |
+| [Accumulation](#accumulation-operators--running-state) | `obs-scan` `obs-reduce` |
+| [Limiting](#limiting-operators--controlling-flow) | `obs-take` `obs-skip` `obs-distinct` `obs-first` `obs-last` `obs-take-while` `obs-distinct-until` |
+| [Combination](#combination-operators--merging-pipelines) | `obs-merge` `obs-concat` `obs-zip` `obs-start-with` |
+| [Buffer/Composition](#buffer-and-composition-operators) | `obs-buffer` `obs-buffer-when` `obs-window` `obs-flat-map` `obs-switch-map` `obs-pairwise` |
+| [Terminal](#terminal-operators--triggering-execution) | `obs-subscribe` `obs-to-array` `obs-count` `obs-reduce` `obs-to-string` |
+| [Utility](#utility-operators) | `obs-tap` `obs-finalize` `obs-catch` |
+| [Introspection](#introspection) | `obs?` `obs-kind` |
+| [Temporal](#temporal-operators--wall-clock-time) | `obs-timer` `obs-interval` `obs-delay` `obs-timestamp` `obs-time-interval` `obs-delay-each` `obs-debounce-time` `obs-throttle-time` `obs-sample-time` `obs-timeout` `obs-audit-time` `obs-buffer-time` `obs-take-until-time` `obs-retry-delay` |
+| [File I/O](#streaming-file-io) | `obs-read-bytes` `obs-read-lines` `obs-read-json` `obs-read-csv` `obs-readdir` `obs-write-file` `obs-append-file` |
+| [HTTP](#streaming-http) | `obs-http-get` `obs-http-post` `obs-http-sse` |
+
+#### Alphabetical
+
+| Word | Stack Effect | Category |
+|------|-------------|----------|
+| `obs-append-file` | `( obs path -- )` | File I/O |
+| `obs-audit-time` | `( obs window-us -- obs' )` | Temporal |
+| `obs-buffer` | `( obs n -- obs' )` | Buffer |
+| `obs-buffer-time` | `( obs window-us -- obs' )` | Temporal |
+| `obs-buffer-when` | `( obs xt -- obs' )` | Buffer |
+| `obs-catch` | `( obs xt -- obs' )` | Utility |
+| `obs-concat` | `( obs-a obs-b -- obs )` | Combination |
+| `obs-count` | `( obs -- n )` | Terminal |
+| `obs-debounce-time` | `( obs quiet-us -- obs' )` | Temporal |
+| `obs-delay` | `( obs delay-us -- obs' )` | Temporal |
+| `obs-delay-each` | `( obs xt -- obs' )` | Temporal |
+| `obs-distinct` | `( obs -- obs' )` | Limiting |
+| `obs-distinct-until` | `( obs -- obs' )` | Limiting |
+| `obs-empty` | `( -- obs )` | Source |
+| `obs-filter` | `( obs xt -- obs' )` | Transform |
+| `obs-filter-with` | `( obs xt ctx -- obs' )` | Transform |
+| `obs-finalize` | `( obs xt -- obs' )` | Utility |
+| `obs-first` | `( obs -- obs' )` | Limiting |
+| `obs-flat-map` | `( obs xt -- obs' )` | Buffer |
+| `obs-from` | `( array -- obs )` | Source |
+| `obs-http-get` | `( url headers -- obs )` | HTTP |
+| `obs-http-post` | `( url headers body -- obs )` | HTTP |
+| `obs-http-sse` | `( url headers -- obs )` | HTTP |
+| `obs-interval` | `( period-us -- obs )` | Temporal |
+| `obs-kind` | `( obs -- str )` | Introspection |
+| `obs-last` | `( obs -- obs' )` | Limiting |
+| `obs-map` | `( obs xt -- obs' )` | Transform |
+| `obs-map-with` | `( obs xt ctx -- obs' )` | Transform |
+| `obs-merge` | `( obs-a obs-b max -- obs )` | Combination |
+| `obs-of` | `( value -- obs )` | Source |
+| `obs-pairwise` | `( obs -- obs' )` | Buffer |
+| `obs-range` | `( start end -- obs )` | Source |
+| `obs-read-bytes` | `( path chunk-size -- obs )` | File I/O |
+| `obs-read-csv` | `( path separator -- obs )` | File I/O |
+| `obs-read-json` | `( path -- obs )` | File I/O |
+| `obs-read-lines` | `( path -- obs )` | File I/O |
+| `obs-readdir` | `( path -- obs )` | File I/O |
+| `obs-reduce` | `( obs xt init -- val )` | Terminal |
+| `obs-retry-delay` | `( obs delay-us max -- obs' )` | Temporal |
+| `obs-sample-time` | `( obs period-us -- obs' )` | Temporal |
+| `obs-scan` | `( obs xt init -- obs' )` | Accumulation |
+| `obs-skip` | `( obs n -- obs' )` | Limiting |
+| `obs-start-with` | `( obs value -- obs' )` | Combination |
+| `obs-subscribe` | `( obs xt -- )` | Terminal |
+| `obs-switch-map` | `( obs xt -- obs' )` | Buffer |
+| `obs-take` | `( obs n -- obs' )` | Limiting |
+| `obs-take-until-time` | `( obs duration-us -- obs' )` | Temporal |
+| `obs-take-while` | `( obs xt -- obs' )` | Limiting |
+| `obs-tap` | `( obs xt -- obs' )` | Utility |
+| `obs-throttle-time` | `( obs window-us -- obs' )` | Temporal |
+| `obs-time-interval` | `( obs -- obs' )` | Temporal |
+| `obs-timeout` | `( obs limit-us -- obs' )` | Temporal |
+| `obs-timestamp` | `( obs -- obs' )` | Temporal |
+| `obs-to-array` | `( obs -- array )` | Terminal |
+| `obs-to-string` | `( obs -- string )` | Terminal |
+| `obs-window` | `( obs n -- obs' )` | Buffer |
+| `obs-write-file` | `( obs path -- )` | File I/O |
+| `obs-zip` | `( obs-a obs-b -- obs )` | Combination |
+| `obs?` | `( val -- bool )` | Introspection |
 
 ---
 
