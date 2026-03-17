@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 314u);  // +3: obs-http-get, obs-http-post, obs-http-sse
+    EXPECT_EQ(dict.concept_count(), 301u);  // -13: removed *-sync file I/O words (AVO Phase 4)
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

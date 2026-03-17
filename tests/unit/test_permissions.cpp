@@ -159,7 +159,7 @@ TEST_F(PermissionsTest, LvfsModifyDenied) {
     ctx().set_permissions(&perms);
 
     err_.str("");
-    interp_->interpret_line("s\" hello\" s\" /home/test.txt\" write-file-sync");
+    interp_->interpret_line("s\" hello\" s\" /home/test.txt\" write-file");
 
     // Should have pushed false (denied)
     ASSERT_GE(ctx().data_stack().size(), 1u);
@@ -184,7 +184,7 @@ TEST_F(PermissionsTest, LvfsModifyAllowed) {
     perms.lvfs_modify = true;
     ctx().set_permissions(&perms);
 
-    interp_->interpret_line("s\" hello\" s\" /home/test.txt\" write-file-sync");
+    interp_->interpret_line("s\" hello\" s\" /home/test.txt\" write-file");
 
     ASSERT_GE(ctx().data_stack().size(), 1u);
     auto top = ctx().data_stack().pop();
@@ -227,7 +227,7 @@ TEST_F(PermissionsTest, DiskQuotaExceeded) {
         "12345678901234567890123456789012345678901234567890"
         "12345678901234567890123456789012345678901234567890"
         "12345678901234567890123456789012345678901234567890"
-        "\" s\" /home/new.txt\" write-file-sync");
+        "\" s\" /home/new.txt\" write-file");
 
     ASSERT_GE(ctx().data_stack().size(), 1u);
     auto top = ctx().data_stack().pop();
