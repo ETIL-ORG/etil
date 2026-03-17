@@ -14,7 +14,7 @@ cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ../evolutionary-til
 # Build
 ninja
 
-# Run tests (1,272 tests)
+# Run tests (1,252 tests)
 ctest --output-on-failure
 
 # Run the REPL
@@ -119,6 +119,60 @@ cmake -GNinja \
     ../evolutionary-til
 ```
 
+## Build Scripts (Recommended)
+
+The `scripts/` directory provides convenience wrappers. All scripts auto-detect paths
+from `scripts/env.sh`. Run from the **workspace** directory (parent of `evolutionary-til/`):
+
+```bash
+# Build debug (default) or release
+scripts/build.sh debug
+scripts/build.sh release
+scripts/build.sh all              # both
+
+# Test
+scripts/test.sh debug
+scripts/test.sh all
+scripts/test.sh debug --filter Observable   # run matching tests only
+
+# Debug-first development loop
+scripts/dev.sh                    # build + test debug
+scripts/dev.sh --release          # also build + test release
+
+# Clean rebuild
+scripts/build.sh debug --clean
+```
+
+Build output goes to sibling directories: `build-debug/` (debug) and `build/` (release).
+
+## Pre-Built Dependencies (Fast Builds)
+
+FetchContent downloads and compiles all 13 C++ dependencies on first build (~5-10 min).
+To avoid this on subsequent clean builds, pre-build them once:
+
+```bash
+# Build dependencies into ~/workspace/lib/ (both debug and release)
+scripts/build-deps.sh all
+
+# Or just one mode
+scripts/build-deps.sh debug
+```
+
+Once built, `scripts/build.sh` automatically detects them via `CMAKE_PREFIX_PATH` and
+passes `FETCHCONTENT_FULLY_DISCONNECTED=ON`. Clean debug builds drop from ~5 min to ~25s.
+
+The staleness check compares `ci/deps/manifest.json` against the installed manifest.
+Use `--force` to rebuild even if up to date.
+
+For manual CMake builds, pass the flags explicitly:
+
+```bash
+cmake -GNinja -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_PREFIX_PATH=$HOME/workspace/lib/debug \
+    -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+    ../evolutionary-til
+```
+
 ## Dependencies
 
 All C++ dependencies are fetched automatically by CMake FetchContent on first build.
@@ -127,30 +181,20 @@ See [ATTRIBUTION.md](ATTRIBUTION.md) for the complete list with versions and lic
 System dependencies (must be installed separately): LLVM 18+, OpenSSL (if JWT or HTTP
 enabled), LAPACK/OpenBLAS (for linear algebra).
 
-Dependencies can also be pre-built and resolved via `CMAKE_PREFIX_PATH` with
-`FETCHCONTENT_FULLY_DISCONNECTED=ON` to avoid network access during builds.
-
 ## Testing
 
-### Run All Tests
-
 ```bash
+# Via script (recommended)
+scripts/test.sh debug
+scripts/test.sh debug --filter Observable --parallel 4
+
+# Via ctest directly
 ctest --test-dir build-debug --output-on-failure
-```
 
-### Run Specific Tests
-
-```bash
-# By test name pattern
-ctest --test-dir build-debug -R Dictionary
-
-# By GTest filter
+# Specific tests by GTest filter
 ./build-debug/bin/etil_tests --gtest_filter=PrimitivesTest.*
-```
 
-### Run Benchmarks
-
-```bash
+# Benchmarks
 ./build-debug/bin/etil_benchmark
 ```
 
