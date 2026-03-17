@@ -50,6 +50,17 @@ These are found via `find_package` and provided by the host system or Docker ima
 | [OpenSSL](https://www.openssl.org/) | Apache-2.0 | Required by `ETIL_BUILD_JWT` / `ETIL_BUILD_HTTP_CLIENT` |
 | [jemalloc](https://jemalloc.net/) | BSD-2-Clause | Optional via `ETIL_USE_JEMALLOC` |
 
+## Conceptual Inspirations
+
+ETIL's design draws on established programming language concepts and reactive
+programming patterns. No source code was copied from any of these projects.
+
+| Concept | Origin | How Used in ETIL |
+|---------|--------|-----------------|
+| Stack-based language model | [FORTH](http://www.forth200x.org/) (Charles H. Moore, 1970) | Language architecture: stack, dictionary, colon definitions, control flow |
+| Reactive observable pipelines | [RxJS](https://rxjs.dev/) (Ben Lesh et al., Apache-2.0) | Operator naming conventions and pipeline composition patterns |
+| ReactiveX specification | [ReactiveX](https://reactivex.io/) | Observable operator semantics (map, filter, scan, merge, etc.) |
+
 ## TUI Client
 
 The TUI client lives in a separate repository
