@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 299u);  // +8: s>upper, s>lower, hex., bin., oct., array-sort, within, elapsed
+    EXPECT_EQ(dict.concept_count(), 304u);  // +5: obs-buffer, obs-buffer-when, obs-window, obs-flat-map, obs-to-string
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

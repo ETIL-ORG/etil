@@ -272,3 +272,94 @@ dup array-length 3 expect-eq
 0 1 obs-timer 3 obs-take obs-timestamp obs-to-array
 dup array-length 3 expect-eq
 0 array-get 1 array-get 0 expect-eq
+
+# ===================================================================
+# AVO Phase 1: Buffer + Composition
+# ===================================================================
+
+# --- obs-buffer ---
+
+." obs-buffer exact: "
+1 7 obs-range 3 obs-buffer obs-to-array
+dup array-length 2 expect-eq
+0 array-get array-length 3 expect-eq
+
+." obs-buffer trailing: "
+1 8 obs-range 3 obs-buffer obs-to-array
+dup array-length 3 expect-eq
+2 array-get array-length 1 expect-eq
+
+." obs-buffer single: "
+1 4 obs-range 1 obs-buffer obs-to-array
+array-length 3 expect-eq
+
+." obs-buffer larger-than-source: "
+1 4 obs-range 10 obs-buffer obs-to-array
+dup array-length 1 expect-eq
+0 array-get array-length 3 expect-eq
+
+." obs-buffer empty: "
+obs-empty 3 obs-buffer obs-to-array
+array-length 0 expect-eq
+
+# --- obs-buffer-when ---
+
+: mod3? 3 mod 0= ;
+
+." obs-buffer-when predicate: "
+1 10 obs-range ' mod3? obs-buffer-when obs-to-array
+dup array-length 3 expect-eq
+0 array-get array-length 3 expect-eq
+
+: always-true drop true ;
+." obs-buffer-when always-true: "
+1 4 obs-range ' always-true obs-buffer-when obs-to-array
+array-length 3 expect-eq
+
+# --- obs-window ---
+
+." obs-window count: "
+1 6 obs-range 3 obs-window obs-count 3 expect-eq
+
+." obs-window first element: "
+1 6 obs-range 3 obs-window obs-to-array
+0 array-get 0 array-get 1 expect-eq
+
+." obs-window slides: "
+1 6 obs-range 3 obs-window obs-to-array
+1 array-get 0 array-get 2 expect-eq
+
+." obs-window too-short: "
+1 3 obs-range 5 obs-window obs-to-array
+array-length 0 expect-eq
+
+." obs-window size-1: "
+1 4 obs-range 1 obs-window obs-count 3 expect-eq
+
+# --- obs-flat-map ---
+
+: expand dup * obs-of ;
+
+." obs-flat-map basic: "
+1 4 obs-range ' expand obs-flat-map obs-to-array
+dup array-length 3 expect-eq
+dup 0 array-get 1 expect-eq
+dup 1 array-get 4 expect-eq
+2 array-get 9 expect-eq
+
+: range-from 1 swap obs-range ;
+
+." obs-flat-map multi-emission: "
+3 6 obs-range ' range-from obs-flat-map obs-count 9 expect-eq
+
+." obs-flat-map empty-sub: "
+1 4 obs-range ' drop obs-empty obs-flat-map obs-count 0 expect-eq
+
+# --- obs-to-string ---
+
+." obs-to-string basic: "
+array-new s" hello" array-push s" world" array-push obs-from
+obs-to-string slength 10 expect-eq
+
+." obs-to-string empty: "
+obs-empty obs-to-string slength 0 expect-eq

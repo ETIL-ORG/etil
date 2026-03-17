@@ -66,6 +66,10 @@ const char* HeapObservable::kind_name() const {
     case Kind::DelayEach:     return "delay-each";
     case Kind::AuditTime:     return "audit-time";
     case Kind::RetryDelay:    return "retry-delay";
+    case Kind::Buffer:        return "buffer";
+    case Kind::BufferWhen:    return "buffer-when";
+    case Kind::Window:        return "window";
+    case Kind::FlatMap:       return "flat-map";
     }
     return "unknown";
 }
@@ -266,6 +270,36 @@ HeapObservable* HeapObservable::retry_delay(HeapObservable* source, int64_t dela
     source->add_ref(); o->source_ = source;
     o->state_ = Value(delay_us);
     o->param_ = max_retries;
+    return o;
+}
+
+// AVO Phase 1 factories
+
+HeapObservable* HeapObservable::buffer(HeapObservable* source, int64_t count) {
+    auto* o = new HeapObservable(Kind::Buffer);
+    source->add_ref(); o->source_ = source;
+    o->param_ = count;
+    return o;
+}
+
+HeapObservable* HeapObservable::buffer_when(HeapObservable* source, WordImpl* predicate_xt) {
+    auto* o = new HeapObservable(Kind::BufferWhen);
+    source->add_ref(); o->source_ = source;
+    predicate_xt->add_ref(); o->operator_xt_ = predicate_xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::window(HeapObservable* source, int64_t size) {
+    auto* o = new HeapObservable(Kind::Window);
+    source->add_ref(); o->source_ = source;
+    o->param_ = size;
+    return o;
+}
+
+HeapObservable* HeapObservable::flat_map(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::FlatMap);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref(); o->operator_xt_ = xt;
     return o;
 }
 
@@ -795,6 +829,107 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return false;  // all retries exhausted
     }
 
+    // --- AVO Phase 1: Buffer + Composition ---
+
+    case K::Buffer: {
+        int64_t count = obs->param();
+        auto* batch = new HeapArray();
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            batch->push_back(v);  // takes ownership of v's ref
+            if (static_cast<int64_t>(batch->length()) >= count) {
+                // Emit full batch
+                bool ok = observer(Value::from(batch), c);
+                batch = new HeapArray();  // start new batch
+                return ok;
+            }
+            return true;
+        });
+        // Emit trailing partial batch (if any)
+        if (batch->length() > 0 && result) {
+            observer(Value::from(batch), ctx);
+        } else {
+            delete batch;
+        }
+        return result;
+    }
+
+    case K::BufferWhen: {
+        auto* xt = obs->operator_xt();
+        auto* batch = new HeapArray();
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);  // one ref for batch, one for predicate test
+            batch->push_back(v);  // takes one ref
+            // Test predicate with the value
+            c.data_stack().push(v);  // uses addref'd copy
+            if (!execute_xt(xt, c)) return false;
+            auto pred = c.data_stack().pop();
+            if (!pred) return false;
+            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                // Predicate fired — emit batch
+                bool ok = observer(Value::from(batch), c);
+                batch = new HeapArray();
+                return ok;
+            }
+            return true;
+        });
+        // Emit trailing partial batch (if any)
+        if (batch->length() > 0 && result) {
+            observer(Value::from(batch), ctx);
+        } else {
+            delete batch;
+        }
+        return result;
+    }
+
+    case K::Window: {
+        int64_t size = obs->param();
+        std::vector<Value> ring;
+        ring.reserve(static_cast<size_t>(size));
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);  // ring holds one ref
+            ring.push_back(v);
+            if (static_cast<int64_t>(ring.size()) > size) {
+                value_release(ring.front());
+                ring.erase(ring.begin());
+            }
+            if (static_cast<int64_t>(ring.size()) == size) {
+                // Emit a copy of the window as a HeapArray
+                auto* win = new HeapArray();
+                for (auto& elem : ring) {
+                    value_addref(elem);
+                    win->push_back(elem);
+                }
+                if (!observer(Value::from(win), c)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        // Release remaining ring values
+        for (auto& v : ring) value_release(v);
+        return result;
+    }
+
+    case K::FlatMap: {
+        auto* xt = obs->operator_xt();
+        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            // Push value, execute xt — should return an Observable
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) return false;
+            auto opt = c.data_stack().pop();
+            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                if (opt) opt->release();
+                c.err() << "Error: obs-flat-map xt must return an observable\n";
+                return false;
+            }
+            auto* sub_obs = opt->as_observable();
+            // Execute sub-observable, forwarding emissions to downstream observer
+            bool ok = execute_observable(sub_obs, c, observer);
+            sub_obs->release();
+            return ok;
+        });
+    }
+
     } // switch
     return false;
 }
@@ -1284,6 +1419,97 @@ bool prim_obs_retry_delay(ExecutionContext& ctx) {
     return true;
 }
 
+// --- AVO Phase 1: Buffer + Composition ---
+
+// obs-buffer ( obs n -- obs' )
+bool prim_obs_buffer(ExecutionContext& ctx) {
+    auto opt_n = ctx.data_stack().pop();
+    if (!opt_n) return false;
+    if (opt_n->type != Value::Type::Integer || opt_n->as_int <= 0) {
+        ctx.data_stack().push(*opt_n);
+        ctx.err() << "Error: obs-buffer requires a positive integer\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_n); return false; }
+    auto* obs = HeapObservable::buffer(src, opt_n->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-buffer-when ( obs xt -- obs' )
+bool prim_obs_buffer_when(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        ctx.err() << "Error: obs-buffer-when requires an xt\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::buffer_when(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();  // factory addref'd
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-window ( obs n -- obs' )
+bool prim_obs_window(ExecutionContext& ctx) {
+    auto opt_n = ctx.data_stack().pop();
+    if (!opt_n) return false;
+    if (opt_n->type != Value::Type::Integer || opt_n->as_int <= 0) {
+        ctx.data_stack().push(*opt_n);
+        ctx.err() << "Error: obs-window requires a positive integer\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_n); return false; }
+    auto* obs = HeapObservable::window(src, opt_n->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-flat-map ( obs xt -- obs' )
+bool prim_obs_flat_map(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        ctx.err() << "Error: obs-flat-map requires an xt\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::flat_map(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();  // factory addref'd
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-to-string ( obs -- string ) — concatenate all string emissions
+bool prim_obs_to_string(ExecutionContext& ctx) {
+    auto* obs = pop_observable(ctx);
+    if (!obs) return false;
+    std::string result;
+    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+        if (v.type == Value::Type::String && v.as_ptr) {
+            result += v.as_string()->view();
+        }
+        value_release(v);
+        return true;
+    });
+    obs->release();
+    if (!ok) return false;
+    auto* hs = HeapString::create(result);
+    ctx.data_stack().push(Value::from(hs));
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
@@ -1388,6 +1614,18 @@ void register_observable_primitives(Dictionary& dict) {
     // Temporal: Error Recovery
     dict.register_word("obs-retry-delay", mk("prim_obs_retry_delay", prim_obs_retry_delay,
         {T::Unknown, T::Integer, T::Integer}, {T::Unknown}));
+
+    // AVO Phase 1: Buffer + Composition
+    dict.register_word("obs-buffer", mk("prim_obs_buffer", prim_obs_buffer,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-buffer-when", mk("prim_obs_buffer_when", prim_obs_buffer_when,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-window", mk("prim_obs_window", prim_obs_window,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-flat-map", mk("prim_obs_flat_map", prim_obs_flat_map,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-to-string", mk("prim_obs_to_string", prim_obs_to_string,
+        {T::Unknown}, {T::String}));
 }
 
 } // namespace etil::core

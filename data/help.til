@@ -1868,3 +1868,30 @@ s" obs-retry-delay" s" description" s" text" s" On pipeline failure, wait delay-
 s" obs-retry-delay" s" stack-effect" s" text" s" ( obs delay-us max-retries -- obs' )" meta! drop
 s" obs-retry-delay" s" category" s" text" s" observable" meta! drop
 s" obs-retry-delay" s" examples" s" code" s" 1 4 obs-range 0 3 obs-retry-delay obs-count ." meta! drop
+
+# --- Observable AVO Phase 1: Buffer + Composition ---
+
+s" obs-buffer" s" description" s" text" s" Collect n emissions into arrays, emit each batch. Trailing partial batch emitted on completion" meta! drop
+s" obs-buffer" s" stack-effect" s" text" s" ( obs n -- obs' )" meta! drop
+s" obs-buffer" s" category" s" text" s" observable" meta! drop
+s" obs-buffer" s" examples" s" code" s" 1 8 obs-range 3 obs-buffer obs-to-array dump drop\n=> [[1, 2, 3], [4, 5, 6], [7]]" meta! drop
+
+s" obs-buffer-when" s" description" s" text" s" Buffer emissions until predicate xt returns true, then emit batch. Trailing partial batch emitted on completion" meta! drop
+s" obs-buffer-when" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-buffer-when" s" category" s" text" s" observable" meta! drop
+s" obs-buffer-when" s" examples" s" code" s" : mod3? 3 mod 0= ;  1 10 obs-range ' mod3? obs-buffer-when obs-count ." meta! drop
+
+s" obs-window" s" description" s" text" s" Sliding window of n elements. After n-th emission, each new value emits a window array" meta! drop
+s" obs-window" s" stack-effect" s" text" s" ( obs n -- obs' )" meta! drop
+s" obs-window" s" category" s" text" s" observable" meta! drop
+s" obs-window" s" examples" s" code" s" 1 6 obs-range 3 obs-window obs-count .\n=> 3" meta! drop
+
+s" obs-flat-map" s" description" s" text" s" Map each value to a sub-Observable via xt, flatten all emissions into one stream (concatMap semantics)" meta! drop
+s" obs-flat-map" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-flat-map" s" category" s" text" s" observable" meta! drop
+s" obs-flat-map" s" examples" s" code" s" : expand dup * obs-of ;  1 4 obs-range ' expand obs-flat-map obs-to-array dump drop\n=> [1, 4, 9]" meta! drop
+
+s" obs-to-string" s" description" s" text" s" Concatenate all string emissions into a single string" meta! drop
+s" obs-to-string" s" stack-effect" s" text" s" ( obs -- string )" meta! drop
+s" obs-to-string" s" category" s" text" s" observable" meta! drop
+s" obs-to-string" s" examples" s" code" s| array-new s" hello" array-push s" " array-push s" world" array-push obs-from obs-to-string type cr| meta! drop

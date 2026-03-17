@@ -52,6 +52,12 @@ public:
         DelayEach,      // xt in operator_xt_
         AuditTime,      // window in param_ (us)
         RetryDelay,     // delay in state_.as_int (us), max retries in param_
+
+        // AVO Phase 1: Buffer + Composition
+        Buffer,         // count in param_
+        BufferWhen,     // predicate xt in operator_xt_
+        Window,         // window size in param_
+        FlatMap,        // mapping xt in operator_xt_
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -111,6 +117,12 @@ public:
 
     // Temporal — Error
     static HeapObservable* retry_delay(HeapObservable* source, int64_t delay_us, int64_t max_retries);
+
+    // AVO Phase 1 — Buffer + Composition
+    static HeapObservable* buffer(HeapObservable* source, int64_t count);
+    static HeapObservable* buffer_when(HeapObservable* source, WordImpl* predicate_xt);
+    static HeapObservable* window(HeapObservable* source, int64_t size);
+    static HeapObservable* flat_map(HeapObservable* source, WordImpl* xt);
 
     ~HeapObservable() override;
 
