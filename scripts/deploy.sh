@@ -15,7 +15,6 @@
 #
 # Prerequisites (remote mode):
 #   - Docker installed locally
-#   - SSH key configured via ETIL_SSH_KEY env var (or .ssh/deploy.ed25519)
 #   - SSH connectivity to the production server (ETIL_SSH_HOST)
 # Prerequisites (local-deploy mode):
 #   - Docker installed locally
@@ -28,8 +27,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
 # --- Derived constants ---
-SSH_CMD="ssh -i $ETIL_SSH_KEY $ETIL_SSH_HOST"
-SCP_CMD="scp -i $ETIL_SSH_KEY"
+SSH_CMD="ssh $ETIL_SSH_HOST"
+SCP_CMD="scp"
 LOCAL_TARBALL="/tmp/etil-mcp-deploy.tar.gz"
 REMOTE_TARBALL="/tmp/etil-mcp-deploy.tar.gz"
 REMOTE_ENV_FILE="/tmp/etil-deploy-env"
@@ -118,12 +117,6 @@ fi
 echo "Docker:     OK"
 
 if [ "$LOCAL_DEPLOY" = false ]; then
-    if [ ! -f "$ETIL_SSH_KEY" ]; then
-        echo "ERROR: SSH key not found: $ETIL_SSH_KEY"
-        exit 1
-    fi
-    echo "SSH key:    OK"
-
     if [ "$DRY_RUN" = false ]; then
         if ! $SSH_CMD "echo ok" >/dev/null 2>&1; then
             echo "ERROR: Cannot connect to $ETIL_SSH_HOST"

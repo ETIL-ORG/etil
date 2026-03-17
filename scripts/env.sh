@@ -30,7 +30,6 @@ ETIL_DEPS_DEBUG_DIR="$ETIL_DEPS_PREFIX/debug"
 ETIL_DEPS_RELEASE_DIR="$ETIL_DEPS_PREFIX/release"
 
 # --- SSH (configure for your deployment target) ---
-ETIL_SSH_KEY="${ETIL_SSH_KEY:-$ETIL_PROJECT_DIR/.ssh/deploy.ed25519}"
 ETIL_SSH_HOST="${ETIL_SSH_HOST:-deploy@your-server.example.com}"
 
 # --- Docker ---
