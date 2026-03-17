@@ -95,6 +95,16 @@ const char* HeapObservable::kind_name() const {
     case Kind::HttpGet:       return "http-get";
     case Kind::HttpPost:      return "http-post";
     case Kind::HttpSse:       return "http-sse";
+    case Kind::Tap:           return "tap";
+    case Kind::Pairwise:      return "pairwise";
+    case Kind::First:         return "first";
+    case Kind::Last:          return "last";
+    case Kind::TakeWhile:     return "take-while";
+    case Kind::DistinctUntil: return "distinct-until";
+    case Kind::StartWith:     return "start-with";
+    case Kind::Finalize:      return "finalize";
+    case Kind::SwitchMap:     return "switch-map";
+    case Kind::Catch:         return "catch";
     }
     return "unknown";
 }
@@ -397,6 +407,75 @@ HeapObservable* HeapObservable::http_sse(HeapArray* url_data) {
     auto* o = new HeapObservable(Kind::HttpSse);
     url_data->add_ref();
     o->source_array_ = url_data;
+    return o;
+}
+
+// Gap fill factories
+
+HeapObservable* HeapObservable::tap(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::Tap);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref(); o->operator_xt_ = xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::pairwise(HeapObservable* source) {
+    auto* o = new HeapObservable(Kind::Pairwise);
+    source->add_ref(); o->source_ = source;
+    return o;
+}
+
+HeapObservable* HeapObservable::first(HeapObservable* source) {
+    auto* o = new HeapObservable(Kind::First);
+    source->add_ref(); o->source_ = source;
+    return o;
+}
+
+HeapObservable* HeapObservable::last(HeapObservable* source) {
+    auto* o = new HeapObservable(Kind::Last);
+    source->add_ref(); o->source_ = source;
+    return o;
+}
+
+HeapObservable* HeapObservable::take_while(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::TakeWhile);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref(); o->operator_xt_ = xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::distinct_until(HeapObservable* source) {
+    auto* o = new HeapObservable(Kind::DistinctUntil);
+    source->add_ref(); o->source_ = source;
+    return o;
+}
+
+HeapObservable* HeapObservable::start_with(HeapObservable* source, Value val) {
+    auto* o = new HeapObservable(Kind::StartWith);
+    source->add_ref(); o->source_ = source;
+    value_addref(val);
+    o->state_ = val;
+    return o;
+}
+
+HeapObservable* HeapObservable::finalize(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::Finalize);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref(); o->operator_xt_ = xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::switch_map(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::SwitchMap);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref(); o->operator_xt_ = xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::catch_error(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::Catch);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref(); o->operator_xt_ = xt;
     return o;
 }
 
@@ -1322,6 +1401,171 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return false;
 #endif
 
+    // --- Gap fill: high-value RxJS operators ---
+
+    case K::Tap: {
+        auto* xt = obs->operator_xt();
+        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) { value_release(v); return false; }
+            auto discard = c.data_stack().pop();
+            if (discard) discard->release();
+            return observer(v, c);
+        });
+    }
+
+    case K::Pairwise: {
+        bool has_prev = false;
+        Value prev;
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            if (!has_prev) {
+                prev = v;
+                has_prev = true;
+                return true;
+            }
+            auto* pair = new HeapArray();
+            pair->push_back(prev);
+            value_addref(v);
+            pair->push_back(v);
+            prev = v;
+            return observer(Value::from(pair), c);
+        });
+        if (has_prev) value_release(prev);
+        return result;
+    }
+
+    case K::First:
+        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            observer(v, c);
+            return false;  // stop after first
+        });
+
+    case K::Last: {
+        bool has_value = false;
+        Value last_val;
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
+            if (has_value) value_release(last_val);
+            last_val = v;
+            has_value = true;
+            return true;
+        });
+        if (has_value && result) observer(last_val, ctx);
+        else if (has_value) value_release(last_val);
+        return result;
+    }
+
+    case K::TakeWhile: {
+        auto* xt = obs->operator_xt();
+        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) { value_release(v); return false; }
+            auto pred = c.data_stack().pop();
+            if (!pred) { value_release(v); return false; }
+            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                return observer(v, c);
+            }
+            value_release(v);
+            return false;  // stop
+        });
+    }
+
+    case K::DistinctUntil: {
+        bool has_prev = false;
+        Value prev;
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            bool duplicate = has_prev && v.type == prev.type && v.as_int == prev.as_int;
+            if (duplicate) {
+                value_release(v);
+                return true;
+            }
+            if (has_prev) value_release(prev);
+            value_addref(v);
+            prev = v;
+            has_prev = true;
+            return observer(v, c);
+        });
+        if (has_prev) value_release(prev);
+        return result;
+    }
+
+    case K::StartWith: {
+        Value start_val = obs->state();
+        value_addref(start_val);
+        if (!observer(start_val, ctx)) return true;
+        return execute_observable(obs->source(), ctx, observer);
+    }
+
+    case K::Finalize: {
+        auto* xt = obs->operator_xt();
+        bool result = execute_observable(obs->source(), ctx, observer);
+        execute_xt(xt, ctx);
+        auto discard = ctx.data_stack().pop();
+        if (discard) discard->release();
+        return result;
+    }
+
+    case K::SwitchMap: {
+        auto* xt = obs->operator_xt();
+        // Collect all upstream values
+        std::vector<Value> upstream;
+        bool src_ok = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
+            upstream.push_back(v);
+            return true;
+        });
+        if (!src_ok) {
+            for (auto& v : upstream) value_release(v);
+            return false;
+        }
+        // Only forward emissions from the last inner observable
+        for (size_t i = 0; i < upstream.size(); ++i) {
+            if (!ctx.tick()) {
+                for (size_t j = i; j < upstream.size(); ++j) value_release(upstream[j]);
+                return false;
+            }
+            ctx.data_stack().push(upstream[i]);
+            if (!execute_xt(xt, ctx)) return false;
+            auto opt = ctx.data_stack().pop();
+            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                if (opt) opt->release();
+                ctx.err() << "Error: obs-switch-map xt must return an observable\n";
+                return false;
+            }
+            auto* sub_obs = opt->as_observable();
+            bool is_last = (i == upstream.size() - 1);
+            if (is_last) {
+                bool ok = execute_observable(sub_obs, ctx, observer);
+                sub_obs->release();
+                return ok;
+            } else {
+                execute_observable(sub_obs, ctx, [](Value v, ExecutionContext&) -> bool {
+                    value_release(v);
+                    return true;
+                });
+                sub_obs->release();
+            }
+        }
+        return true;
+    }
+
+    case K::Catch: {
+        auto* xt = obs->operator_xt();
+        bool result = execute_observable(obs->source(), ctx, observer);
+        if (!result) {
+            if (!execute_xt(xt, ctx)) return false;
+            auto opt = ctx.data_stack().pop();
+            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                if (opt) opt->release();
+                return false;
+            }
+            auto* fallback = opt->as_observable();
+            result = execute_observable(fallback, ctx, observer);
+            fallback->release();
+        }
+        return result;
+    }
+
     } // switch
     return false;
 }
@@ -2207,6 +2451,146 @@ bool prim_obs_http_sse(ExecutionContext& ctx) {
 }
 #endif  // ETIL_HTTP_CLIENT_ENABLED
 
+// --- Gap fill: high-value RxJS operators ---
+
+// obs-tap ( obs xt -- obs' )
+bool prim_obs_tap(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::tap(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-pairwise ( obs -- obs' )
+bool prim_obs_pairwise(ExecutionContext& ctx) {
+    auto* src = pop_observable(ctx);
+    if (!src) return false;
+    auto* obs = HeapObservable::pairwise(src);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-first ( obs -- obs' )
+bool prim_obs_first(ExecutionContext& ctx) {
+    auto* src = pop_observable(ctx);
+    if (!src) return false;
+    auto* obs = HeapObservable::first(src);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-last ( obs -- obs' )
+bool prim_obs_last(ExecutionContext& ctx) {
+    auto* src = pop_observable(ctx);
+    if (!src) return false;
+    auto* obs = HeapObservable::last(src);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-take-while ( obs xt -- obs' )
+bool prim_obs_take_while(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::take_while(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-distinct-until ( obs -- obs' )
+bool prim_obs_distinct_until(ExecutionContext& ctx) {
+    auto* src = pop_observable(ctx);
+    if (!src) return false;
+    auto* obs = HeapObservable::distinct_until(src);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-start-with ( obs value -- obs' )
+bool prim_obs_start_with(ExecutionContext& ctx) {
+    auto opt_val = ctx.data_stack().pop();
+    if (!opt_val) return false;
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_val); return false; }
+    auto* obs = HeapObservable::start_with(src, *opt_val);
+    src->release();
+    // start_with factory addref'd val; we consumed the stack's ref
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-finalize ( obs xt -- obs' )
+bool prim_obs_finalize(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::finalize(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-switch-map ( obs xt -- obs' )
+bool prim_obs_switch_map(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::switch_map(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-catch ( obs xt -- obs' )
+bool prim_obs_catch(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::catch_error(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
 // obs-to-string ( obs -- string ) — concatenate all string emissions
 bool prim_obs_to_string(ExecutionContext& ctx) {
     auto* obs = pop_observable(ctx);
@@ -2368,6 +2752,28 @@ void register_observable_primitives(Dictionary& dict) {
     dict.register_word("obs-http-sse", mk("prim_obs_http_sse", prim_obs_http_sse,
         {T::String, T::Unknown}, {T::Unknown}));
 #endif
+
+    // Gap fill: high-value RxJS operators
+    dict.register_word("obs-tap", mk("prim_obs_tap", prim_obs_tap,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-pairwise", mk("prim_obs_pairwise", prim_obs_pairwise,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-first", mk("prim_obs_first", prim_obs_first,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-last", mk("prim_obs_last", prim_obs_last,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-take-while", mk("prim_obs_take_while", prim_obs_take_while,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-distinct-until", mk("prim_obs_distinct_until", prim_obs_distinct_until,
+        {T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-start-with", mk("prim_obs_start_with", prim_obs_start_with,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-finalize", mk("prim_obs_finalize", prim_obs_finalize,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-switch-map", mk("prim_obs_switch_map", prim_obs_switch_map,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-catch", mk("prim_obs_catch", prim_obs_catch,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
 }
 
 } // namespace etil::core
