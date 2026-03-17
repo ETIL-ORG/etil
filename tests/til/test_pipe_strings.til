@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # test_pipe_strings.til — Tests for .| and s| string literals with escape processing
 # Convention: leading space after s| is stripped, but NO trailing space before |
 # i.e. s| text| not s| text |  (trailing space would be included in string)

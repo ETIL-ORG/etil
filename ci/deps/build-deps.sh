@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
 # Build all ETIL dependencies for CI.
 # Builds both debug and release into the prefix directory.
 #

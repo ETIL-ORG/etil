@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # test_evolve.til — Integration test for the (1+1) evolutionary strategy
 # Uses a fixed PRNG seed for deterministic, reproducible results.
 # Verifies: genome creation, mutation, fitness evaluation, evolution loop,

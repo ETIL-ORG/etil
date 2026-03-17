@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # test_pen_strings.til — PEN tests for string boundary conditions
 # Tests negative/oversize substr params, empty string ops, split/join edge cases
 

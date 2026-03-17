@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # test_taint.til — Taint bit integration tests
 # NOTE: File I/O taint tests are in unit tests (REPL has no LVFS).
 include tests/til/harness.til

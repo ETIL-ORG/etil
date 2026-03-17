@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 \ test_permissions.til — Standalone mode permission regression tests
 \ In standalone mode (REPL), permissions pointer is null → all permitted.
 include tests/til/harness.til

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # builtins.til -- ETIL words implemented in ETIL
 # Loaded on startup by interpreter configuration.
 # These replace the C++ interpret handlers with self-hosting definitions.

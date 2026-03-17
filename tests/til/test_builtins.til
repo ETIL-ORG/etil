@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # test_builtins.til — Tests for self-hosted words defined in builtins.til
 
 include tests/til/harness.til

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # help.til -- Built-in help metadata for all ETIL words
 # Loaded on startup after builtins.til.
 # Uses stack-based meta! to attach description, stack-effect, and category to each word.

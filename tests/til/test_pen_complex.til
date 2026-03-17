@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # test_pen_complex.til — PEN tests for complex arrangements and stress
 # Arrays of strings, arrays of byte arrays, nested arrays, refcount stress
 

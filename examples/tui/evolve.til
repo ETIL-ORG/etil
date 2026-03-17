@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # evolve.til -- (1+1) Evolutionary Strategy in TIL
 #
 # Evolves an arithmetic RPN expression to produce a target number.
