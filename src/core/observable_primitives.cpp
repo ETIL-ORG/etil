@@ -12,7 +12,17 @@
 #include "etil/core/value_helpers.hpp"
 #include "etil/core/word_impl.hpp"
 
+#include "etil/core/heap_byte_array.hpp"
+#include "etil/core/heap_json.hpp"
+#include "etil/lvfs/lvfs.hpp"
+#include "etil/mcp/role_permissions.hpp"
+
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <string>
 #include <thread>
@@ -70,6 +80,11 @@ const char* HeapObservable::kind_name() const {
     case Kind::BufferWhen:    return "buffer-when";
     case Kind::Window:        return "window";
     case Kind::FlatMap:       return "flat-map";
+    case Kind::ReadBytes:     return "read-bytes";
+    case Kind::ReadLines:     return "read-lines";
+    case Kind::ReadJson:      return "read-json";
+    case Kind::ReadCsv:       return "read-csv";
+    case Kind::ReadDir:       return "read-dir";
     }
     return "unknown";
 }
@@ -300,6 +315,49 @@ HeapObservable* HeapObservable::flat_map(HeapObservable* source, WordImpl* xt) {
     auto* o = new HeapObservable(Kind::FlatMap);
     source->add_ref(); o->source_ = source;
     xt->add_ref(); o->operator_xt_ = xt;
+    return o;
+}
+
+// AVO Phase 2 factories
+
+HeapObservable* HeapObservable::read_bytes(HeapString* fs_path, int64_t chunk_size) {
+    auto* o = new HeapObservable(Kind::ReadBytes);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    o->param_ = chunk_size;
+    return o;
+}
+
+HeapObservable* HeapObservable::read_lines(HeapString* fs_path) {
+    auto* o = new HeapObservable(Kind::ReadLines);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    return o;
+}
+
+HeapObservable* HeapObservable::read_json(HeapString* fs_path) {
+    auto* o = new HeapObservable(Kind::ReadJson);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    return o;
+}
+
+HeapObservable* HeapObservable::read_csv(HeapString* fs_path, HeapString* separator) {
+    auto* o = new HeapObservable(Kind::ReadCsv);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    // Store separator in a single-element source_array
+    auto* arr = new HeapArray();
+    separator->add_ref();
+    arr->push_back(Value::from(separator));
+    o->source_array_ = arr;
+    return o;
+}
+
+HeapObservable* HeapObservable::read_dir(HeapString* fs_path) {
+    auto* o = new HeapObservable(Kind::ReadDir);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
     return o;
 }
 
@@ -930,6 +988,144 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         });
     }
 
+    // --- AVO Phase 2: Streaming File I/O ---
+
+    case K::ReadBytes: {
+        auto* path_hs = obs->state().as_string();
+        int64_t chunk_size = obs->param();
+        std::ifstream file(std::string(path_hs->view()), std::ios::binary);
+        if (!file) {
+            ctx.err() << "Error: obs-read-bytes cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::vector<char> buf(static_cast<size_t>(chunk_size));
+        while (file) {
+            if (!ctx.tick()) return false;
+            file.read(buf.data(), chunk_size);
+            auto bytes_read = file.gcount();
+            if (bytes_read <= 0) break;
+            auto* ba = new HeapByteArray(static_cast<size_t>(bytes_read));
+            for (std::streamsize i = 0; i < bytes_read; ++i) {
+                ba->set(static_cast<size_t>(i), static_cast<uint8_t>(buf[static_cast<size_t>(i)]));
+            }
+            ba->set_tainted(true);
+            if (!observer(Value::from(ba), ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::ReadLines: {
+        auto* path_hs = obs->state().as_string();
+        std::ifstream file(std::string(path_hs->view()));
+        if (!file) {
+            ctx.err() << "Error: obs-read-lines cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!ctx.tick()) return false;
+            // Remove trailing \r for \r\n line endings
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            auto* hs = HeapString::create(line);
+            hs->set_tainted(true);
+            if (!observer(Value::from(hs), ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::ReadJson: {
+        auto* path_hs = obs->state().as_string();
+        std::ifstream file(std::string(path_hs->view()));
+        if (!file) {
+            ctx.err() << "Error: obs-read-json cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::string content((std::istreambuf_iterator<char>(file)),
+                             std::istreambuf_iterator<char>());
+        try {
+            auto j = nlohmann::json::parse(content);
+            auto* hj = new HeapJson(std::move(j));
+            observer(Value::from(hj), ctx);
+        } catch (const nlohmann::json::parse_error& e) {
+            ctx.err() << "Error: obs-read-json parse error: " << e.what() << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    case K::ReadCsv: {
+        auto* path_hs = obs->state().as_string();
+        // Get separator from source_array_[0]
+        Value sep_val;
+        obs->source_array()->get(0, sep_val);
+        auto* sep_hs = sep_val.as_string();
+        char sep_char = (sep_hs->length() > 0) ? sep_hs->view()[0] : ',';
+        sep_hs->release();
+
+        std::ifstream file(std::string(path_hs->view()));
+        if (!file) {
+            ctx.err() << "Error: obs-read-csv cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!ctx.tick()) return false;
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            // Split line by separator (handles quoted fields)
+            auto* row = new HeapArray();
+            std::string field;
+            bool in_quotes = false;
+            for (size_t i = 0; i < line.size(); ++i) {
+                char c = line[i];
+                if (c == '"') {
+                    if (in_quotes && i + 1 < line.size() && line[i + 1] == '"') {
+                        field += '"';
+                        ++i;  // skip escaped quote
+                    } else {
+                        in_quotes = !in_quotes;
+                    }
+                } else if (c == sep_char && !in_quotes) {
+                    auto* fs = HeapString::create(field);
+                    fs->set_tainted(true);
+                    row->push_back(Value::from(fs));
+                    field.clear();
+                } else {
+                    field += c;
+                }
+            }
+            // Last field
+            auto* fs = HeapString::create(field);
+            fs->set_tainted(true);
+            row->push_back(Value::from(fs));
+            if (!observer(Value::from(row), ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::ReadDir: {
+        auto* path_hs = obs->state().as_string();
+        std::string dir_path(path_hs->view());
+        std::error_code ec;
+        // Collect and sort entries
+        std::vector<std::string> entries;
+        for (auto& entry : std::filesystem::directory_iterator(dir_path, ec)) {
+            if (ec) break;
+            entries.push_back(entry.path().filename().string());
+        }
+        if (ec) {
+            ctx.err() << "Error: obs-readdir cannot read '" << dir_path << "': " << ec.message() << "\n";
+            return false;
+        }
+        std::sort(entries.begin(), entries.end());
+        for (auto& name : entries) {
+            if (!ctx.tick()) return false;
+            auto* hs = HeapString::create(name);
+            hs->set_tainted(true);
+            if (!observer(Value::from(hs), ctx)) return true;
+        }
+        return true;
+    }
+
     } // switch
     return false;
 }
@@ -1491,6 +1687,196 @@ bool prim_obs_flat_map(ExecutionContext& ctx) {
     return true;
 }
 
+// --- AVO Phase 2: Streaming File I/O primitives ---
+
+// Helper: pop a path string, resolve via LVFS, return resolved HeapString*.
+// Returns nullptr on failure (error printed, stack handled).
+static HeapString* pop_and_resolve_obs_path(ExecutionContext& ctx) {
+    auto* hs = pop_string(ctx);
+    if (!hs) return nullptr;
+    std::string vpath(hs->view());
+    hs->release();
+
+    auto* lvfs = ctx.lvfs();
+    if (!lvfs) {
+        ctx.err() << "Error: no LVFS available\n";
+        return nullptr;
+    }
+    std::string fs_path = lvfs->resolve(vpath);
+    if (fs_path.empty()) {
+        ctx.err() << "Error: cannot resolve path '" << vpath << "'\n";
+        return nullptr;
+    }
+    return HeapString::create(fs_path);
+}
+
+// obs-read-bytes ( path chunk-size -- obs )
+bool prim_obs_read_bytes(ExecutionContext& ctx) {
+    auto opt_size = ctx.data_stack().pop();
+    if (!opt_size) return false;
+    if (opt_size->type != Value::Type::Integer || opt_size->as_int <= 0) {
+        ctx.data_stack().push(*opt_size);
+        ctx.err() << "Error: obs-read-bytes requires a positive chunk size\n";
+        return false;
+    }
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) { ctx.data_stack().push(*opt_size); return false; }
+    auto* obs = HeapObservable::read_bytes(path, opt_size->as_int);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-read-lines ( path -- obs )
+bool prim_obs_read_lines(ExecutionContext& ctx) {
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) return false;
+    auto* obs = HeapObservable::read_lines(path);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-read-json ( path -- obs )
+bool prim_obs_read_json(ExecutionContext& ctx) {
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) return false;
+    auto* obs = HeapObservable::read_json(path);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-read-csv ( path separator -- obs )
+bool prim_obs_read_csv(ExecutionContext& ctx) {
+    auto* sep = pop_string(ctx);
+    if (!sep) return false;
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) { sep->release(); return false; }
+    auto* obs = HeapObservable::read_csv(path, sep);
+    path->release();
+    sep->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-readdir ( path -- obs )
+bool prim_obs_readdir(ExecutionContext& ctx) {
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) return false;
+    auto* obs = HeapObservable::read_dir(path);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-write-file ( obs path -- ) — terminal: write all emissions to file
+bool prim_obs_write_file(ExecutionContext& ctx) {
+    auto* path_hs = pop_string(ctx);
+    if (!path_hs) return false;
+    std::string vpath(path_hs->view());
+    path_hs->release();
+
+    auto* obs = pop_observable(ctx);
+    if (!obs) return false;
+
+    // Check write permission
+    auto* perms = ctx.permissions();
+    if (perms && !perms->lvfs_modify) {
+        ctx.err() << "Error: file modification not permitted\n";
+        obs->release();
+        return false;
+    }
+
+    auto* lvfs = ctx.lvfs();
+    if (!lvfs) { ctx.err() << "Error: no LVFS\n"; obs->release(); return false; }
+    std::string fs_path = lvfs->resolve(vpath);
+    if (fs_path.empty() || lvfs->is_read_only(vpath)) {
+        ctx.err() << "Error: cannot write to '" << vpath << "'\n";
+        obs->release();
+        return false;
+    }
+
+    std::ofstream file(fs_path, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        ctx.err() << "Error: obs-write-file cannot open '" << fs_path << "'\n";
+        obs->release();
+        return false;
+    }
+
+    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+        if (v.type == Value::Type::String && v.as_ptr) {
+            auto sv = v.as_string()->view();
+            file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
+        } else if (v.type == Value::Type::ByteArray && v.as_ptr) {
+            auto* ba = v.as_byte_array();
+            for (size_t i = 0; i < ba->length(); ++i) {
+                uint8_t byte;
+                ba->get(i, byte);
+                file.put(static_cast<char>(byte));
+            }
+        }
+        value_release(v);
+        return true;
+    });
+    obs->release();
+    file.close();
+    return ok;
+}
+
+// obs-append-file ( obs path -- ) — terminal: append all emissions to file
+bool prim_obs_append_file(ExecutionContext& ctx) {
+    auto* path_hs = pop_string(ctx);
+    if (!path_hs) return false;
+    std::string vpath(path_hs->view());
+    path_hs->release();
+
+    auto* obs = pop_observable(ctx);
+    if (!obs) return false;
+
+    auto* perms = ctx.permissions();
+    if (perms && !perms->lvfs_modify) {
+        ctx.err() << "Error: file modification not permitted\n";
+        obs->release();
+        return false;
+    }
+
+    auto* lvfs = ctx.lvfs();
+    if (!lvfs) { ctx.err() << "Error: no LVFS\n"; obs->release(); return false; }
+    std::string fs_path = lvfs->resolve(vpath);
+    if (fs_path.empty() || lvfs->is_read_only(vpath)) {
+        ctx.err() << "Error: cannot write to '" << vpath << "'\n";
+        obs->release();
+        return false;
+    }
+
+    std::ofstream file(fs_path, std::ios::binary | std::ios::app);
+    if (!file) {
+        ctx.err() << "Error: obs-append-file cannot open '" << fs_path << "'\n";
+        obs->release();
+        return false;
+    }
+
+    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+        if (v.type == Value::Type::String && v.as_ptr) {
+            auto sv = v.as_string()->view();
+            file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
+        } else if (v.type == Value::Type::ByteArray && v.as_ptr) {
+            auto* ba = v.as_byte_array();
+            for (size_t i = 0; i < ba->length(); ++i) {
+                uint8_t byte;
+                ba->get(i, byte);
+                file.put(static_cast<char>(byte));
+            }
+        }
+        value_release(v);
+        return true;
+    });
+    obs->release();
+    file.close();
+    return ok;
+}
+
 // obs-to-string ( obs -- string ) — concatenate all string emissions
 bool prim_obs_to_string(ExecutionContext& ctx) {
     auto* obs = pop_observable(ctx);
@@ -1626,6 +2012,22 @@ void register_observable_primitives(Dictionary& dict) {
         {T::Unknown, T::Unknown}, {T::Unknown}));
     dict.register_word("obs-to-string", mk("prim_obs_to_string", prim_obs_to_string,
         {T::Unknown}, {T::String}));
+
+    // AVO Phase 2: Streaming File I/O
+    dict.register_word("obs-read-bytes", mk("prim_obs_read_bytes", prim_obs_read_bytes,
+        {T::String, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-read-lines", mk("prim_obs_read_lines", prim_obs_read_lines,
+        {T::String}, {T::Unknown}));
+    dict.register_word("obs-read-json", mk("prim_obs_read_json", prim_obs_read_json,
+        {T::String}, {T::Unknown}));
+    dict.register_word("obs-read-csv", mk("prim_obs_read_csv", prim_obs_read_csv,
+        {T::String, T::String}, {T::Unknown}));
+    dict.register_word("obs-readdir", mk("prim_obs_readdir", prim_obs_readdir,
+        {T::String}, {T::Unknown}));
+    dict.register_word("obs-write-file", mk("prim_obs_write_file", prim_obs_write_file,
+        {T::Unknown, T::String}, {}));
+    dict.register_word("obs-append-file", mk("prim_obs_append_file", prim_obs_append_file,
+        {T::Unknown, T::String}, {}));
 }
 
 } // namespace etil::core

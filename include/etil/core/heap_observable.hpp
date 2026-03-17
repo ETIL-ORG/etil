@@ -58,6 +58,13 @@ public:
         BufferWhen,     // predicate xt in operator_xt_
         Window,         // window size in param_
         FlatMap,        // mapping xt in operator_xt_
+
+        // AVO Phase 2: Streaming File I/O
+        ReadBytes,      // fs path in state_ (HeapString), chunk size in param_
+        ReadLines,      // fs path in state_ (HeapString)
+        ReadJson,       // fs path in state_ (HeapString)
+        ReadCsv,        // fs path in state_ (HeapString), separator in source_array_ (single HeapString)
+        ReadDir,        // fs path in state_ (HeapString)
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -123,6 +130,13 @@ public:
     static HeapObservable* buffer_when(HeapObservable* source, WordImpl* predicate_xt);
     static HeapObservable* window(HeapObservable* source, int64_t size);
     static HeapObservable* flat_map(HeapObservable* source, WordImpl* xt);
+
+    // AVO Phase 2 — Streaming File I/O (fs_path is the resolved filesystem path)
+    static HeapObservable* read_bytes(HeapString* fs_path, int64_t chunk_size);
+    static HeapObservable* read_lines(HeapString* fs_path);
+    static HeapObservable* read_json(HeapString* fs_path);
+    static HeapObservable* read_csv(HeapString* fs_path, HeapString* separator);
+    static HeapObservable* read_dir(HeapString* fs_path);
 
     ~HeapObservable() override;
 

@@ -1895,3 +1895,33 @@ s" obs-to-string" s" description" s" text" s" Concatenate all string emissions i
 s" obs-to-string" s" stack-effect" s" text" s" ( obs -- string )" meta! drop
 s" obs-to-string" s" category" s" text" s" observable" meta! drop
 s" obs-to-string" s" examples" s" code" s| array-new s" hello" array-push s" " array-push s" world" array-push obs-from obs-to-string type cr| meta! drop
+
+# --- Observable AVO Phase 2: Streaming File I/O ---
+
+s" obs-read-bytes" s" description" s" text" s" Read file as observable stream of byte array chunks" meta! drop
+s" obs-read-bytes" s" stack-effect" s" text" s" ( path chunk-size -- obs )" meta! drop
+s" obs-read-bytes" s" category" s" text" s" observable" meta! drop
+
+s" obs-read-lines" s" description" s" text" s" Read file as observable stream of lines (one string per line)" meta! drop
+s" obs-read-lines" s" stack-effect" s" text" s" ( path -- obs )" meta! drop
+s" obs-read-lines" s" category" s" text" s" observable" meta! drop
+
+s" obs-read-json" s" description" s" text" s" Read and parse JSON file, emit as single HeapJson value" meta! drop
+s" obs-read-json" s" stack-effect" s" text" s" ( path -- obs )" meta! drop
+s" obs-read-json" s" category" s" text" s" observable" meta! drop
+
+s" obs-read-csv" s" description" s" text" s" Read CSV file as observable stream of rows (one array of strings per row). Handles quoted fields" meta! drop
+s" obs-read-csv" s" stack-effect" s" text" s" ( path separator -- obs )" meta! drop
+s" obs-read-csv" s" category" s" text" s" observable" meta! drop
+
+s" obs-readdir" s" description" s" text" s" List directory entries as observable stream of name strings (sorted alphabetically)" meta! drop
+s" obs-readdir" s" stack-effect" s" text" s" ( path -- obs )" meta! drop
+s" obs-readdir" s" category" s" text" s" observable" meta! drop
+
+s" obs-write-file" s" description" s" text" s" Terminal: write all observable string/byte emissions to a file (creates/truncates)" meta! drop
+s" obs-write-file" s" stack-effect" s" text" s" ( obs path -- )" meta! drop
+s" obs-write-file" s" category" s" text" s" observable" meta! drop
+
+s" obs-append-file" s" description" s" text" s" Terminal: append all observable string/byte emissions to a file" meta! drop
+s" obs-append-file" s" stack-effect" s" text" s" ( obs path -- )" meta! drop
+s" obs-append-file" s" category" s" text" s" observable" meta! drop
