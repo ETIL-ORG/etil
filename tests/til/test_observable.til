@@ -363,3 +363,126 @@ obs-to-string slength 10 expect-eq
 
 ." obs-to-string empty: "
 obs-empty obs-to-string slength 0 expect-eq
+
+# ===================================================================
+# Gap Fill: High-Value RxJS Operators
+# ===================================================================
+
+# --- obs-tap ---
+
+variable tap-count
+: count-tap drop tap-count @ 1 + tap-count ! ;
+
+." obs-tap passthrough: "
+0 tap-count !
+1 4 obs-range ' count-tap obs-tap obs-count 3 expect-eq
+
+." obs-tap side-effect: "
+tap-count @ 3 expect-eq
+
+# --- obs-pairwise ---
+
+." obs-pairwise count: "
+1 5 obs-range obs-pairwise obs-count 3 expect-eq
+
+." obs-pairwise first pair: "
+1 5 obs-range obs-pairwise obs-to-array
+0 array-get dup 0 array-get 1 expect-eq
+1 array-get 2 expect-eq
+
+." obs-pairwise single: "
+1 2 obs-range obs-pairwise obs-count 0 expect-eq
+
+# --- obs-first ---
+
+." obs-first basic: "
+1 10 obs-range obs-first obs-to-array
+dup array-length 1 expect-eq
+0 array-get 1 expect-eq
+
+." obs-first empty: "
+obs-empty obs-first obs-count 0 expect-eq
+
+# --- obs-last ---
+
+." obs-last basic: "
+1 10 obs-range obs-last obs-to-array
+dup array-length 1 expect-eq
+0 array-get 9 expect-eq
+
+." obs-last single: "
+42 obs-of obs-last obs-to-array
+0 array-get 42 expect-eq
+
+# --- obs-take-while ---
+
+: less5 5 < ;
+
+." obs-take-while basic: "
+1 10 obs-range ' less5 obs-take-while obs-to-array
+array-length 4 expect-eq
+
+." obs-take-while all pass: "
+1 4 obs-range ' less5 obs-take-while obs-count 3 expect-eq
+
+: never-true drop false ;
+
+." obs-take-while none pass: "
+1 10 obs-range ' never-true obs-take-while obs-count 0 expect-eq
+
+# --- obs-distinct-until ---
+
+." obs-distinct-until basic: "
+array-new 1 array-push 1 array-push 2 array-push 2 array-push 1 array-push obs-from
+obs-distinct-until obs-to-array
+array-length 3 expect-eq
+
+." obs-distinct-until all same: "
+array-new 5 array-push 5 array-push 5 array-push obs-from
+obs-distinct-until obs-count 1 expect-eq
+
+." obs-distinct-until all different: "
+1 5 obs-range obs-distinct-until obs-count 4 expect-eq
+
+# --- obs-start-with ---
+
+." obs-start-with basic: "
+1 4 obs-range 0 obs-start-with obs-to-array
+dup array-length 4 expect-eq
+0 array-get 0 expect-eq
+
+." obs-start-with empty source: "
+obs-empty 42 obs-start-with obs-to-array
+dup array-length 1 expect-eq
+0 array-get 42 expect-eq
+
+# --- obs-finalize ---
+
+variable finalized
+: set-finalized true finalized ! ;
+
+." obs-finalize runs on success: "
+false finalized !
+1 4 obs-range ' set-finalized obs-finalize obs-count 3 expect-eq
+finalized @ true expect-eq
+
+# --- obs-switch-map ---
+
+: to-obs obs-of ;
+
+." obs-switch-map basic: "
+1 4 obs-range ' to-obs obs-switch-map obs-to-array
+dup array-length 1 expect-eq
+0 array-get 3 expect-eq
+
+: range-from 1 swap obs-range ;
+
+." obs-switch-map last inner: "
+3 6 obs-range ' range-from obs-switch-map obs-count 4 expect-eq
+
+# --- obs-catch ---
+
+: fallback 42 obs-of ;
+
+." obs-catch no error: "
+1 4 obs-range ' fallback obs-catch obs-count 3 expect-eq

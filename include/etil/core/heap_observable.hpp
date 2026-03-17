@@ -72,6 +72,18 @@ public:
         HttpGet,        // URL data in source_array_ (HeapArray: [scheme_host_port, path, hostname, resolved_ip, headers...])
         HttpPost,       // URL data in source_array_, request body in state_ (HeapByteArray)
         HttpSse,        // URL data in source_array_ (same as HttpGet)
+
+        // Gap fill: high-value RxJS operators
+        Tap,            // side-effect xt in operator_xt_
+        Pairwise,       // no extra state
+        First,          // no extra state
+        Last,           // no extra state
+        TakeWhile,      // predicate xt in operator_xt_
+        DistinctUntil,  // no extra state
+        StartWith,      // prepend value in state_
+        Finalize,       // cleanup xt in operator_xt_
+        SwitchMap,      // mapping xt in operator_xt_
+        Catch,          // recovery xt in operator_xt_
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -149,6 +161,18 @@ public:
     static HeapObservable* http_get(HeapArray* url_data);
     static HeapObservable* http_post(HeapArray* url_data, HeapByteArray* body, HeapString* content_type);
     static HeapObservable* http_sse(HeapArray* url_data);
+
+    // Gap fill — high-value RxJS operators
+    static HeapObservable* tap(HeapObservable* source, WordImpl* xt);
+    static HeapObservable* pairwise(HeapObservable* source);
+    static HeapObservable* first(HeapObservable* source);
+    static HeapObservable* last(HeapObservable* source);
+    static HeapObservable* take_while(HeapObservable* source, WordImpl* xt);
+    static HeapObservable* distinct_until(HeapObservable* source);
+    static HeapObservable* start_with(HeapObservable* source, Value val);
+    static HeapObservable* finalize(HeapObservable* source, WordImpl* xt);
+    static HeapObservable* switch_map(HeapObservable* source, WordImpl* xt);
+    static HeapObservable* catch_error(HeapObservable* source, WordImpl* xt);
 
     ~HeapObservable() override;
 

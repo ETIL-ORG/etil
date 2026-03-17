@@ -1872,3 +1872,47 @@ s" obs-http-post" s" category" s" text" s" observable" meta! drop
 s" obs-http-sse" s" description" s" text" s" SSE client: connect to Server-Sent Events endpoint, emit each event as HeapJson or string. Naturally infinite — compose with obs-take or obs-timeout" meta! drop
 s" obs-http-sse" s" stack-effect" s" text" s" ( url headers-map -- obs )" meta! drop
 s" obs-http-sse" s" category" s" text" s" observable" meta! drop
+
+# --- Observable Gap Fill: High-Value RxJS Operators ---
+
+s" obs-tap" s" description" s" text" s" Execute xt as side-effect for each emission, pass value through unchanged. For debugging pipelines" meta! drop
+s" obs-tap" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-tap" s" category" s" text" s" observable" meta! drop
+s" obs-tap" s" examples" s" code" s" 1 4 obs-range ' . obs-tap obs-count ." meta! drop
+
+s" obs-pairwise" s" description" s" text" s" Emit consecutive [prev, curr] pairs as 2-element arrays. First emission is buffered" meta! drop
+s" obs-pairwise" s" stack-effect" s" text" s" ( obs -- obs' )" meta! drop
+s" obs-pairwise" s" category" s" text" s" observable" meta! drop
+s" obs-pairwise" s" examples" s" code" s" 1 5 obs-range obs-pairwise obs-count .\n=> 3" meta! drop
+
+s" obs-first" s" description" s" text" s" Emit only the first value, then complete" meta! drop
+s" obs-first" s" stack-effect" s" text" s" ( obs -- obs' )" meta! drop
+s" obs-first" s" category" s" text" s" observable" meta! drop
+
+s" obs-last" s" description" s" text" s" Emit only the final value on source completion" meta! drop
+s" obs-last" s" stack-effect" s" text" s" ( obs -- obs' )" meta! drop
+s" obs-last" s" category" s" text" s" observable" meta! drop
+
+s" obs-take-while" s" description" s" text" s" Emit values while predicate xt returns true. Complete on first false" meta! drop
+s" obs-take-while" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-take-while" s" category" s" text" s" observable" meta! drop
+
+s" obs-distinct-until" s" description" s" text" s" Suppress consecutive duplicate values. Unlike obs-distinct, only compares with immediately previous emission" meta! drop
+s" obs-distinct-until" s" stack-effect" s" text" s" ( obs -- obs' )" meta! drop
+s" obs-distinct-until" s" category" s" text" s" observable" meta! drop
+
+s" obs-start-with" s" description" s" text" s" Emit the given value before any source emissions" meta! drop
+s" obs-start-with" s" stack-effect" s" text" s" ( obs value -- obs' )" meta! drop
+s" obs-start-with" s" category" s" text" s" observable" meta! drop
+
+s" obs-finalize" s" description" s" text" s" Execute cleanup xt when the pipeline completes (success or error)" meta! drop
+s" obs-finalize" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-finalize" s" category" s" text" s" observable" meta! drop
+
+s" obs-switch-map" s" description" s" text" s" Map each value to a sub-observable via xt, only forward emissions from the last one. For synchronous sources, runs last inner only" meta! drop
+s" obs-switch-map" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-switch-map" s" category" s" text" s" observable" meta! drop
+
+s" obs-catch" s" description" s" text" s" On pipeline error, call recovery xt which must return a fallback observable" meta! drop
+s" obs-catch" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-catch" s" category" s" text" s" observable" meta! drop
