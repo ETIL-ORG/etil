@@ -10,6 +10,8 @@
 namespace etil::core {
 
 class HeapArray;
+class HeapByteArray;
+class HeapString;
 class WordImpl;
 
 /// Heap-allocated Observable node.
@@ -52,6 +54,24 @@ public:
         DelayEach,      // xt in operator_xt_
         AuditTime,      // window in param_ (us)
         RetryDelay,     // delay in state_.as_int (us), max retries in param_
+
+        // AVO Phase 1: Buffer + Composition
+        Buffer,         // count in param_
+        BufferWhen,     // predicate xt in operator_xt_
+        Window,         // window size in param_
+        FlatMap,        // mapping xt in operator_xt_
+
+        // AVO Phase 2: Streaming File I/O
+        ReadBytes,      // fs path in state_ (HeapString), chunk size in param_
+        ReadLines,      // fs path in state_ (HeapString)
+        ReadJson,       // fs path in state_ (HeapString)
+        ReadCsv,        // fs path in state_ (HeapString), separator in source_array_ (single HeapString)
+        ReadDir,        // fs path in state_ (HeapString)
+
+        // AVO Phase 3: Streaming HTTP
+        HttpGet,        // URL data in source_array_ (HeapArray: [scheme_host_port, path, hostname, resolved_ip, headers...])
+        HttpPost,       // URL data in source_array_, request body in state_ (HeapByteArray)
+        HttpSse,        // URL data in source_array_ (same as HttpGet)
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -111,6 +131,24 @@ public:
 
     // Temporal — Error
     static HeapObservable* retry_delay(HeapObservable* source, int64_t delay_us, int64_t max_retries);
+
+    // AVO Phase 1 — Buffer + Composition
+    static HeapObservable* buffer(HeapObservable* source, int64_t count);
+    static HeapObservable* buffer_when(HeapObservable* source, WordImpl* predicate_xt);
+    static HeapObservable* window(HeapObservable* source, int64_t size);
+    static HeapObservable* flat_map(HeapObservable* source, WordImpl* xt);
+
+    // AVO Phase 2 — Streaming File I/O (fs_path is the resolved filesystem path)
+    static HeapObservable* read_bytes(HeapString* fs_path, int64_t chunk_size);
+    static HeapObservable* read_lines(HeapString* fs_path);
+    static HeapObservable* read_json(HeapString* fs_path);
+    static HeapObservable* read_csv(HeapString* fs_path, HeapString* separator);
+    static HeapObservable* read_dir(HeapString* fs_path);
+
+    // AVO Phase 3 — Streaming HTTP (url_data is [scheme_host_port, path, hostname, resolved_ip, header_k, header_v, ...])
+    static HeapObservable* http_get(HeapArray* url_data);
+    static HeapObservable* http_post(HeapArray* url_data, HeapByteArray* body, HeapString* content_type);
+    static HeapObservable* http_sse(HeapArray* url_data);
 
     ~HeapObservable() override;
 

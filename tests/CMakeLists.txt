@@ -17,7 +17,6 @@ add_executable(etil_tests
     unit/test_observable_primitives.cpp
     unit/test_handler_sets.cpp
     unit/test_lvfs.cpp
-    unit/test_file_io_primitives.cpp
     unit/test_async_file_io.cpp
     unit/test_taint.cpp
     unit/test_permissions.cpp

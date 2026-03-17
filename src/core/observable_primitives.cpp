@@ -12,7 +12,24 @@
 #include "etil/core/value_helpers.hpp"
 #include "etil/core/word_impl.hpp"
 
+#include "etil/core/heap_byte_array.hpp"
+#include "etil/core/heap_json.hpp"
+#include "etil/core/heap_map.hpp"
+#include "etil/lvfs/lvfs.hpp"
+#include "etil/net/http_client_config.hpp"
+#include "etil/net/url_validation.hpp"
+#include "etil/mcp/role_permissions.hpp"
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+#include <httplib.h>
+#endif
+
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <string>
 #include <thread>
@@ -66,6 +83,18 @@ const char* HeapObservable::kind_name() const {
     case Kind::DelayEach:     return "delay-each";
     case Kind::AuditTime:     return "audit-time";
     case Kind::RetryDelay:    return "retry-delay";
+    case Kind::Buffer:        return "buffer";
+    case Kind::BufferWhen:    return "buffer-when";
+    case Kind::Window:        return "window";
+    case Kind::FlatMap:       return "flat-map";
+    case Kind::ReadBytes:     return "read-bytes";
+    case Kind::ReadLines:     return "read-lines";
+    case Kind::ReadJson:      return "read-json";
+    case Kind::ReadCsv:       return "read-csv";
+    case Kind::ReadDir:       return "read-dir";
+    case Kind::HttpGet:       return "http-get";
+    case Kind::HttpPost:      return "http-post";
+    case Kind::HttpSse:       return "http-sse";
     }
     return "unknown";
 }
@@ -266,6 +295,108 @@ HeapObservable* HeapObservable::retry_delay(HeapObservable* source, int64_t dela
     source->add_ref(); o->source_ = source;
     o->state_ = Value(delay_us);
     o->param_ = max_retries;
+    return o;
+}
+
+// AVO Phase 1 factories
+
+HeapObservable* HeapObservable::buffer(HeapObservable* source, int64_t count) {
+    auto* o = new HeapObservable(Kind::Buffer);
+    source->add_ref(); o->source_ = source;
+    o->param_ = count;
+    return o;
+}
+
+HeapObservable* HeapObservable::buffer_when(HeapObservable* source, WordImpl* predicate_xt) {
+    auto* o = new HeapObservable(Kind::BufferWhen);
+    source->add_ref(); o->source_ = source;
+    predicate_xt->add_ref(); o->operator_xt_ = predicate_xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::window(HeapObservable* source, int64_t size) {
+    auto* o = new HeapObservable(Kind::Window);
+    source->add_ref(); o->source_ = source;
+    o->param_ = size;
+    return o;
+}
+
+HeapObservable* HeapObservable::flat_map(HeapObservable* source, WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::FlatMap);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref(); o->operator_xt_ = xt;
+    return o;
+}
+
+// AVO Phase 2 factories
+
+HeapObservable* HeapObservable::read_bytes(HeapString* fs_path, int64_t chunk_size) {
+    auto* o = new HeapObservable(Kind::ReadBytes);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    o->param_ = chunk_size;
+    return o;
+}
+
+HeapObservable* HeapObservable::read_lines(HeapString* fs_path) {
+    auto* o = new HeapObservable(Kind::ReadLines);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    return o;
+}
+
+HeapObservable* HeapObservable::read_json(HeapString* fs_path) {
+    auto* o = new HeapObservable(Kind::ReadJson);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    return o;
+}
+
+HeapObservable* HeapObservable::read_csv(HeapString* fs_path, HeapString* separator) {
+    auto* o = new HeapObservable(Kind::ReadCsv);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    // Store separator in a single-element source_array
+    auto* arr = new HeapArray();
+    separator->add_ref();
+    arr->push_back(Value::from(separator));
+    o->source_array_ = arr;
+    return o;
+}
+
+HeapObservable* HeapObservable::read_dir(HeapString* fs_path) {
+    auto* o = new HeapObservable(Kind::ReadDir);
+    fs_path->add_ref();
+    o->state_ = Value::from(fs_path);
+    return o;
+}
+
+// AVO Phase 3 factories
+
+HeapObservable* HeapObservable::http_get(HeapArray* url_data) {
+    auto* o = new HeapObservable(Kind::HttpGet);
+    url_data->add_ref();
+    o->source_array_ = url_data;
+    return o;
+}
+
+HeapObservable* HeapObservable::http_post(HeapArray* url_data, HeapByteArray* body, HeapString* content_type) {
+    auto* o = new HeapObservable(Kind::HttpPost);
+    url_data->add_ref();
+    o->source_array_ = url_data;
+    // Store body as Value in state_
+    body->add_ref();
+    o->state_ = Value::from(body);
+    // Store content_type: use param_ as flag, add content_type to url_data
+    content_type->add_ref();
+    url_data->push_back(Value::from(content_type));  // last element
+    return o;
+}
+
+HeapObservable* HeapObservable::http_sse(HeapArray* url_data) {
+    auto* o = new HeapObservable(Kind::HttpSse);
+    url_data->add_ref();
+    o->source_array_ = url_data;
     return o;
 }
 
@@ -795,6 +926,402 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return false;  // all retries exhausted
     }
 
+    // --- AVO Phase 1: Buffer + Composition ---
+
+    case K::Buffer: {
+        int64_t count = obs->param();
+        auto* batch = new HeapArray();
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            batch->push_back(v);  // takes ownership of v's ref
+            if (static_cast<int64_t>(batch->length()) >= count) {
+                // Emit full batch
+                bool ok = observer(Value::from(batch), c);
+                batch = new HeapArray();  // start new batch
+                return ok;
+            }
+            return true;
+        });
+        // Emit trailing partial batch (if any)
+        if (batch->length() > 0 && result) {
+            observer(Value::from(batch), ctx);
+        } else {
+            delete batch;
+        }
+        return result;
+    }
+
+    case K::BufferWhen: {
+        auto* xt = obs->operator_xt();
+        auto* batch = new HeapArray();
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);  // one ref for batch, one for predicate test
+            batch->push_back(v);  // takes one ref
+            // Test predicate with the value
+            c.data_stack().push(v);  // uses addref'd copy
+            if (!execute_xt(xt, c)) return false;
+            auto pred = c.data_stack().pop();
+            if (!pred) return false;
+            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                // Predicate fired — emit batch
+                bool ok = observer(Value::from(batch), c);
+                batch = new HeapArray();
+                return ok;
+            }
+            return true;
+        });
+        // Emit trailing partial batch (if any)
+        if (batch->length() > 0 && result) {
+            observer(Value::from(batch), ctx);
+        } else {
+            delete batch;
+        }
+        return result;
+    }
+
+    case K::Window: {
+        int64_t size = obs->param();
+        std::vector<Value> ring;
+        ring.reserve(static_cast<size_t>(size));
+        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);  // ring holds one ref
+            ring.push_back(v);
+            if (static_cast<int64_t>(ring.size()) > size) {
+                value_release(ring.front());
+                ring.erase(ring.begin());
+            }
+            if (static_cast<int64_t>(ring.size()) == size) {
+                // Emit a copy of the window as a HeapArray
+                auto* win = new HeapArray();
+                for (auto& elem : ring) {
+                    value_addref(elem);
+                    win->push_back(elem);
+                }
+                if (!observer(Value::from(win), c)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        // Release remaining ring values
+        for (auto& v : ring) value_release(v);
+        return result;
+    }
+
+    case K::FlatMap: {
+        auto* xt = obs->operator_xt();
+        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            // Push value, execute xt — should return an Observable
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) return false;
+            auto opt = c.data_stack().pop();
+            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                if (opt) opt->release();
+                c.err() << "Error: obs-flat-map xt must return an observable\n";
+                return false;
+            }
+            auto* sub_obs = opt->as_observable();
+            // Execute sub-observable, forwarding emissions to downstream observer
+            bool ok = execute_observable(sub_obs, c, observer);
+            sub_obs->release();
+            return ok;
+        });
+    }
+
+    // --- AVO Phase 2: Streaming File I/O ---
+
+    case K::ReadBytes: {
+        auto* path_hs = obs->state().as_string();
+        int64_t chunk_size = obs->param();
+        std::ifstream file(std::string(path_hs->view()), std::ios::binary);
+        if (!file) {
+            ctx.err() << "Error: obs-read-bytes cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::vector<char> buf(static_cast<size_t>(chunk_size));
+        while (file) {
+            if (!ctx.tick()) return false;
+            file.read(buf.data(), chunk_size);
+            auto bytes_read = file.gcount();
+            if (bytes_read <= 0) break;
+            auto* ba = new HeapByteArray(static_cast<size_t>(bytes_read));
+            for (std::streamsize i = 0; i < bytes_read; ++i) {
+                ba->set(static_cast<size_t>(i), static_cast<uint8_t>(buf[static_cast<size_t>(i)]));
+            }
+            ba->set_tainted(true);
+            if (!observer(Value::from(ba), ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::ReadLines: {
+        auto* path_hs = obs->state().as_string();
+        std::ifstream file(std::string(path_hs->view()));
+        if (!file) {
+            ctx.err() << "Error: obs-read-lines cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!ctx.tick()) return false;
+            // Remove trailing \r for \r\n line endings
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            auto* hs = HeapString::create(line);
+            hs->set_tainted(true);
+            if (!observer(Value::from(hs), ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::ReadJson: {
+        auto* path_hs = obs->state().as_string();
+        std::ifstream file(std::string(path_hs->view()));
+        if (!file) {
+            ctx.err() << "Error: obs-read-json cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::string content((std::istreambuf_iterator<char>(file)),
+                             std::istreambuf_iterator<char>());
+        try {
+            auto j = nlohmann::json::parse(content);
+            auto* hj = new HeapJson(std::move(j));
+            observer(Value::from(hj), ctx);
+        } catch (const nlohmann::json::parse_error& e) {
+            ctx.err() << "Error: obs-read-json parse error: " << e.what() << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    case K::ReadCsv: {
+        auto* path_hs = obs->state().as_string();
+        // Get separator from source_array_[0]
+        Value sep_val;
+        obs->source_array()->get(0, sep_val);
+        auto* sep_hs = sep_val.as_string();
+        char sep_char = (sep_hs->length() > 0) ? sep_hs->view()[0] : ',';
+        sep_hs->release();
+
+        std::ifstream file(std::string(path_hs->view()));
+        if (!file) {
+            ctx.err() << "Error: obs-read-csv cannot open '" << path_hs->view() << "'\n";
+            return false;
+        }
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!ctx.tick()) return false;
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            // Split line by separator (handles quoted fields)
+            auto* row = new HeapArray();
+            std::string field;
+            bool in_quotes = false;
+            for (size_t i = 0; i < line.size(); ++i) {
+                char c = line[i];
+                if (c == '"') {
+                    if (in_quotes && i + 1 < line.size() && line[i + 1] == '"') {
+                        field += '"';
+                        ++i;  // skip escaped quote
+                    } else {
+                        in_quotes = !in_quotes;
+                    }
+                } else if (c == sep_char && !in_quotes) {
+                    auto* fs = HeapString::create(field);
+                    fs->set_tainted(true);
+                    row->push_back(Value::from(fs));
+                    field.clear();
+                } else {
+                    field += c;
+                }
+            }
+            // Last field
+            auto* fs = HeapString::create(field);
+            fs->set_tainted(true);
+            row->push_back(Value::from(fs));
+            if (!observer(Value::from(row), ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::ReadDir: {
+        auto* path_hs = obs->state().as_string();
+        std::string dir_path(path_hs->view());
+        std::error_code ec;
+        // Collect and sort entries
+        std::vector<std::string> entries;
+        for (auto& entry : std::filesystem::directory_iterator(dir_path, ec)) {
+            if (ec) break;
+            entries.push_back(entry.path().filename().string());
+        }
+        if (ec) {
+            ctx.err() << "Error: obs-readdir cannot read '" << dir_path << "': " << ec.message() << "\n";
+            return false;
+        }
+        std::sort(entries.begin(), entries.end());
+        for (auto& name : entries) {
+            if (!ctx.tick()) return false;
+            auto* hs = HeapString::create(name);
+            hs->set_tainted(true);
+            if (!observer(Value::from(hs), ctx)) return true;
+        }
+        return true;
+    }
+
+    // --- AVO Phase 3: Streaming HTTP ---
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+    case K::HttpGet:
+    case K::HttpSse: {
+        // Extract URL data from source_array_: [scheme_host_port, path, hostname, resolved_ip, hdr_k, hdr_v, ...]
+        auto* arr = obs->source_array();
+        Value v0, v1, v2, v3;
+        if (!arr->get(0, v0) || !arr->get(1, v1) || !arr->get(2, v2) || !arr->get(3, v3)) {
+            ctx.err() << "Error: obs-http-get: malformed URL data\n";
+            return false;
+        }
+        std::string shp(v0.as_string()->view()); v0.release();
+        std::string path(v1.as_string()->view()); v1.release();
+        std::string hostname(v2.as_string()->view()); v2.release();
+        std::string resolved_ip(v3.as_string()->view()); v3.release();
+
+        httplib::Headers headers;
+        for (size_t i = 4; i + 1 < arr->length(); i += 2) {
+            Value hk, hv;
+            if (arr->get(i, hk) && arr->get(i + 1, hv)) {
+                if (hk.type == Value::Type::String && hv.type == Value::Type::String) {
+                    headers.emplace(std::string(hk.as_string()->view()),
+                                    std::string(hv.as_string()->view()));
+                }
+                hk.release(); hv.release();
+            }
+        }
+
+        httplib::Client cli(shp);
+        if (!resolved_ip.empty()) {
+            cli.set_hostname_addr_map({{hostname, resolved_ip}});
+        }
+        cli.set_connection_timeout(10, 0);
+        cli.set_read_timeout(30, 0);
+        cli.set_follow_location(false);
+
+        if (obs->obs_kind() == K::HttpSse) {
+            // SSE: accept text/event-stream
+            headers.emplace("Accept", "text/event-stream");
+        }
+
+        // Stream response chunks
+        bool stopped = false;
+        auto result = cli.Get(path, headers,
+            [&](const char* data, size_t len) -> bool {
+                if (!ctx.tick()) { stopped = true; return false; }
+
+                if (obs->obs_kind() == K::HttpSse) {
+                    // SSE: accumulate lines, emit on double-newline
+                    // For simplicity, emit each data: payload as a HeapString
+                    std::string chunk(data, len);
+                    // Split into lines and process
+                    std::istringstream iss(chunk);
+                    std::string line;
+                    while (std::getline(iss, line)) {
+                        if (!line.empty() && line.back() == '\r') line.pop_back();
+                        if (line.rfind("data:", 0) == 0) {
+                            std::string payload = line.substr(5);
+                            if (!payload.empty() && payload[0] == ' ') payload = payload.substr(1);
+                            try {
+                                auto j = nlohmann::json::parse(payload);
+                                auto* hj = new HeapJson(std::move(j));
+                                if (!observer(Value::from(hj), ctx)) { stopped = true; return false; }
+                            } catch (...) {
+                                // Non-JSON data line: emit as string
+                                auto* hs = HeapString::create(payload);
+                                hs->set_tainted(true);
+                                if (!observer(Value::from(hs), ctx)) { stopped = true; return false; }
+                            }
+                        }
+                    }
+                    return true;
+                } else {
+                    // Regular GET: emit each chunk as HeapByteArray
+                    auto* ba = new HeapByteArray(len);
+                    std::memcpy(ba->data(), data, len);
+                    ba->set_tainted(true);
+                    if (!observer(Value::from(ba), ctx)) { stopped = true; return false; }
+                    return true;
+                }
+            });
+
+        if (stopped) return !ctx.tick() ? false : true;  // cancelled vs observer-stopped
+        if (!result) {
+            ctx.err() << "Error: obs-http-get: " << httplib::to_string(result.error()) << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    case K::HttpPost: {
+        auto* arr = obs->source_array();
+        Value v0, v1, v2, v3;
+        if (!arr->get(0, v0) || !arr->get(1, v1) || !arr->get(2, v2) || !arr->get(3, v3)) {
+            ctx.err() << "Error: obs-http-post: malformed URL data\n";
+            return false;
+        }
+        std::string shp(v0.as_string()->view()); v0.release();
+        std::string path(v1.as_string()->view()); v1.release();
+        std::string hostname(v2.as_string()->view()); v2.release();
+        std::string resolved_ip(v3.as_string()->view()); v3.release();
+
+        httplib::Headers headers;
+        // Last element is content_type; headers are pairs before it
+        size_t header_end = arr->length() - 1;  // last is content_type
+        for (size_t i = 4; i + 1 < header_end; i += 2) {
+            Value hk, hv;
+            if (arr->get(i, hk) && arr->get(i + 1, hv)) {
+                if (hk.type == Value::Type::String && hv.type == Value::Type::String) {
+                    headers.emplace(std::string(hk.as_string()->view()),
+                                    std::string(hv.as_string()->view()));
+                }
+                hk.release(); hv.release();
+            }
+        }
+
+        // Get content type (last element of source_array)
+        Value ct_val;
+        arr->get(arr->length() - 1, ct_val);
+        std::string content_type(ct_val.as_string()->view());
+        ct_val.release();
+
+        // Get body from state_
+        auto* body_ba = obs->state().as_byte_array();
+        std::string body_str(reinterpret_cast<const char*>(body_ba->data()), body_ba->length());
+
+        httplib::Client cli(shp);
+        if (!resolved_ip.empty()) {
+            cli.set_hostname_addr_map({{hostname, resolved_ip}});
+        }
+        cli.set_connection_timeout(10, 0);
+        cli.set_read_timeout(30, 0);
+        cli.set_follow_location(false);
+
+        auto result = cli.Post(path, headers, body_str, content_type);
+        if (!result) {
+            ctx.err() << "Error: obs-http-post: " << httplib::to_string(result.error()) << "\n";
+            return false;
+        }
+
+        // Emit response body as single HeapByteArray
+        auto& rb = result->body;
+        auto* ba = new HeapByteArray(rb.size());
+        std::memcpy(ba->data(), rb.data(), rb.size());
+        ba->set_tainted(true);
+        observer(Value::from(ba), ctx);
+        return true;
+    }
+#else
+    case K::HttpGet:
+    case K::HttpPost:
+    case K::HttpSse:
+        ctx.err() << "Error: HTTP client not compiled (ETIL_BUILD_HTTP_CLIENT=OFF)\n";
+        return false;
+#endif
+
     } // switch
     return false;
 }
@@ -1284,6 +1811,421 @@ bool prim_obs_retry_delay(ExecutionContext& ctx) {
     return true;
 }
 
+// --- AVO Phase 1: Buffer + Composition ---
+
+// obs-buffer ( obs n -- obs' )
+bool prim_obs_buffer(ExecutionContext& ctx) {
+    auto opt_n = ctx.data_stack().pop();
+    if (!opt_n) return false;
+    if (opt_n->type != Value::Type::Integer || opt_n->as_int <= 0) {
+        ctx.data_stack().push(*opt_n);
+        ctx.err() << "Error: obs-buffer requires a positive integer\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_n); return false; }
+    auto* obs = HeapObservable::buffer(src, opt_n->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-buffer-when ( obs xt -- obs' )
+bool prim_obs_buffer_when(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        ctx.err() << "Error: obs-buffer-when requires an xt\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::buffer_when(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();  // factory addref'd
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-window ( obs n -- obs' )
+bool prim_obs_window(ExecutionContext& ctx) {
+    auto opt_n = ctx.data_stack().pop();
+    if (!opt_n) return false;
+    if (opt_n->type != Value::Type::Integer || opt_n->as_int <= 0) {
+        ctx.data_stack().push(*opt_n);
+        ctx.err() << "Error: obs-window requires a positive integer\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*opt_n); return false; }
+    auto* obs = HeapObservable::window(src, opt_n->as_int);
+    src->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-flat-map ( obs xt -- obs' )
+bool prim_obs_flat_map(ExecutionContext& ctx) {
+    auto xt_val = ctx.data_stack().pop();
+    if (!xt_val) return false;
+    if (xt_val->type != Value::Type::Xt || !xt_val->as_ptr) {
+        ctx.data_stack().push(*xt_val);
+        ctx.err() << "Error: obs-flat-map requires an xt\n";
+        return false;
+    }
+    auto* src = pop_observable(ctx);
+    if (!src) { ctx.data_stack().push(*xt_val); return false; }
+    auto* obs = HeapObservable::flat_map(src, xt_val->as_xt_impl());
+    src->release();
+    xt_val->as_xt_impl()->release();  // factory addref'd
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// --- AVO Phase 2: Streaming File I/O primitives ---
+
+// Helper: pop a path string, resolve via LVFS, return resolved HeapString*.
+// Returns nullptr on failure (error printed, stack handled).
+static HeapString* pop_and_resolve_obs_path(ExecutionContext& ctx) {
+    auto* hs = pop_string(ctx);
+    if (!hs) return nullptr;
+    std::string vpath(hs->view());
+    hs->release();
+
+    auto* lvfs = ctx.lvfs();
+    if (!lvfs) {
+        ctx.err() << "Error: no LVFS available\n";
+        return nullptr;
+    }
+    std::string fs_path = lvfs->resolve(vpath);
+    if (fs_path.empty()) {
+        ctx.err() << "Error: cannot resolve path '" << vpath << "'\n";
+        return nullptr;
+    }
+    return HeapString::create(fs_path);
+}
+
+// obs-read-bytes ( path chunk-size -- obs )
+bool prim_obs_read_bytes(ExecutionContext& ctx) {
+    auto opt_size = ctx.data_stack().pop();
+    if (!opt_size) return false;
+    if (opt_size->type != Value::Type::Integer || opt_size->as_int <= 0) {
+        ctx.data_stack().push(*opt_size);
+        ctx.err() << "Error: obs-read-bytes requires a positive chunk size\n";
+        return false;
+    }
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) { ctx.data_stack().push(*opt_size); return false; }
+    auto* obs = HeapObservable::read_bytes(path, opt_size->as_int);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-read-lines ( path -- obs )
+bool prim_obs_read_lines(ExecutionContext& ctx) {
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) return false;
+    auto* obs = HeapObservable::read_lines(path);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-read-json ( path -- obs )
+bool prim_obs_read_json(ExecutionContext& ctx) {
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) return false;
+    auto* obs = HeapObservable::read_json(path);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-read-csv ( path separator -- obs )
+bool prim_obs_read_csv(ExecutionContext& ctx) {
+    auto* sep = pop_string(ctx);
+    if (!sep) return false;
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) { sep->release(); return false; }
+    auto* obs = HeapObservable::read_csv(path, sep);
+    path->release();
+    sep->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-readdir ( path -- obs )
+bool prim_obs_readdir(ExecutionContext& ctx) {
+    auto* path = pop_and_resolve_obs_path(ctx);
+    if (!path) return false;
+    auto* obs = HeapObservable::read_dir(path);
+    path->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-write-file ( obs path -- ) — terminal: write all emissions to file
+bool prim_obs_write_file(ExecutionContext& ctx) {
+    auto* path_hs = pop_string(ctx);
+    if (!path_hs) return false;
+    std::string vpath(path_hs->view());
+    path_hs->release();
+
+    auto* obs = pop_observable(ctx);
+    if (!obs) return false;
+
+    // Check write permission
+    auto* perms = ctx.permissions();
+    if (perms && !perms->lvfs_modify) {
+        ctx.err() << "Error: file modification not permitted\n";
+        obs->release();
+        return false;
+    }
+
+    auto* lvfs = ctx.lvfs();
+    if (!lvfs) { ctx.err() << "Error: no LVFS\n"; obs->release(); return false; }
+    std::string fs_path = lvfs->resolve(vpath);
+    if (fs_path.empty() || lvfs->is_read_only(vpath)) {
+        ctx.err() << "Error: cannot write to '" << vpath << "'\n";
+        obs->release();
+        return false;
+    }
+
+    std::ofstream file(fs_path, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        ctx.err() << "Error: obs-write-file cannot open '" << fs_path << "'\n";
+        obs->release();
+        return false;
+    }
+
+    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+        if (v.type == Value::Type::String && v.as_ptr) {
+            auto sv = v.as_string()->view();
+            file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
+        } else if (v.type == Value::Type::ByteArray && v.as_ptr) {
+            auto* ba = v.as_byte_array();
+            for (size_t i = 0; i < ba->length(); ++i) {
+                uint8_t byte;
+                ba->get(i, byte);
+                file.put(static_cast<char>(byte));
+            }
+        }
+        value_release(v);
+        return true;
+    });
+    obs->release();
+    file.close();
+    return ok;
+}
+
+// obs-append-file ( obs path -- ) — terminal: append all emissions to file
+bool prim_obs_append_file(ExecutionContext& ctx) {
+    auto* path_hs = pop_string(ctx);
+    if (!path_hs) return false;
+    std::string vpath(path_hs->view());
+    path_hs->release();
+
+    auto* obs = pop_observable(ctx);
+    if (!obs) return false;
+
+    auto* perms = ctx.permissions();
+    if (perms && !perms->lvfs_modify) {
+        ctx.err() << "Error: file modification not permitted\n";
+        obs->release();
+        return false;
+    }
+
+    auto* lvfs = ctx.lvfs();
+    if (!lvfs) { ctx.err() << "Error: no LVFS\n"; obs->release(); return false; }
+    std::string fs_path = lvfs->resolve(vpath);
+    if (fs_path.empty() || lvfs->is_read_only(vpath)) {
+        ctx.err() << "Error: cannot write to '" << vpath << "'\n";
+        obs->release();
+        return false;
+    }
+
+    std::ofstream file(fs_path, std::ios::binary | std::ios::app);
+    if (!file) {
+        ctx.err() << "Error: obs-append-file cannot open '" << fs_path << "'\n";
+        obs->release();
+        return false;
+    }
+
+    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+        if (v.type == Value::Type::String && v.as_ptr) {
+            auto sv = v.as_string()->view();
+            file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
+        } else if (v.type == Value::Type::ByteArray && v.as_ptr) {
+            auto* ba = v.as_byte_array();
+            for (size_t i = 0; i < ba->length(); ++i) {
+                uint8_t byte;
+                ba->get(i, byte);
+                file.put(static_cast<char>(byte));
+            }
+        }
+        value_release(v);
+        return true;
+    });
+    obs->release();
+    file.close();
+    return ok;
+}
+
+// --- AVO Phase 3: Streaming HTTP primitives ---
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+// Helper: pop URL + headers-map, validate, build url_data array.
+// Returns nullptr on failure (error printed, stack handled).
+static HeapArray* pop_and_validate_http(ExecutionContext& ctx) {
+    // Pop headers map (TOS)
+    auto hdr_opt = ctx.data_stack().pop();
+    if (!hdr_opt) return nullptr;
+    if (hdr_opt->type != Value::Type::Map || !hdr_opt->as_ptr) {
+        ctx.err() << "Error: expected Map for headers\n";
+        value_release(*hdr_opt);
+        return nullptr;
+    }
+    auto* hdr_map = hdr_opt->as_map();
+
+    // Pop URL string
+    auto* hs = pop_string(ctx);
+    if (!hs) { hdr_map->release(); return nullptr; }
+    std::string url(hs->view());
+    hs->release();
+
+    // Check permissions
+    auto* perms = ctx.permissions();
+    if (perms && !perms->net_client_allowed) {
+        ctx.err() << "Error: HTTP not permitted\n";
+        hdr_map->release();
+        return nullptr;
+    }
+
+    auto* http_state = ctx.http_client_state();
+    if (!http_state || !http_state->config || !http_state->config->enabled()) {
+        ctx.err() << "Error: HTTP client not configured\n";
+        hdr_map->release();
+        return nullptr;
+    }
+    if (!http_state->can_fetch()) {
+        ctx.err() << "Error: fetch budget exceeded\n";
+        hdr_map->release();
+        return nullptr;
+    }
+
+    etil::net::ParsedUrl parsed;
+    std::string error;
+    if (!etil::net::validate_url(url, *http_state->config, parsed, error)) {
+        ctx.err() << "Error: " << error << "\n";
+        hdr_map->release();
+        return nullptr;
+    }
+
+    http_state->record_fetch();
+
+    // Build url_data array: [scheme_host_port, path, hostname, resolved_ip, hdr_k, hdr_v, ...]
+    std::string shp = parsed.scheme + "://" + parsed.host;
+    if (parsed.port != 0) shp += ":" + std::to_string(parsed.port);
+
+    auto* arr = new HeapArray();
+    arr->push_back(Value::from(HeapString::create(shp)));
+    arr->push_back(Value::from(HeapString::create(parsed.path)));
+    arr->push_back(Value::from(HeapString::create(parsed.host)));
+    arr->push_back(Value::from(HeapString::create(parsed.resolved_ip)));
+
+    for (const auto& [key, val] : hdr_map->entries()) {
+        if (val.type == Value::Type::String && val.as_ptr) {
+            arr->push_back(Value::from(HeapString::create(key)));
+            value_addref(val);
+            arr->push_back(val);
+        }
+    }
+    hdr_map->release();
+    return arr;
+}
+
+// obs-http-get ( url headers -- obs )
+bool prim_obs_http_get(ExecutionContext& ctx) {
+    auto* url_data = pop_and_validate_http(ctx);
+    if (!url_data) return false;
+    auto* obs = HeapObservable::http_get(url_data);
+    url_data->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-http-post ( url headers body -- obs )
+bool prim_obs_http_post(ExecutionContext& ctx) {
+    // Pop body (TOS)
+    auto* body = pop_byte_array(ctx);
+    if (!body) return false;
+
+    auto* url_data = pop_and_validate_http(ctx);
+    if (!url_data) { body->release(); return false; }
+
+    // Extract Content-Type from headers if present, default to application/octet-stream
+    auto* ct = HeapString::create("application/octet-stream");
+    // Check if headers had Content-Type (it's in url_data pairs starting at index 4)
+    for (size_t i = 4; i + 1 < url_data->length(); i += 2) {
+        Value hk;
+        if (url_data->get(i, hk) && hk.type == Value::Type::String) {
+            std::string key(hk.as_string()->view());
+            hk.release();
+            // Case-insensitive Content-Type check
+            std::string lower_key = key;
+            for (auto& c : lower_key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (lower_key == "content-type") {
+                Value hv;
+                if (url_data->get(i + 1, hv) && hv.type == Value::Type::String) {
+                    ct->release();
+                    ct = HeapString::create(std::string(hv.as_string()->view()));
+                    hv.release();
+                }
+                break;
+            }
+        }
+    }
+
+    auto* obs = HeapObservable::http_post(url_data, body, ct);
+    url_data->release();
+    body->release();
+    ct->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+
+// obs-http-sse ( url headers -- obs )
+bool prim_obs_http_sse(ExecutionContext& ctx) {
+    auto* url_data = pop_and_validate_http(ctx);
+    if (!url_data) return false;
+    auto* obs = HeapObservable::http_sse(url_data);
+    url_data->release();
+    ctx.data_stack().push(Value::from(obs));
+    return true;
+}
+#endif  // ETIL_HTTP_CLIENT_ENABLED
+
+// obs-to-string ( obs -- string ) — concatenate all string emissions
+bool prim_obs_to_string(ExecutionContext& ctx) {
+    auto* obs = pop_observable(ctx);
+    if (!obs) return false;
+    std::string result;
+    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+        if (v.type == Value::Type::String && v.as_ptr) {
+            result += v.as_string()->view();
+        }
+        value_release(v);
+        return true;
+    });
+    obs->release();
+    if (!ok) return false;
+    auto* hs = HeapString::create(result);
+    ctx.data_stack().push(Value::from(hs));
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
@@ -1388,6 +2330,44 @@ void register_observable_primitives(Dictionary& dict) {
     // Temporal: Error Recovery
     dict.register_word("obs-retry-delay", mk("prim_obs_retry_delay", prim_obs_retry_delay,
         {T::Unknown, T::Integer, T::Integer}, {T::Unknown}));
+
+    // AVO Phase 1: Buffer + Composition
+    dict.register_word("obs-buffer", mk("prim_obs_buffer", prim_obs_buffer,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-buffer-when", mk("prim_obs_buffer_when", prim_obs_buffer_when,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-window", mk("prim_obs_window", prim_obs_window,
+        {T::Unknown, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-flat-map", mk("prim_obs_flat_map", prim_obs_flat_map,
+        {T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-to-string", mk("prim_obs_to_string", prim_obs_to_string,
+        {T::Unknown}, {T::String}));
+
+    // AVO Phase 2: Streaming File I/O
+    dict.register_word("obs-read-bytes", mk("prim_obs_read_bytes", prim_obs_read_bytes,
+        {T::String, T::Integer}, {T::Unknown}));
+    dict.register_word("obs-read-lines", mk("prim_obs_read_lines", prim_obs_read_lines,
+        {T::String}, {T::Unknown}));
+    dict.register_word("obs-read-json", mk("prim_obs_read_json", prim_obs_read_json,
+        {T::String}, {T::Unknown}));
+    dict.register_word("obs-read-csv", mk("prim_obs_read_csv", prim_obs_read_csv,
+        {T::String, T::String}, {T::Unknown}));
+    dict.register_word("obs-readdir", mk("prim_obs_readdir", prim_obs_readdir,
+        {T::String}, {T::Unknown}));
+    dict.register_word("obs-write-file", mk("prim_obs_write_file", prim_obs_write_file,
+        {T::Unknown, T::String}, {}));
+    dict.register_word("obs-append-file", mk("prim_obs_append_file", prim_obs_append_file,
+        {T::Unknown, T::String}, {}));
+
+#ifdef ETIL_HTTP_CLIENT_ENABLED
+    // AVO Phase 3: Streaming HTTP
+    dict.register_word("obs-http-get", mk("prim_obs_http_get", prim_obs_http_get,
+        {T::String, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-http-post", mk("prim_obs_http_post", prim_obs_http_post,
+        {T::String, T::Unknown, T::Unknown}, {T::Unknown}));
+    dict.register_word("obs-http-sse", mk("prim_obs_http_sse", prim_obs_http_sse,
+        {T::String, T::Unknown}, {T::Unknown}));
+#endif
 }
 
 } // namespace etil::core

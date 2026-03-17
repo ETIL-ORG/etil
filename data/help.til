@@ -1403,73 +1403,6 @@ s" mongo-delete" s" stack-effect" s" text" s" ( coll filter opts -- count flag )
 s" mongo-delete" s" category" s" text" s" mongodb" meta! drop
 s" mongo-delete" s" examples" s" code" s| s" mycoll" s" {}" s" {}" mongo-delete| meta! drop
 
-# --- File I/O Sync (synchronous libuv, blocking) ---
-
-s" exists-sync" s" description" s" text" s" Check if a file or directory exists at the given virtual path" meta! drop
-s" exists-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
-s" exists-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" exists-sync" s" examples" s" code" s| s" /home/test.txt" exists-sync .| meta! drop
-
-s" read-file-sync" s" description" s" text" s" Read entire file contents as a string. Works with /home and /library paths" meta! drop
-s" read-file-sync" s" stack-effect" s" text" s" ( path -- string? flag )" meta! drop
-s" read-file-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" read-file-sync" s" examples" s" code" s| s" /home/data.txt" read-file-sync drop s.| meta! drop
-
-s" write-file-sync" s" description" s" text" s" Write string to file, truncating any existing content. Only writes to /home" meta! drop
-s" write-file-sync" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
-s" write-file-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" write-file-sync" s" examples" s" code" s| s" Hello" s" /home/out.txt" write-file-sync .| meta! drop
-
-s" append-file-sync" s" description" s" text" s" Append string to file. Creates file if it does not exist. Only writes to /home" meta! drop
-s" append-file-sync" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
-s" append-file-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" append-file-sync" s" examples" s" code" s| s" more data" s" /home/log.txt" append-file-sync drop| meta! drop
-
-s" copy-file-sync" s" description" s" text" s" Copy a file. Source can be /library (read-only), destination must be under /home" meta! drop
-s" copy-file-sync" s" stack-effect" s" text" s" ( src dest -- flag )" meta! drop
-s" copy-file-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" copy-file-sync" s" examples" s" code" s| s" /library/template.til" s" /home/my.til" copy-file-sync drop| meta! drop
-
-s" rename-sync" s" description" s" text" s" Rename or move a file/directory. Both old and new paths must be under /home" meta! drop
-s" rename-sync" s" stack-effect" s" text" s" ( old new -- flag )" meta! drop
-s" rename-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" rename-sync" s" examples" s" code" s| s" /home/old.txt" s" /home/new.txt" rename-sync drop| meta! drop
-
-s" lstat-sync" s" description" s" text" s" Get file status as a 4-element array: [size, mtime_us, is_dir, is_read_only]" meta! drop
-s" lstat-sync" s" stack-effect" s" text" s" ( path -- array? flag )" meta! drop
-s" lstat-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" lstat-sync" s" examples" s" code" s| s" /home/data.txt" lstat-sync drop 0 array-get .| meta! drop
-
-s" readdir-sync" s" description" s" text" s" List directory contents as an array of filename strings" meta! drop
-s" readdir-sync" s" stack-effect" s" text" s" ( path -- array? flag )" meta! drop
-s" readdir-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" readdir-sync" s" examples" s" code" s| s" /home" readdir-sync drop array-length .| meta! drop
-
-s" mkdir-sync" s" description" s" text" s" Create a directory (and parents) under /home" meta! drop
-s" mkdir-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
-s" mkdir-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" mkdir-sync" s" examples" s" code" s| s" /home/project/src" mkdir-sync drop| meta! drop
-
-s" mkdir-tmp-sync" s" description" s" text" s" Create a unique temporary directory under /home with the given prefix. Returns virtual path" meta! drop
-s" mkdir-tmp-sync" s" stack-effect" s" text" s" ( prefix -- string? flag )" meta! drop
-s" mkdir-tmp-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" mkdir-tmp-sync" s" examples" s" code" s| s" test" mkdir-tmp-sync drop s.| meta! drop
-
-s" rmdir-sync" s" description" s" text" s" Remove an empty directory under /home" meta! drop
-s" rmdir-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
-s" rmdir-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" rmdir-sync" s" examples" s" code" s| s" /home/empty-dir" rmdir-sync drop| meta! drop
-
-s" rm-sync" s" description" s" text" s" Remove a file or directory recursively under /home. Refuses to delete /home itself" meta! drop
-s" rm-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
-s" rm-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" rm-sync" s" examples" s" code" s| s" /home/old-project" rm-sync drop| meta! drop
-
-s" truncate-sync" s" description" s" text" s" Truncate a file to zero length. File must exist under /home" meta! drop
-s" truncate-sync" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
-s" truncate-sync" s" category" s" text" s" file-io-sync" meta! drop
-s" truncate-sync" s" examples" s" code" s| s" /home/log.txt" truncate-sync drop| meta! drop
-
 # --- Matrix (Linear Algebra) ---
 
 s" mat-new" s" description" s" text" s" Create a zero-filled matrix" meta! drop
@@ -1868,3 +1801,74 @@ s" obs-retry-delay" s" description" s" text" s" On pipeline failure, wait delay-
 s" obs-retry-delay" s" stack-effect" s" text" s" ( obs delay-us max-retries -- obs' )" meta! drop
 s" obs-retry-delay" s" category" s" text" s" observable" meta! drop
 s" obs-retry-delay" s" examples" s" code" s" 1 4 obs-range 0 3 obs-retry-delay obs-count ." meta! drop
+
+# --- Observable AVO Phase 1: Buffer + Composition ---
+
+s" obs-buffer" s" description" s" text" s" Collect n emissions into arrays, emit each batch. Trailing partial batch emitted on completion" meta! drop
+s" obs-buffer" s" stack-effect" s" text" s" ( obs n -- obs' )" meta! drop
+s" obs-buffer" s" category" s" text" s" observable" meta! drop
+s" obs-buffer" s" examples" s" code" s" 1 8 obs-range 3 obs-buffer obs-to-array dump drop\n=> [[1, 2, 3], [4, 5, 6], [7]]" meta! drop
+
+s" obs-buffer-when" s" description" s" text" s" Buffer emissions until predicate xt returns true, then emit batch. Trailing partial batch emitted on completion" meta! drop
+s" obs-buffer-when" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-buffer-when" s" category" s" text" s" observable" meta! drop
+s" obs-buffer-when" s" examples" s" code" s" : mod3? 3 mod 0= ;  1 10 obs-range ' mod3? obs-buffer-when obs-count ." meta! drop
+
+s" obs-window" s" description" s" text" s" Sliding window of n elements. After n-th emission, each new value emits a window array" meta! drop
+s" obs-window" s" stack-effect" s" text" s" ( obs n -- obs' )" meta! drop
+s" obs-window" s" category" s" text" s" observable" meta! drop
+s" obs-window" s" examples" s" code" s" 1 6 obs-range 3 obs-window obs-count .\n=> 3" meta! drop
+
+s" obs-flat-map" s" description" s" text" s" Map each value to a sub-Observable via xt, flatten all emissions into one stream (concatMap semantics)" meta! drop
+s" obs-flat-map" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
+s" obs-flat-map" s" category" s" text" s" observable" meta! drop
+s" obs-flat-map" s" examples" s" code" s" : expand dup * obs-of ;  1 4 obs-range ' expand obs-flat-map obs-to-array dump drop\n=> [1, 4, 9]" meta! drop
+
+s" obs-to-string" s" description" s" text" s" Concatenate all string emissions into a single string" meta! drop
+s" obs-to-string" s" stack-effect" s" text" s" ( obs -- string )" meta! drop
+s" obs-to-string" s" category" s" text" s" observable" meta! drop
+s" obs-to-string" s" examples" s" code" s| array-new s" hello" array-push s" " array-push s" world" array-push obs-from obs-to-string type cr| meta! drop
+
+# --- Observable AVO Phase 2: Streaming File I/O ---
+
+s" obs-read-bytes" s" description" s" text" s" Read file as observable stream of byte array chunks" meta! drop
+s" obs-read-bytes" s" stack-effect" s" text" s" ( path chunk-size -- obs )" meta! drop
+s" obs-read-bytes" s" category" s" text" s" observable" meta! drop
+
+s" obs-read-lines" s" description" s" text" s" Read file as observable stream of lines (one string per line)" meta! drop
+s" obs-read-lines" s" stack-effect" s" text" s" ( path -- obs )" meta! drop
+s" obs-read-lines" s" category" s" text" s" observable" meta! drop
+
+s" obs-read-json" s" description" s" text" s" Read and parse JSON file, emit as single HeapJson value" meta! drop
+s" obs-read-json" s" stack-effect" s" text" s" ( path -- obs )" meta! drop
+s" obs-read-json" s" category" s" text" s" observable" meta! drop
+
+s" obs-read-csv" s" description" s" text" s" Read CSV file as observable stream of rows (one array of strings per row). Handles quoted fields" meta! drop
+s" obs-read-csv" s" stack-effect" s" text" s" ( path separator -- obs )" meta! drop
+s" obs-read-csv" s" category" s" text" s" observable" meta! drop
+
+s" obs-readdir" s" description" s" text" s" List directory entries as observable stream of name strings (sorted alphabetically)" meta! drop
+s" obs-readdir" s" stack-effect" s" text" s" ( path -- obs )" meta! drop
+s" obs-readdir" s" category" s" text" s" observable" meta! drop
+
+s" obs-write-file" s" description" s" text" s" Terminal: write all observable string/byte emissions to a file (creates/truncates)" meta! drop
+s" obs-write-file" s" stack-effect" s" text" s" ( obs path -- )" meta! drop
+s" obs-write-file" s" category" s" text" s" observable" meta! drop
+
+s" obs-append-file" s" description" s" text" s" Terminal: append all observable string/byte emissions to a file" meta! drop
+s" obs-append-file" s" stack-effect" s" text" s" ( obs path -- )" meta! drop
+s" obs-append-file" s" category" s" text" s" observable" meta! drop
+
+# --- Observable AVO Phase 3: Streaming HTTP ---
+
+s" obs-http-get" s" description" s" text" s" Streaming HTTP GET: emit response body as byte array chunks. Same SSRF/allowlist/budget enforcement as http-get" meta! drop
+s" obs-http-get" s" stack-effect" s" text" s" ( url headers-map -- obs )" meta! drop
+s" obs-http-get" s" category" s" text" s" observable" meta! drop
+
+s" obs-http-post" s" description" s" text" s" HTTP POST: emit response body as single byte array. Same security as http-post" meta! drop
+s" obs-http-post" s" stack-effect" s" text" s" ( url headers-map body-bytes -- obs )" meta! drop
+s" obs-http-post" s" category" s" text" s" observable" meta! drop
+
+s" obs-http-sse" s" description" s" text" s" SSE client: connect to Server-Sent Events endpoint, emit each event as HeapJson or string. Naturally infinite — compose with obs-take or obs-timeout" meta! drop
+s" obs-http-sse" s" stack-effect" s" text" s" ( url headers-map -- obs )" meta! drop
+s" obs-http-sse" s" category" s" text" s" observable" meta! drop
