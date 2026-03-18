@@ -35,7 +35,7 @@ variable Y-data
 Y-data !
 
 # --- Build network ---
-42 random-seed
+7 random-seed
 
 2 4 ' mat-relu ' mat-relu' make-layer
 4 1 ' mat-sigmoid ' mat-sigmoid' make-layer
@@ -44,10 +44,10 @@ variable xor-net
 xor-net !
 
 ." Network: 2 -> 4 (ReLU) -> 1 (sigmoid)" cr
-." Training 5000 epochs, lr=0.5" cr cr
+." Training 5000 epochs, lr=1.0" cr cr
 
 # --- Train ---
-X-data @ Y-data @ xor-net @ 0.5 5000 train
+X-data @ Y-data @ xor-net @ 1.0 5000 train
 xor-net !
 
 # --- Test predictions ---

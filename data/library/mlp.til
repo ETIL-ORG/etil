@@ -257,7 +257,7 @@ variable _tn-lr
     0 do
         _tn-X @ _tn-Y @ _tn-net @ _tn-lr @
         train-step
-        _tn-net !
+        swap _tn-net !
         i 500 mod 0 = if
             ." Epoch " i . ." : loss = " . cr
         else
