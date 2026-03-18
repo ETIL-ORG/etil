@@ -1,0 +1,403 @@
+digraph ETIL_Architecture {
+    // Global settings — 16:9 aspect, large size
+    graph [
+        rankdir=TB
+        size="32,18!"
+        ratio=fill
+        dpi=150
+        bgcolor="#1a1a2e"
+        fontname="Helvetica Neue"
+        pad="0.5"
+        nodesep=0.6
+        ranksep=1.0
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="36" COLOR="#e0e0e0">ETIL Interpreter Architecture — v0.9.9</FONT>>
+        labelloc=t
+        labeljust=c
+    ];
+
+    node [
+        shape=none
+        style="filled"
+        fontname="Helvetica Neue"
+        fontsize=13
+        fontcolor="#e0e0e0"
+        penwidth=1.5
+    ];
+
+    edge [
+        fontname="Helvetica Neue"
+        fontsize=11
+        penwidth=1.5
+    ];
+
+    // =====================================================================
+    // INTERPRETER — Central orchestrator
+    // =====================================================================
+    Interpreter [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD COLSPAN="2" ALIGN="CENTER"><FONT POINT-SIZE="18" COLOR="#00d4ff"><B>Interpreter</B></FONT></TD></TR>
+            <TR><TD COLSPAN="2"><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/interpreter.hpp</FONT></TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Members</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  Dictionary&amp; dict_</TD><TD ALIGN="LEFT">  ExecutionContext ctx_</TD></TR>
+            <TR><TD ALIGN="LEFT">  InterpretHandlerSet</TD><TD ALIGN="LEFT">  CompileHandlerSet</TD></TR>
+            <TR><TD ALIGN="LEFT">  ControlFlowHandlerSet</TD><TD ALIGN="LEFT">  shared_ptr&lt;ByteCode&gt;</TD></TR>
+            <TR><TD ALIGN="LEFT">  ostream&amp; out_, err_</TD><TD ALIGN="LEFT">  vector&lt;size_t&gt; control_stack_</TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Public Methods</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  interpret_line()</TD><TD ALIGN="LEFT">  evaluate_string()</TD></TR>
+            <TR><TD ALIGN="LEFT">  load_file()</TD><TD ALIGN="LEFT">  load_startup_files()</TD></TR>
+            <TR><TD ALIGN="LEFT">  register_handler_words()</TD><TD ALIGN="LEFT">  shutdown()</TD></TR>
+            <TR><TD ALIGN="LEFT">  completable_words()</TD><TD ALIGN="LEFT">  stack_status()</TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Private Methods</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  interpret_token()</TD><TD ALIGN="LEFT">  compile_token()</TD></TR>
+            <TR><TD ALIGN="LEFT">  execute_word()</TD><TD ALIGN="LEFT">  finalize_definition()</TD></TR>
+            <TR><TD ALIGN="LEFT">  try_push_number()</TD><TD ALIGN="LEFT">  try_compile_number()</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#00d4ff"
+        penwidth=3
+    ];
+
+    // =====================================================================
+    // EXECUTION CONTEXT — Runtime environment
+    // =====================================================================
+    ExecutionContext [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD COLSPAN="2" ALIGN="CENTER"><FONT POINT-SIZE="18" COLOR="#0abde3"><B>ExecutionContext</B></FONT></TD></TR>
+            <TR><TD COLSPAN="2"><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/execution_context.hpp</FONT></TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Stacks</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  ValueStack data_stack_</TD><TD ALIGN="LEFT">  ValueStack return_stack_</TD></TR>
+            <TR><TD ALIGN="LEFT">  ValueStack float_stack_</TD><TD></TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Wired References</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  Dictionary*</TD><TD ALIGN="LEFT">  Interpreter*</TD></TR>
+            <TR><TD ALIGN="LEFT">  Lvfs*</TD><TD ALIGN="LEFT">  UvSession*</TD></TR>
+            <TR><TD ALIGN="LEFT">  HttpClientState*</TD><TD ALIGN="LEFT">  MongoClientState*</TD></TR>
+            <TR><TD ALIGN="LEFT">  RolePermissions*</TD><TD ALIGN="LEFT">  DataFieldRegistry</TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Execution Limits</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  instruction_budget_</TD><TD ALIGN="LEFT">  deadline_</TD></TR>
+            <TR><TD ALIGN="LEFT">  max_stack_depth_</TD><TD ALIGN="LEFT">  max_call_depth_</TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Methods</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  tick()</TD><TD ALIGN="LEFT">  set_limits() / reset_limits()</TD></TR>
+            <TR><TD ALIGN="LEFT">  cancel() / is_cancelled()</TD><TD ALIGN="LEFT">  enter_call() / exit_call()</TD></TR>
+            <TR><TD ALIGN="LEFT">  request_abort()</TD><TD ALIGN="LEFT">  queue_notification()</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#0abde3"
+        penwidth=2.5
+    ];
+
+    // =====================================================================
+    // DICTIONARY — Word concept registry
+    // =====================================================================
+    Dictionary [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD COLSPAN="2" ALIGN="CENTER"><FONT POINT-SIZE="18" COLOR="#10ac84"><B>Dictionary</B></FONT></TD></TR>
+            <TR><TD COLSPAN="2"><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/dictionary.hpp</FONT></TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Members</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  absl::Mutex mutex_</TD><TD ALIGN="LEFT">  atomic&lt;uint64_t&gt; generation_</TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT">  flat_hash_map&lt;string, WordConcept&gt; concepts_</TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Methods</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  lookup()</TD><TD ALIGN="LEFT">  register_word()</TD></TR>
+            <TR><TD ALIGN="LEFT">  get_implementations()</TD><TD ALIGN="LEFT">  forget_word()</TD></TR>
+            <TR><TD ALIGN="LEFT">  word_names()</TD><TD ALIGN="LEFT">  concept_count()</TD></TR>
+            <TR><TD ALIGN="LEFT">  set_concept_metadata()</TD><TD ALIGN="LEFT">  get_concept_metadata()</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#10ac84"
+        penwidth=2.5
+    ];
+
+    // =====================================================================
+    // HANDLER SETS — Parsing delegation
+    // =====================================================================
+    HandlerSets [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD ALIGN="CENTER"><FONT POINT-SIZE="16" COLOR="#feca57"><B>Handler Sets</B></FONT></TD></TR>
+            <TR><TD><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/handler_set.hpp</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">InterpretHandlerSet</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  dot-quote  s-quote  .| s| j|</TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">CompileHandlerSet</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  ; does&gt; dot-quote s-quote [tick] recurse</TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">ControlFlowHandlerSet</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  if/else/then do/loop/+loop</TD></TR>
+            <TR><TD ALIGN="LEFT">  begin/until/while/repeat</TD></TR>
+            <TR><TD ALIGN="LEFT">  &gt;r r&gt; r@ leave exit</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#feca57"
+        penwidth=2
+    ];
+
+    // =====================================================================
+    // WORDIMPL — Implementation node
+    // =====================================================================
+    WordImpl [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD COLSPAN="2" ALIGN="CENTER"><FONT POINT-SIZE="16" COLOR="#ee5a24"><B>WordImpl</B></FONT></TD></TR>
+            <TR><TD COLSPAN="2"><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/word_impl.hpp</FONT></TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Members</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  FunctionPtr native_code_</TD><TD ALIGN="LEFT">  shared_ptr&lt;ByteCode&gt;</TD></TR>
+            <TR><TD ALIGN="LEFT">  PerfProfile profile_</TD><TD ALIGN="LEFT">  TypeSignature signature_</TD></TR>
+            <TR><TD ALIGN="LEFT">  atomic&lt;double&gt; weight_</TD><TD ALIGN="LEFT">  atomic&lt;uint64_t&gt; refcount_</TD></TR>
+            <TR><TD ALIGN="LEFT">  MetadataMap metadata_</TD><TD ALIGN="LEFT">  MutationHistory mutations_</TD></TR>
+            <TR><TD COLSPAN="2" ALIGN="LEFT"><FONT COLOR="#ff9f43">Methods</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  native_code()</TD><TD ALIGN="LEFT">  bytecode()</TD></TR>
+            <TR><TD ALIGN="LEFT">  record_execution()</TD><TD ALIGN="LEFT">  success_rate()</TD></TR>
+            <TR><TD ALIGN="LEFT">  add_ref() / release()</TD><TD ALIGN="LEFT">  set_weight()</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#ee5a24"
+        penwidth=2
+    ];
+
+    // =====================================================================
+    // BYTECODE — Compiled word body
+    // =====================================================================
+    ByteCode [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD ALIGN="CENTER"><FONT POINT-SIZE="16" COLOR="#c44569"><B>ByteCode</B></FONT></TD></TR>
+            <TR><TD><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/compiled_body.hpp</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">Members</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  vector&lt;Instruction&gt; instructions_</TD></TR>
+            <TR><TD ALIGN="LEFT">  vector&lt;Value&gt; data_field_</TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">Op Codes</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  Call  PushInt  PushFloat  PushBool</TD></TR>
+            <TR><TD ALIGN="LEFT">  Branch  BranchIfFalse  DoSetup</TD></TR>
+            <TR><TD ALIGN="LEFT">  DoLoop  DoPlusLoop  DoLeave</TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">Key Function</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  execute_compiled() — inner interpreter</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#c44569"
+        penwidth=2
+    ];
+
+    // =====================================================================
+    // VALUE STACK — Stack storage
+    // =====================================================================
+    ValueStack [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD ALIGN="CENTER"><FONT POINT-SIZE="16" COLOR="#a29bfe"><B>ValueStack</B></FONT></TD></TR>
+            <TR><TD><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/value_stack.hpp</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  vector&lt;Value&gt; data_</TD></TR>
+            <TR><TD ALIGN="LEFT">  push() pop() top()</TD></TR>
+            <TR><TD ALIGN="LEFT">  size() empty() clear()</TD></TR>
+            <TR><TD ALIGN="LEFT">  operator[] — indexed access</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#a29bfe"
+        penwidth=2
+    ];
+
+    // =====================================================================
+    // HEAP TYPES — Reference-counted values
+    // =====================================================================
+    HeapTypes [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD ALIGN="CENTER"><FONT POINT-SIZE="16" COLOR="#fd79a8"><B>Heap Types</B></FONT></TD></TR>
+            <TR><TD><FONT POINT-SIZE="10" COLOR="#888888">include/etil/core/heap_*.hpp</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">HeapObject (base)</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  add_ref() / release() / tainted_</TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">Derived</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  HeapString    HeapArray</TD></TR>
+            <TR><TD ALIGN="LEFT">  HeapByteArray HeapMap</TD></TR>
+            <TR><TD ALIGN="LEFT">  HeapJson      HeapMatrix</TD></TR>
+            <TR><TD ALIGN="LEFT">  HeapObservable</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#fd79a8"
+        penwidth=2
+    ];
+
+    // =====================================================================
+    // PRIMITIVES — Native word implementations
+    // =====================================================================
+    Primitives [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD ALIGN="CENTER"><FONT POINT-SIZE="16" COLOR="#55efc4"><B>Primitives</B></FONT></TD></TR>
+            <TR><TD><FONT POINT-SIZE="10" COLOR="#888888">src/core/primitives.cpp + *_primitives.cpp</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  bool prim_*(ExecutionContext&amp;)</TD></TR>
+            <TR><TD ALIGN="LEFT"><FONT COLOR="#ff9f43">Categories</FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  Stack: dup swap drop over rot</TD></TR>
+            <TR><TD ALIGN="LEFT">  Arithmetic: + - * / mod</TD></TR>
+            <TR><TD ALIGN="LEFT">  Comparison: = &lt; &gt; and or not</TD></TR>
+            <TR><TD ALIGN="LEFT">  String / Array / Map / JSON</TD></TR>
+            <TR><TD ALIGN="LEFT">  Matrix / Observable / MongoDB</TD></TR>
+            <TR><TD ALIGN="LEFT">  File I/O / HTTP / Network</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#55efc4"
+        penwidth=2
+    ];
+
+    // =====================================================================
+    // DATA FIELD REGISTRY
+    // =====================================================================
+    DataFieldRegistry [
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="4" CELLPADDING="6">
+            <TR><TD ALIGN="CENTER"><FONT POINT-SIZE="14" COLOR="#74b9ff"><B>DataFieldRegistry</B></FONT></TD></TR>
+            <TR><TD ALIGN="LEFT">  register_field()</TD></TR>
+            <TR><TD ALIGN="LEFT">  resolve() — bounds-checked</TD></TR>
+            <TR><TD ALIGN="LEFT">  invalidate() / update()</TD></TR>
+            </TABLE>
+        >
+        fillcolor="#16213e"
+        color="#74b9ff"
+        penwidth=1.5
+    ];
+
+    // =====================================================================
+    // EDGES — Ownership and call relationships
+    // =====================================================================
+
+    // Interpreter owns/references
+    Interpreter -> ExecutionContext [
+        label="  owns ctx_"
+        color="#0abde3"
+        fontcolor="#0abde3"
+        style=bold
+        penwidth=2.5
+    ];
+
+    Interpreter -> Dictionary [
+        label="  dict_ (ref)"
+        color="#10ac84"
+        fontcolor="#10ac84"
+        style=bold
+        penwidth=2.5
+    ];
+
+    Interpreter -> HandlerSets [
+        label="  owns 3 sets"
+        color="#feca57"
+        fontcolor="#feca57"
+        style=bold
+    ];
+
+    Interpreter -> ByteCode [
+        label="  compiles : ... ;"
+        color="#c44569"
+        fontcolor="#c44569"
+        style=dashed
+    ];
+
+    // Interpreter dispatches
+    Interpreter -> WordImpl [
+        label="  execute_word()"
+        color="#ee5a24"
+        fontcolor="#ee5a24"
+        style=bold
+    ];
+
+    // Dictionary manages WordImpls
+    Dictionary -> WordImpl [
+        label="  lookup() → WordImplPtr"
+        color="#10ac84"
+        fontcolor="#10ac84"
+        style=bold
+    ];
+
+    // WordImpl owns ByteCode
+    WordImpl -> ByteCode [
+        label="  shared_ptr&lt;ByteCode&gt;"
+        color="#c44569"
+        fontcolor="#c44569"
+        style=bold
+    ];
+
+    // ExecutionContext owns stacks
+    ExecutionContext -> ValueStack [
+        label="  data_ / return_ / float_"
+        color="#a29bfe"
+        fontcolor="#a29bfe"
+        style=bold
+    ];
+
+    // ExecutionContext references
+    ExecutionContext -> DataFieldRegistry [
+        label="  shared_ptr"
+        color="#74b9ff"
+        fontcolor="#74b9ff"
+    ];
+
+    // ByteCode inner interpreter
+    ByteCode -> ExecutionContext [
+        label="  execute_compiled(ctx)"
+        color="#c44569"
+        fontcolor="#c44569"
+        style=dashed
+        constraint=false
+    ];
+
+    ByteCode -> WordImpl [
+        label="  Call instruction\n  (cached impl)"
+        color="#c44569"
+        fontcolor="#888888"
+        style=dashed
+        constraint=false
+    ];
+
+    // Primitives operate on context
+    Primitives -> ExecutionContext [
+        label="  prim_*(ctx)"
+        color="#55efc4"
+        fontcolor="#55efc4"
+        style=bold
+    ];
+
+    // Primitives registered in Dictionary
+    Primitives -> Dictionary [
+        label="  register_word()"
+        color="#55efc4"
+        fontcolor="#55efc4"
+        style=dashed
+    ];
+
+    // ValueStack holds Values referencing HeapTypes
+    ValueStack -> HeapTypes [
+        label="  Value.as_ptr → HeapObject*"
+        color="#fd79a8"
+        fontcolor="#fd79a8"
+        style=dashed
+    ];
+
+    // ByteCode references DataFieldRegistry
+    ByteCode -> DataFieldRegistry [
+        label="  PushDataPtr"
+        color="#74b9ff"
+        fontcolor="#74b9ff"
+        style=dashed
+    ];
+
+    // Handler sets call back to interpreter
+    HandlerSets -> Interpreter [
+        label="  callbacks"
+        color="#feca57"
+        fontcolor="#feca57"
+        style=dotted
+        constraint=false
+    ];
+
+    // Layout hints
+    { rank=same; ExecutionContext; Dictionary; HandlerSets; }
+    { rank=same; WordImpl; ByteCode; }
+    { rank=same; ValueStack; Primitives; HeapTypes; DataFieldRegistry; }
+}

@@ -1,0 +1,585 @@
+digraph ETIL_Source_Tree {
+    graph [
+        rankdir=LR
+        size="32,18!"
+        ratio=fill
+        dpi=150
+        bgcolor="#1a1a2e"
+        fontname="Helvetica Neue"
+        pad="0.8"
+        nodesep=0.15
+        ranksep=0.7
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="32" COLOR="#e0e0e0">ETIL Source Tree — v0.9.9 &nbsp; (42 headers, 40 sources, ~20K lines)</FONT>>
+        labelloc=t
+        labeljust=c
+    ];
+
+    node [
+        shape=none
+        fontname="Helvetica Neue"
+        fontsize=11
+        fontcolor="#e0e0e0"
+    ];
+
+    edge [
+        color="#444466"
+        arrowhead=none
+        penwidth=1.5
+    ];
+
+    // =====================================================================
+    // ROOT NODES
+    // =====================================================================
+    root_src [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8" BGCOLOR="#222244" COLOR="#555577">
+        <TR><TD><FONT POINT-SIZE="20" COLOR="#00d4ff"><B>src/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    root_include [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8" BGCOLOR="#222244" COLOR="#555577">
+        <TR><TD><FONT POINT-SIZE="20" COLOR="#00d4ff"><B>include/etil/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC SUBDIRECTORIES
+    // =====================================================================
+    src_core [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#0abde3">
+        <TR><TD COLSPAN="2"><FONT POINT-SIZE="16" COLOR="#0abde3"><B>core/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    src_mcp [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#10ac84">
+        <TR><TD COLSPAN="2"><FONT POINT-SIZE="16" COLOR="#10ac84"><B>mcp/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    src_db [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#feca57">
+        <TR><TD COLSPAN="2"><FONT POINT-SIZE="16" COLOR="#feca57"><B>db/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    src_net [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#ee5a24">
+        <TR><TD COLSPAN="2"><FONT POINT-SIZE="16" COLOR="#ee5a24"><B>net/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    src_fileio [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#c44569">
+        <TR><TD COLSPAN="2"><FONT POINT-SIZE="16" COLOR="#c44569"><B>fileio/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    src_lvfs [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#a29bfe">
+        <TR><TD COLSPAN="2"><FONT POINT-SIZE="16" COLOR="#a29bfe"><B>lvfs/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    src_aaa [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#fd79a8">
+        <TR><TD COLSPAN="2"><FONT POINT-SIZE="16" COLOR="#fd79a8"><B>aaa/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // INCLUDE SUBDIRECTORIES
+    // =====================================================================
+    inc_core [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#0abde3">
+        <TR><TD><FONT POINT-SIZE="16" COLOR="#0abde3"><B>core/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    inc_mcp [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#10ac84">
+        <TR><TD><FONT POINT-SIZE="16" COLOR="#10ac84"><B>mcp/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    inc_db [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#feca57">
+        <TR><TD><FONT POINT-SIZE="16" COLOR="#feca57"><B>db/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    inc_net [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#ee5a24">
+        <TR><TD><FONT POINT-SIZE="16" COLOR="#ee5a24"><B>net/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    inc_fileio [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#c44569">
+        <TR><TD><FONT POINT-SIZE="16" COLOR="#c44569"><B>fileio/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    inc_lvfs [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#a29bfe">
+        <TR><TD><FONT POINT-SIZE="16" COLOR="#a29bfe"><B>lvfs/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    inc_aaa [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#1e2d4a" COLOR="#fd79a8">
+        <TR><TD><FONT POINT-SIZE="16" COLOR="#fd79a8"><B>aaa/</B></FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC/CORE FILES — color #0abde3
+    // =====================================================================
+    sc_observable [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>observable_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">2779</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_primitives [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">2741</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_matrix [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>matrix_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">1214</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_string [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>string_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">956</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_interpreter [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>interpreter.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">560</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_json [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>json_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">534</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_array [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>array_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">474</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_compiled [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>compiled_body.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">368</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_ctrlflow [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>control_flow_handlers.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">266</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_map [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>map_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">226</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_compile_h [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>compile_handlers.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">188</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_byte [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>byte_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">157</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_dict [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>dictionary.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">139</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_meta_json [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>metadata_json.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">117</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_interp_h [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>interpret_handlers.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">113</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_escape [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>escape_processing.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">79</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_meta [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>metadata.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">51</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_execctx [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>execution_context.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">33</FONT></TD></TR>
+        </TABLE>
+    >];
+    sc_wordimpl [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#0abde3"><B>word_impl.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">14</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC/MCP FILES — color #10ac84
+    // =====================================================================
+    sm_tools [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>tool_handlers.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">2019</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_http [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>http_transport.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">791</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_server [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>mcp_server.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">734</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_auth [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>auth_config.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">390</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_github [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>oauth_github.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">234</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_google [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>oauth_google.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">168</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_resource [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>resource_handlers.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">167</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_session [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>session.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">143</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_jsonrpc [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>json_rpc.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">106</FONT></TD></TR>
+        </TABLE>
+    >];
+    sm_jwt [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#10ac84"><B>jwt_auth.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">87</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC/DB FILES — color #feca57
+    // =====================================================================
+    sd_prims [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#feca57">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#feca57"><B>mongo_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">550</FONT></TD></TR>
+        </TABLE>
+    >];
+    sd_client [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#feca57">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#feca57"><B>mongo_client.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">379</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC/NET FILES — color #ee5a24
+    // =====================================================================
+    sn_http [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#ee5a24">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#ee5a24"><B>http_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">486</FONT></TD></TR>
+        </TABLE>
+    >];
+    sn_url [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#ee5a24">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#ee5a24"><B>url_validation.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">299</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC/FILEIO FILES — color #c44569
+    // =====================================================================
+    sf_async [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#c44569">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#c44569"><B>async_file_io.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">707</FONT></TD></TR>
+        </TABLE>
+    >];
+    sf_uv [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#c44569">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#c44569"><B>uv_session.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">88</FONT></TD></TR>
+        </TABLE>
+    >];
+    sf_prims [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#c44569">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#c44569"><B>file_io_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">17</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC/LVFS FILES — color #a29bfe
+    // =====================================================================
+    sl_lvfs [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#a29bfe">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#a29bfe"><B>lvfs.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">346</FONT></TD></TR>
+        </TABLE>
+    >];
+    sl_prims [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#a29bfe">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#a29bfe"><B>lvfs_primitives.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">215</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // SRC/AAA FILES — color #fd79a8
+    // =====================================================================
+    sa_user [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#fd79a8">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#fd79a8"><B>user_store.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">233</FONT></TD></TR>
+        </TABLE>
+    >];
+    sa_audit [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#fd79a8">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#fd79a8"><B>audit_log.cpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">100</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // INCLUDE/CORE FILES — color #0abde3
+    // =====================================================================
+    ic_execctx [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>execution_context.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">515</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_wordimpl [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>word_impl.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">316</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_observable [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>heap_observable.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">200</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_prims [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>primitives.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">197</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_interp [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>interpreter.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">161</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_handler [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>handler_set.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">154</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_compiled [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>compiled_body.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">107</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_heapobj [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>heap_object.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">106</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_heapmap [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>heap_map.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">98</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_heaparr [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>heap_array.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">96</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_dict [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>dictionary.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">94</FONT></TD></TR>
+        </TABLE>
+    >];
+    ic_misc [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#0abde3">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#6ecff6"><B>+ 13 more headers</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">632</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // INCLUDE/MCP FILES — color #10ac84
+    // =====================================================================
+    im_server [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#55efc4"><B>mcp_server.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">346</FONT></TD></TR>
+        </TABLE>
+    >];
+    im_http [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#55efc4"><B>http_transport.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">146</FONT></TD></TR>
+        </TABLE>
+    >];
+    im_session [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#55efc4"><B>session.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">96</FONT></TD></TR>
+        </TABLE>
+    >];
+    im_misc [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#10ac84">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#55efc4"><B>+ 7 more headers</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">405</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // INCLUDE/DB, NET, FILEIO, LVFS, AAA
+    // =====================================================================
+    id_all [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#feca57">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#feca57"><B>mongo_client.hpp + 1</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">200</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    in_all [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#ee5a24">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#ee5a24"><B>http_client_config.hpp + 2</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">234</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    if_all [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#c44569">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#c44569"><B>uv_session.hpp + 2</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">146</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    il_all [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#a29bfe">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#a29bfe"><B>lvfs.hpp</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">102</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    ia_all [label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4" BGCOLOR="#162640" COLOR="#fd79a8">
+        <TR><TD ALIGN="LEFT"><FONT COLOR="#fd79a8"><B>audit_log.hpp + 1</B></FONT></TD><TD ALIGN="RIGHT"><FONT COLOR="#888888">136</FONT></TD></TR>
+        </TABLE>
+    >];
+
+    // =====================================================================
+    // TREE EDGES
+    // =====================================================================
+
+    // Root to subdirectories
+    root_src -> src_core [color="#0abde3"];
+    root_src -> src_mcp [color="#10ac84"];
+    root_src -> src_db [color="#feca57"];
+    root_src -> src_net [color="#ee5a24"];
+    root_src -> src_fileio [color="#c44569"];
+    root_src -> src_lvfs [color="#a29bfe"];
+    root_src -> src_aaa [color="#fd79a8"];
+
+    root_include -> inc_core [color="#0abde3"];
+    root_include -> inc_mcp [color="#10ac84"];
+    root_include -> inc_db [color="#feca57"];
+    root_include -> inc_net [color="#ee5a24"];
+    root_include -> inc_fileio [color="#c44569"];
+    root_include -> inc_lvfs [color="#a29bfe"];
+    root_include -> inc_aaa [color="#fd79a8"];
+
+    // src/core/ files
+    src_core -> sc_observable [color="#0abde3"];
+    src_core -> sc_primitives [color="#0abde3"];
+    src_core -> sc_matrix [color="#0abde3"];
+    src_core -> sc_string [color="#0abde3"];
+    src_core -> sc_interpreter [color="#0abde3"];
+    src_core -> sc_json [color="#0abde3"];
+    src_core -> sc_array [color="#0abde3"];
+    src_core -> sc_compiled [color="#0abde3"];
+    src_core -> sc_ctrlflow [color="#0abde3"];
+    src_core -> sc_map [color="#0abde3"];
+    src_core -> sc_compile_h [color="#0abde3"];
+    src_core -> sc_byte [color="#0abde3"];
+    src_core -> sc_dict [color="#0abde3"];
+    src_core -> sc_meta_json [color="#0abde3"];
+    src_core -> sc_interp_h [color="#0abde3"];
+    src_core -> sc_escape [color="#0abde3"];
+    src_core -> sc_meta [color="#0abde3"];
+    src_core -> sc_execctx [color="#0abde3"];
+    src_core -> sc_wordimpl [color="#0abde3"];
+
+    // src/mcp/ files
+    src_mcp -> sm_tools [color="#10ac84"];
+    src_mcp -> sm_http [color="#10ac84"];
+    src_mcp -> sm_server [color="#10ac84"];
+    src_mcp -> sm_auth [color="#10ac84"];
+    src_mcp -> sm_github [color="#10ac84"];
+    src_mcp -> sm_google [color="#10ac84"];
+    src_mcp -> sm_resource [color="#10ac84"];
+    src_mcp -> sm_session [color="#10ac84"];
+    src_mcp -> sm_jsonrpc [color="#10ac84"];
+    src_mcp -> sm_jwt [color="#10ac84"];
+
+    // src/db/ files
+    src_db -> sd_prims [color="#feca57"];
+    src_db -> sd_client [color="#feca57"];
+
+    // src/net/ files
+    src_net -> sn_http [color="#ee5a24"];
+    src_net -> sn_url [color="#ee5a24"];
+
+    // src/fileio/ files
+    src_fileio -> sf_async [color="#c44569"];
+    src_fileio -> sf_uv [color="#c44569"];
+    src_fileio -> sf_prims [color="#c44569"];
+
+    // src/lvfs/ files
+    src_lvfs -> sl_lvfs [color="#a29bfe"];
+    src_lvfs -> sl_prims [color="#a29bfe"];
+
+    // src/aaa/ files
+    src_aaa -> sa_user [color="#fd79a8"];
+    src_aaa -> sa_audit [color="#fd79a8"];
+
+    // include/core/ files
+    inc_core -> ic_execctx [color="#0abde3"];
+    inc_core -> ic_wordimpl [color="#0abde3"];
+    inc_core -> ic_observable [color="#0abde3"];
+    inc_core -> ic_prims [color="#0abde3"];
+    inc_core -> ic_interp [color="#0abde3"];
+    inc_core -> ic_handler [color="#0abde3"];
+    inc_core -> ic_compiled [color="#0abde3"];
+    inc_core -> ic_heapobj [color="#0abde3"];
+    inc_core -> ic_heapmap [color="#0abde3"];
+    inc_core -> ic_heaparr [color="#0abde3"];
+    inc_core -> ic_dict [color="#0abde3"];
+    inc_core -> ic_misc [color="#0abde3"];
+
+    // include/mcp/ files
+    inc_mcp -> im_server [color="#10ac84"];
+    inc_mcp -> im_http [color="#10ac84"];
+    inc_mcp -> im_session [color="#10ac84"];
+    inc_mcp -> im_misc [color="#10ac84"];
+
+    // include/other
+    inc_db -> id_all [color="#feca57"];
+    inc_net -> in_all [color="#ee5a24"];
+    inc_fileio -> if_all [color="#c44569"];
+    inc_lvfs -> il_all [color="#a29bfe"];
+    inc_aaa -> ia_all [color="#fd79a8"];
+}
