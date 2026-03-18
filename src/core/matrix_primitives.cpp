@@ -394,6 +394,29 @@ bool prim_mat_col(ExecutionContext& ctx) {
     return true;
 }
 
+// mat-col-vec ( mat j -- mat ) — extract column j as (rows x 1) HeapMatrix
+bool prim_mat_col_vec(ExecutionContext& ctx) {
+    int64_t j;
+    if (!pop_int(ctx, j)) return false;
+    auto* mat = pop_matrix(ctx);
+    if (!mat) {
+        ctx.data_stack().push(Value(j));
+        return false;
+    }
+    if (j < 0 || j >= mat->cols()) {
+        ctx.err() << "Error: mat-col-vec index " << j << " out of bounds\n";
+        mat->release();
+        return false;
+    }
+    auto* col = new HeapMatrix(mat->rows(), 1);
+    for (int64_t r = 0; r < mat->rows(); ++r) {
+        col->data()[r] = mat->data()[r + j * mat->rows()];
+    }
+    mat->release();
+    ctx.data_stack().push(Value::from(col));
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Arithmetic
 // ---------------------------------------------------------------------------
@@ -1131,6 +1154,8 @@ void register_matrix_primitives(Dictionary& dict) {
         {T::Unknown, T::Integer}, {T::Array}));
     dict.register_word("mat-col", make_primitive("mat-col", prim_mat_col,
         {T::Unknown, T::Integer}, {T::Array}));
+    dict.register_word("mat-col-vec", make_primitive("mat-col-vec", prim_mat_col_vec,
+        {T::Unknown, T::Integer}, {T::Unknown}));
 
     // Arithmetic
     dict.register_word("mat*", make_primitive("mat*", prim_mat_mul,

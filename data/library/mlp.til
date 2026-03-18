@@ -1,0 +1,275 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# mlp.til — Multilayer Perceptron library for ETIL
+#
+# Provides words for constructing, training, and evaluating
+# feedforward neural networks using ETIL's matrix primitives.
+#
+# Usage:
+#   include data/library/mlp.til
+#
+# Data representation:
+#   Layer   = HeapMap { "W": matrix, "b": matrix, "act": xt, "act'": xt }
+#   Network = HeapArray of layers
+#   Cache   = HeapArray of HeapMaps { "Z": matrix, "A": matrix }
+#
+# Note: Loss gradient uses batch-averaged MSE convention.
+# For single-output networks (XOR etc.) this is equivalent to
+# element-averaged MSE. For multi-output networks, the effective
+# learning rate scales with output dimension.
+
+# ===================================================================
+# Internal variables (prefixed to avoid collisions)
+# ===================================================================
+
+variable _ml-fi
+variable _ml-fo
+variable _ml-map
+variable _lf-layer
+variable _fw-net
+variable _lfc-layer
+variable _lfc-Z
+variable _lfc-A
+variable _fc-net
+variable _fc-cache
+variable _bp-dA
+variable _bp-Z
+variable _bp-Aprev
+variable _bp-W
+variable _bp-act'
+variable _bp-m
+variable _bk-net
+variable _bk-cache
+variable _bk-dA
+variable _bk-idx
+variable _su-net
+variable _su-grads
+variable _su-lr
+variable _su-layer
+variable _su-grad
+variable _ts-X
+variable _ts-Y
+variable _ts-net
+variable _ts-lr
+variable _ts-Yhat
+variable _ts-cache
+variable _tn-X
+variable _tn-Y
+variable _tn-net
+variable _tn-lr
+
+# ===================================================================
+# Layer Construction
+# ===================================================================
+
+# make-layer ( fan_in fan_out act-xt act'-xt -- layer )
+# Creates a layer with Xavier-initialized weights and zero bias.
+# W is (fan_out x fan_in), b is (fan_out x 1).
+: make-layer
+    map-new _ml-map !
+    _ml-map @ s" act'" rot map-set _ml-map !
+    _ml-map @ s" act" rot map-set _ml-map !
+    _ml-fo ! _ml-fi !
+    _ml-map @ s" W" _ml-fo @ _ml-fi @ mat-xavier map-set _ml-map !
+    _ml-map @ s" b" _ml-fo @ 1 mat-new 0.0 mat-scale map-set _ml-map !
+    _ml-map @
+;
+
+# make-network ( layer1 layer2 ... n -- network )
+# Collects n layers from the stack into a network array.
+: make-network
+    array-new swap
+    0 do
+        swap over swap array-push drop
+    loop
+    array-reverse
+;
+
+# ===================================================================
+# Forward Pass
+# ===================================================================
+
+# layer-forward ( A_prev layer -- A )
+# A = act(W * A_prev + b)
+: layer-forward
+    _lf-layer !
+    _lf-layer @ s" W" map-get swap mat*
+    _lf-layer @ s" b" map-get mat-add-col
+    _lf-layer @ s" act" map-get execute
+;
+
+# forward ( X network -- Y )
+: forward
+    _fw-net !
+    _fw-net @ array-length swap drop 0 do
+        _fw-net @ i array-get layer-forward
+    loop
+;
+
+# layer-forward-cache ( A_prev layer -- A cache-entry )
+# Returns A and a cache map { "Z": pre-act, "A": post-act }.
+: layer-forward-cache
+    _lfc-layer !
+    _lfc-layer @ s" W" map-get swap mat*
+    _lfc-layer @ s" b" map-get mat-add-col
+    _lfc-Z !
+    _lfc-Z @ _lfc-layer @ s" act" map-get execute
+    _lfc-A !
+    map-new
+    s" Z" _lfc-Z @ map-set
+    s" A" _lfc-A @ map-set
+    _lfc-A @ swap
+;
+
+# forward-cache ( X network -- Y cache )
+# cache[0] = { "A": X }, cache[i+1] = layer i results.
+: forward-cache
+    _fc-net !
+    array-new _fc-cache !
+    dup map-new s" A" rot map-set
+    _fc-cache @ swap array-push _fc-cache !
+    _fc-net @ array-length swap drop 0 do
+        _fc-net @ i array-get layer-forward-cache
+        _fc-cache @ swap array-push _fc-cache !
+    loop
+    _fc-cache @
+;
+
+# ===================================================================
+# Backpropagation
+# ===================================================================
+
+# _layer-backward-core ( -- dA_prev dW db )
+# Reads from _bp-dA, _bp-Z, _bp-Aprev, _bp-W, _bp-act'.
+: _layer-backward-core
+    # dZ = dA hadamard act'(Z)
+    _bp-Z @ _bp-act' @ execute
+    _bp-dA @ swap mat-hadamard
+    # Stack: ( dZ )
+    # m = batch size
+    _bp-Aprev @ mat-cols int->float _bp-m !
+    # dW = (1/m) * dZ * A_prev^T
+    dup _bp-Aprev @ mat-transpose mat*
+    1.0 _bp-m @ / mat-scale
+    # Stack: ( dZ dW )
+    >r
+    # db = (1/m) * col-sum(dZ)
+    dup mat-col-sum 1.0 _bp-m @ / mat-scale
+    # Stack: ( dZ db )
+    swap
+    # dA_prev = W^T * dZ
+    _bp-W @ mat-transpose swap mat*
+    # Stack: ( db dA_prev )
+    r>
+    # Stack: ( db dA_prev dW )
+    rot
+    # Stack: ( dA_prev dW db )
+;
+
+# layer-backward ( dA Z A_prev W act'-xt -- dA_prev dW db )
+: layer-backward
+    _bp-act' ! _bp-W ! _bp-Aprev ! _bp-Z ! _bp-dA !
+    _layer-backward-core
+;
+
+# backward ( Y_hat Y network cache -- grads )
+# Returns array of { "dW": mat, "db": mat } per layer (forward order).
+: backward
+    _bk-cache !
+    _bk-net !
+    # dA = 2 * (Y_hat - Y) -- MSE derivative
+    mat- 2.0 mat-scale _bk-dA !
+    array-new >r
+    # Iterate layers in reverse (countdown loop)
+    _bk-net @ array-length swap drop 1 -
+    begin
+        dup 0 >=
+    while
+        _bk-idx !
+        # Set up backward variables
+        _bk-dA @                                                _bp-dA !
+        _bk-cache @ _bk-idx @ 1 + array-get s" Z" map-get      _bp-Z !
+        _bk-cache @ _bk-idx @ array-get s" A" map-get           _bp-Aprev !
+        _bk-net @ _bk-idx @ array-get
+            dup s" W" map-get                                    _bp-W !
+            s" act'" map-get                                     _bp-act' !
+        _layer-backward-core
+        # Stack: ( dA_prev dW db )
+        map-new s" db" rot map-set s" dW" rot map-set
+        r> swap array-push >r
+        _bk-dA !
+        _bk-idx @ 1 -
+    repeat
+    drop
+    r> array-reverse
+;
+
+# ===================================================================
+# Parameter Update
+# ===================================================================
+
+# sgd-update ( network grads lr -- network )
+# W' = W - lr * dW, b' = b - lr * db for each layer.
+# Mutates layer maps in-place.
+: sgd-update
+    _su-lr ! _su-grads ! _su-net !
+    _su-net @ array-length swap drop 0 do
+        _su-net @ i array-get _su-layer !
+        _su-grads @ i array-get _su-grad !
+        # W' = W - lr * dW
+        _su-layer @ s" W" map-get
+        _su-grad @ s" dW" map-get _su-lr @ mat-scale
+        mat-
+        _su-layer @ s" W" rot map-set _su-layer !
+        # b' = b - lr * db
+        _su-layer @ s" b" map-get
+        _su-grad @ s" db" map-get _su-lr @ mat-scale
+        mat-
+        _su-layer @ s" b" rot map-set _su-layer !
+    loop
+    _su-net @
+;
+
+# ===================================================================
+# Training
+# ===================================================================
+
+# train-step ( X Y network lr -- network loss )
+# One forward-backward-update cycle.
+: train-step
+    _ts-lr ! _ts-net ! _ts-Y ! _ts-X !
+    _ts-X @ _ts-net @ forward-cache
+    _ts-cache ! _ts-Yhat !
+    # Loss = MSE(Y_hat, Y)
+    _ts-Yhat @ _ts-Y @ mat-mse
+    # Backward pass (fetches Y_hat and Y again from variables)
+    _ts-Yhat @ _ts-Y @ _ts-net @ _ts-cache @ backward
+    # SGD update
+    _ts-net @ swap _ts-lr @ sgd-update
+    swap
+;
+
+# train ( X Y network lr epochs -- network )
+# Train for N epochs, printing loss periodically.
+: train
+    >r _tn-lr ! _tn-net ! _tn-Y ! _tn-X ! r>
+    0 do
+        _tn-X @ _tn-Y @ _tn-net @ _tn-lr @
+        train-step
+        _tn-net !
+        i 500 mod 0 = if
+            ." Epoch " i . ." : loss = " . cr
+        else
+            drop
+        then
+    loop
+    _tn-net @
+;
+
+# ===================================================================
+# Inference
+# ===================================================================
+
+# predict ( X network -- Y )
+: predict forward ;

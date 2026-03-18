@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 311u);  // +10: obs-tap/pairwise/first/last/take-while/distinct-until/start-with/finalize/switch-map/catch
+    EXPECT_EQ(dict.concept_count(), 312u);  // +1: mat-col-vec
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

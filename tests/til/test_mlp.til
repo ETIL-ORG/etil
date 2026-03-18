@@ -1,0 +1,171 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# test_mlp.til — Integration tests for the MLP library
+
+include tests/til/harness.til
+include data/library/mlp.til
+
+42 random-seed
+
+# ===================================================================
+# Test helpers (if/else/then are compile-only)
+# ===================================================================
+
+# check-eq ( actual expected label -- )
+: check-eq >r = if r> type ."  PASS" cr else r> type ."  FAIL" cr then ;
+
+# check-true ( flag label -- )
+: check-true >r if r> type ."  PASS" cr else r> type ."  FAIL" cr then ;
+
+# ===================================================================
+# Test: make-layer creates correct structure
+# ===================================================================
+
+2 4 ' mat-relu ' mat-relu' make-layer
+variable test-layer
+test-layer !
+
+: test-make-layer
+    test-layer @ s" W" map-get
+    dup mat-rows 4 s" make-layer W rows=4" check-eq
+    mat-cols 2 s" make-layer W cols=2" check-eq
+    test-layer @ s" b" map-get
+    dup mat-rows 4 s" make-layer b rows=4" check-eq
+    mat-cols 1 s" make-layer b cols=1" check-eq
+    test-layer @ s" act" map-get xt? s" make-layer has act xt" check-true
+    test-layer @ s" act'" map-get xt? s" make-layer has act' xt" check-true
+;
+test-make-layer
+
+# ===================================================================
+# Test: make-network
+# ===================================================================
+
+2 4 ' mat-relu ' mat-relu' make-layer
+4 1 ' mat-sigmoid ' mat-sigmoid' make-layer
+2 make-network
+variable test-net
+test-net !
+
+: test-make-network
+    test-net @ array-length swap drop 2 s" make-network 2 layers" check-eq
+;
+test-make-network
+
+# ===================================================================
+# Test: forward pass dimensions
+# ===================================================================
+
+: test-forward
+    array-new
+      array-new 0.5 array-push array-push
+      array-new 0.3 array-push array-push
+    array->mat
+    test-net @ forward
+    dup mat-rows 1 s" forward output rows=1" check-eq
+    mat-cols 1 s" forward output cols=1" check-eq
+;
+test-forward
+
+# ===================================================================
+# Test: forward with batch
+# ===================================================================
+
+: test-forward-batch
+    array-new
+      array-new 0.0 array-push 1.0 array-push array-push
+      array-new 1.0 array-push 0.0 array-push array-push
+    array->mat
+    test-net @ forward
+    dup mat-rows 1 s" forward batch rows=1" check-eq
+    mat-cols 2 s" forward batch cols=2" check-eq
+;
+test-forward-batch
+
+# ===================================================================
+# Test: forward-cache returns correct cache size
+# ===================================================================
+
+: test-forward-cache
+    array-new
+      array-new 0.5 array-push array-push
+      array-new 0.3 array-push array-push
+    array->mat
+    test-net @ forward-cache
+    swap drop
+    array-length swap drop 3 s" forward-cache 3 entries" check-eq
+;
+test-forward-cache
+
+# ===================================================================
+# Test: layer-backward dimensions
+# ===================================================================
+
+variable bk-l
+: test-layer-backward
+    42 random-seed
+    3 2 ['] mat-relu ['] mat-relu' make-layer
+    bk-l !
+    # dA: 2x1, Z: 2x1, A_prev: 3x1
+    2 1 mat-randn
+    2 1 mat-randn
+    3 1 mat-randn
+    bk-l @ s" W" map-get
+    ['] mat-relu'
+    layer-backward
+    # Stack: ( dA_prev dW db )
+    dup mat-rows 2 s" backward db rows=2" check-eq
+    mat-cols 1 s" backward db cols=1" check-eq
+    dup mat-rows 2 s" backward dW rows=2" check-eq
+    mat-cols 3 s" backward dW cols=3" check-eq
+    dup mat-rows 3 s" backward dA_prev rows=3" check-eq
+    mat-cols 1 s" backward dA_prev cols=1" check-eq
+;
+test-layer-backward
+
+# ===================================================================
+# Test: mat-col-vec
+# ===================================================================
+
+: test-mat-col-vec
+    array-new
+      array-new 1.0 array-push 2.0 array-push array-push
+      array-new 3.0 array-push 4.0 array-push array-push
+    array->mat
+    0 mat-col-vec
+    dup mat-rows 2 s" mat-col-vec rows=2" check-eq
+    dup mat-cols 1 s" mat-col-vec cols=1" check-eq
+    dup 0 0 mat-get 1.0 0.001 f~ bool s" mat-col-vec [0,0]=1" check-true
+    1 0 mat-get 3.0 0.001 f~ bool s" mat-col-vec [1,0]=3" check-true
+;
+test-mat-col-vec
+
+# ===================================================================
+# Test: single train-step doesn't crash
+# ===================================================================
+
+variable ts-net
+: test-train-step
+    42 random-seed
+    2 4 ['] mat-relu ['] mat-relu' make-layer
+    4 1 ['] mat-sigmoid ['] mat-sigmoid' make-layer
+    2 make-network
+    ts-net !
+    # X: 2x4, Y: 1x4
+    array-new
+      array-new 0.0 array-push 0.0 array-push 1.0 array-push 1.0 array-push array-push
+      array-new 0.0 array-push 1.0 array-push 0.0 array-push 1.0 array-push array-push
+    array->mat
+    array-new
+      array-new 0.0 array-push 1.0 array-push 1.0 array-push 0.0 array-push array-push
+    array->mat
+    ts-net @ 0.5
+    train-step
+    # Stack: ( network loss )
+    swap drop
+    # Loss should be a non-negative float
+    dup 0.0 >= s" train-step loss >= 0" check-true
+    1.0 <= s" train-step loss <= 1" check-true
+;
+test-train-step

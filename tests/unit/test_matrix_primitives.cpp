@@ -160,6 +160,37 @@ TEST_F(MatrixPrimitivesTest, MatCol) {
     arr->release();
 }
 
+TEST_F(MatrixPrimitivesTest, MatColVec) {
+    // [1 2; 3 4] col 0 → (2x1) matrix [1; 3]
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat 0 mat-col-vec");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 2);
+    EXPECT_EQ(mat->cols(), 1);
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mat->get(1, 0), 3.0);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatColVecSecondCol) {
+    // [1 2; 3 4] col 1 → (2x1) matrix [2; 4]
+    run("array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat 1 mat-col-vec");
+    auto opt = ctx().data_stack().pop();
+    ASSERT_TRUE(opt.has_value());
+    auto* mat = opt->as_matrix();
+    EXPECT_EQ(mat->rows(), 2);
+    EXPECT_EQ(mat->cols(), 1);
+    EXPECT_DOUBLE_EQ(mat->get(0, 0), 2.0);
+    EXPECT_DOUBLE_EQ(mat->get(1, 0), 4.0);
+    mat->release();
+}
+
+TEST_F(MatrixPrimitivesTest, MatColVecOutOfBounds) {
+    run("2 2 mat-new 5 mat-col-vec");
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
+}
+
 // ---------------------------------------------------------------------------
 // Arithmetic
 // ---------------------------------------------------------------------------

@@ -1,0 +1,88 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# xor-mlp.til — Train an MLP to learn XOR
+#
+# Network: 2 inputs -> 4 hidden (ReLU) -> 1 output (sigmoid)
+# Loss: MSE
+# Optimizer: SGD with learning rate 0.5
+# Expected: converges to < 0.01 loss within 5000 epochs
+#
+# Usage:
+#   REPL:  include examples/tui/xor-mlp.til
+#   TUI:   /load examples/tui/xor-mlp.til
+
+include data/library/mlp.til
+
+." === XOR MLP Training ===" cr
+
+# --- Training data ---
+# X = 2x4 matrix: each column is one sample [x1, x2]
+# Samples: [0,0] [0,1] [1,0] [1,1]
+array-new
+  array-new 0.0 array-push 0.0 array-push 1.0 array-push 1.0 array-push array-push
+  array-new 0.0 array-push 1.0 array-push 0.0 array-push 1.0 array-push array-push
+array->mat
+variable X-data
+X-data !
+
+# Y = 1x4 matrix: XOR outputs
+# Targets: [0, 1, 1, 0]
+array-new
+  array-new 0.0 array-push 1.0 array-push 1.0 array-push 0.0 array-push array-push
+array->mat
+variable Y-data
+Y-data !
+
+# --- Build network ---
+42 random-seed
+
+2 4 ' mat-relu ' mat-relu' make-layer
+4 1 ' mat-sigmoid ' mat-sigmoid' make-layer
+2 make-network
+variable xor-net
+xor-net !
+
+." Network: 2 -> 4 (ReLU) -> 1 (sigmoid)" cr
+." Training 5000 epochs, lr=0.5" cr cr
+
+# --- Train ---
+X-data @ Y-data @ xor-net @ 0.5 5000 train
+xor-net !
+
+# --- Test predictions ---
+cr ." === Predictions ===" cr
+." Input -> Output (expected)" cr
+
+# Test each input individually
+# [0, 0] -> ~0
+array-new
+  array-new 0.0 array-push array-push
+  array-new 0.0 array-push array-push
+array->mat
+xor-net @ predict
+." [0,0] -> " mat. ." (expected ~0)" cr
+
+# [0, 1] -> ~1
+array-new
+  array-new 0.0 array-push array-push
+  array-new 1.0 array-push array-push
+array->mat
+xor-net @ predict
+." [0,1] -> " mat. ." (expected ~1)" cr
+
+# [1, 0] -> ~1
+array-new
+  array-new 1.0 array-push array-push
+  array-new 0.0 array-push array-push
+array->mat
+xor-net @ predict
+." [1,0] -> " mat. ." (expected ~1)" cr
+
+# [1, 1] -> ~0
+array-new
+  array-new 1.0 array-push array-push
+  array-new 1.0 array-push array-push
+array->mat
+xor-net @ predict
+." [1,1] -> " mat. ." (expected ~0)" cr

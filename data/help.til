@@ -1454,6 +1454,10 @@ s" mat-col" s" description" s" text" s" Extract column as HeapArray" meta! drop
 s" mat-col" s" stack-effect" s" text" s" ( mat j -- array )" meta! drop
 s" mat-col" s" category" s" text" s" matrix" meta! drop
 
+s" mat-col-vec" s" description" s" text" s" Extract column as (rows x 1) HeapMatrix" meta! drop
+s" mat-col-vec" s" stack-effect" s" text" s" ( mat j -- mat )" meta! drop
+s" mat-col-vec" s" category" s" text" s" matrix" meta! drop
+
 s" mat*" s" description" s" text" s" Matrix multiply (DGEMM)" meta! drop
 s" mat*" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
 s" mat*" s" category" s" text" s" matrix" meta! drop
