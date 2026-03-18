@@ -64,5 +64,5 @@ programming patterns. No source code was copied from any of these projects.
 ## TUI Client
 
 The TUI client lives in a separate repository
-([etil-tui](https://github.com/krystalmonolith/etil-tui)) with its own
+([etil-tui](https://github.com/ETIL-ORG/etil-tui)) with its own
 dependency tracking.

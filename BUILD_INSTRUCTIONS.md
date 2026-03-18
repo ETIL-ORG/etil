@@ -4,7 +4,7 @@
 
 ```bash
 # Clone the project
-git clone https://github.com/krystalmonolith/evolutionary-til.git
+git clone https://github.com/ETIL-ORG/etil.git
 cd evolutionary-til
 
 # Create a sibling build directory and configure
@@ -242,4 +242,4 @@ ninja
 ## Support
 
 For build issues, open an issue at
-[github.com/krystalmonolith/evolutionary-til](https://github.com/krystalmonolith/evolutionary-til/issues).
+[github.com/ETIL-ORG/etil](https://github.com/ETIL-ORG/etil/issues).

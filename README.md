@@ -27,9 +27,9 @@ See the [BUILD_INSTRUCTIONS.md](./BUILD_INSTRUCTIONS.md) for compilation instruc
 
 ## ETIL TUI: _Text User Interface_ Network Client
 
-### See the TUI [README.md](https://github.com/krystalmonolith/etil-tui/README.md) in the ETIL TUI Project for more detail.
+### See the TUI [README.md](https://github.com/ETIL-ORG/etil-tui/blob/master/README.md) in the ETIL TUI Project for more detail.
 
-Connect the [TUI Client](https://github.com/krystalmonolith/etil-tui) to the
+Connect the [TUI Client](https://github.com/ETIL-ORG/etil-tui) to the
 ETIL MCP server directly for a richer experience:
 - Triple Window Layout, 
 - Help Browser (F1)
@@ -254,7 +254,7 @@ custom agents, or any MCP client.
 
 ### MCP Client TUI
 
-Interactive terminal UI in the separate [`etil-tui`](https://github.com/krystalmonolith/etil-tui)
+Interactive terminal UI in the separate [`etil-tui`](https://github.com/ETIL-ORG/etil-tui)
 repository — triple-window layout, full-screen help browser (F1) with live examples,
 OAuth login, script execution (`--exec`/`--execux`), and session logging.
 
