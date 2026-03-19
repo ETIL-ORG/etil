@@ -20,6 +20,7 @@
 #include "etil/mcp/role_permissions.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/interpreter.hpp"
+#include "etil/selection/selection_engine.hpp"
 #include "etil/core/metadata_json.hpp"
 #include "etil/core/version.hpp"
 #include "absl/container/flat_hash_map.h"
@@ -1459,6 +1460,62 @@ bool prim_sys_timestamp(ExecutionContext& ctx) {
     return true;
 }
 
+// --- Selection primitives ---
+
+// select-strategy ( n -- )  0=latest, 1=weighted, 2=epsilon-greedy, 3=ucb1
+bool prim_select_strategy(ExecutionContext& ctx) {
+    auto val = ctx.data_stack().pop();
+    if (!val) return false;
+    if (val->type != Value::Type::Integer) {
+        ctx.err() << "Error: select-strategy requires an integer\n";
+        return false;
+    }
+    auto* engine = ctx.selection_engine();
+    if (!engine) {
+        ctx.err() << "Error: no selection engine configured\n";
+        return false;
+    }
+    switch (val->as_int) {
+        case 0: engine->set_strategy(etil::selection::Strategy::Latest); break;
+        case 1: engine->set_strategy(etil::selection::Strategy::WeightedRandom); break;
+        case 2: engine->set_strategy(etil::selection::Strategy::EpsilonGreedy); break;
+        case 3: engine->set_strategy(etil::selection::Strategy::UCB1); break;
+        default:
+            ctx.err() << "Error: invalid strategy " << val->as_int
+                      << " (0=latest, 1=weighted, 2=epsilon, 3=ucb1)\n";
+            return false;
+    }
+    return true;
+}
+
+// select-epsilon ( f -- )  Set epsilon for epsilon-greedy
+bool prim_select_epsilon(ExecutionContext& ctx) {
+    auto val = ctx.data_stack().pop();
+    if (!val) return false;
+    double eps;
+    if (val->type == Value::Type::Float) eps = val->as_float;
+    else if (val->type == Value::Type::Integer) eps = static_cast<double>(val->as_int);
+    else {
+        ctx.err() << "Error: select-epsilon requires a number\n";
+        return false;
+    }
+    auto* engine = ctx.selection_engine();
+    if (!engine) {
+        ctx.err() << "Error: no selection engine configured\n";
+        return false;
+    }
+    engine->set_epsilon(eps);
+    return true;
+}
+
+// select-off ( -- )  Revert to Latest (deterministic)
+bool prim_select_off(ExecutionContext& ctx) {
+    auto* engine = ctx.selection_engine();
+    if (!engine) return true;  // no-op if no engine
+    engine->set_strategy(etil::selection::Strategy::Latest);
+    return true;
+}
+
 // --- Help primitive ---
 
 namespace {
@@ -2665,6 +2722,10 @@ static const PrimEntry prim_table[] = {
     {"sys-notification", prim_sys_notification, 1, 0, {T::Unknown},      {}},
     {"user-notification",prim_user_notification,2, 1, {T::String, T::String},{T::Integer}},
     {"abort",            prim_abort,            1, 0, {T::Unknown},      {}},
+    // Selection
+    {"select-strategy",  prim_select_strategy,  1, 0, {T::Integer},      {}},
+    {"select-epsilon",   prim_select_epsilon,   1, 0, {T::Unknown},      {}},
+    {"select-off",       prim_select_off,       0, 0, {},                {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::Unknown}},

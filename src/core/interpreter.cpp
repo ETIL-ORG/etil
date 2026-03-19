@@ -383,8 +383,10 @@ bool Interpreter::interpret_token(const std::string& token,
         return true;
     }
 
-    // Dictionary lookup
-    auto lookup = dict_.lookup(token);
+    // Dictionary lookup (with optional selection engine)
+    auto lookup = ctx_.selection_engine()
+        ? dict_.select(token, *ctx_.selection_engine())
+        : dict_.lookup(token);
     if (!lookup) {
         err_ << "Unknown word: " << token;
         if (!source_file_.empty())

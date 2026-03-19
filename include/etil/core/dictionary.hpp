@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+namespace etil::selection { class SelectionEngine; }
+
 namespace etil::core {
 
 struct WordConcept {
@@ -38,6 +40,11 @@ public:
     /// Look up the latest (most recently registered) implementation for a concept.
     /// Returns nullopt if not found.
     std::optional<WordImplPtr> lookup(const std::string& word) const;
+
+    /// Select an implementation using a SelectionEngine.
+    /// Falls back to lookup() if concept not found or has no implementations.
+    std::optional<WordImplPtr> select(const std::string& word,
+                                      etil::selection::SelectionEngine& engine) const;
 
     /// Get all implementations for a concept.
     /// Returns nullopt if concept not found.

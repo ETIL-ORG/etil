@@ -26,7 +26,7 @@ set(ETIL_CORE_SOURCES
 )
 
 set(ETIL_SELECTION_SOURCES
-    # Selection sources will go here
+    selection/selection_engine.cpp
 )
 
 set(ETIL_EVOLUTION_SOURCES

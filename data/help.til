@@ -583,6 +583,20 @@ s" f~" s" stack-effect" s" text" s" ( r1 r2 r3 -- flag )" meta! drop
 s" f~" s" category" s" text" s" math" meta! drop
 s" f~" s" examples" s" code" s" 1.0 1.001 0.01 f~ .\n=> -1\n100.0 101.0 -0.02 f~ .\n=> -1\n3.14 3.14 0.0 f~ .\n=> -1" meta! drop
 
+# --- Selection ---
+
+s" select-strategy" s" description" s" text" s" Set implementation selection strategy (0=latest, 1=weighted, 2=epsilon-greedy, 3=ucb1)" meta! drop
+s" select-strategy" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" select-strategy" s" category" s" text" s" system" meta! drop
+
+s" select-epsilon" s" description" s" text" s" Set epsilon for epsilon-greedy selection strategy" meta! drop
+s" select-epsilon" s" stack-effect" s" text" s" ( f -- )" meta! drop
+s" select-epsilon" s" category" s" text" s" system" meta! drop
+
+s" select-off" s" description" s" text" s" Revert to deterministic latest-wins word selection" meta! drop
+s" select-off" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" select-off" s" category" s" text" s" system" meta! drop
+
 # --- System ---
 
 s" sys-semver" s" description" s" text" s" Print project semantic version" meta! drop

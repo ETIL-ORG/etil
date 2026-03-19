@@ -19,6 +19,7 @@ namespace etil::fileio { class UvSession; }
 namespace etil::net { struct HttpClientState; }
 namespace etil::db { struct MongoClientState; }
 namespace etil::mcp { struct RolePermissions; }
+namespace etil::selection { class SelectionEngine; }
 
 namespace etil::core
 {
@@ -291,6 +292,10 @@ namespace etil::core {
         etil::fileio::UvSession* uv_session() const { return uv_session_; }
         void set_uv_session(etil::fileio::UvSession* s) { uv_session_ = s; }
 
+        // SelectionEngine access (non-owning, for evolutionary word selection)
+        etil::selection::SelectionEngine* selection_engine() const { return selection_engine_; }
+        void set_selection_engine(etil::selection::SelectionEngine* e) { selection_engine_ = e; }
+
         // HTTP client state (non-owning, for http-get primitive)
         etil::net::HttpClientState* http_client_state() const { return http_client_state_; }
         void set_http_client_state(etil::net::HttpClientState* s) { http_client_state_ = s; }
@@ -464,6 +469,9 @@ namespace etil::core {
 
         // UvSession (for async file I/O primitives)
         etil::fileio::UvSession* uv_session_ = nullptr;
+
+        // SelectionEngine (for evolutionary word selection)
+        etil::selection::SelectionEngine* selection_engine_ = nullptr;
 
         // HTTP client state (for http-get primitive)
         etil::net::HttpClientState* http_client_state_ = nullptr;

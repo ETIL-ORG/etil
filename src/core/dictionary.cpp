@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/core/dictionary.hpp"
+#include "etil/selection/selection_engine.hpp"
 #include <spdlog/spdlog.h>
 
 namespace etil::core {
@@ -41,6 +42,25 @@ Dictionary::lookup(const std::string& word) const {
         return std::nullopt;
     }
     return it->second.implementations.back();
+}
+
+std::optional<WordImplPtr>
+Dictionary::select(const std::string& word,
+                   etil::selection::SelectionEngine& engine) const {
+    absl::ReaderMutexLock lock(&mutex_);
+    auto it = concepts_.find(word);
+    if (it == concepts_.end() || it->second.implementations.empty()) {
+        return std::nullopt;
+    }
+    auto* selected = engine.select(it->second.implementations);
+    if (!selected) return std::nullopt;
+    // Find the WordImplPtr that owns this impl and return a copy (which addrefs)
+    for (auto& impl_ptr : it->second.implementations) {
+        if (impl_ptr.get() == selected) {
+            return impl_ptr;  // copy addrefs via WordImplPtr copy ctor
+        }
+    }
+    return std::nullopt;
 }
 
 std::optional<std::vector<WordImplPtr>>

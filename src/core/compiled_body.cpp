@@ -43,10 +43,20 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
             // Use cached impl if available and generation matches,
             // otherwise look up and cache.  The generation check
             // detects invalidation caused by forget_word/forget_all.
+            // When a selection engine is active, bypass the cache so
+            // each execution can pick a different implementation.
             auto* dict = ctx.dictionary();
             if (!dict) return false;
-            if (!instr.cached_impl ||
-                dict->generation() != instr.cached_generation) {
+            auto* sel_engine = ctx.selection_engine();
+            if (sel_engine) {
+                auto result = dict->select(instr.word_name, *sel_engine);
+                if (!result) {
+                    ctx.err() << "Unknown word: " << instr.word_name << "\n";
+                    return false;
+                }
+                instr.cached_impl = result->get();
+            } else if (!instr.cached_impl ||
+                       dict->generation() != instr.cached_generation) {
                 auto result = dict->lookup(instr.word_name);
                 if (!result) {
                     ctx.err() << "Unknown word: " << instr.word_name << "\n";
