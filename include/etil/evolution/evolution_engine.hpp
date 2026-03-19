@@ -1,0 +1,72 @@
+#pragma once
+
+// Copyright (c) 2026 Mark Deazley. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include "etil/evolution/genetic_ops.hpp"
+#include "etil/evolution/fitness.hpp"
+#include "etil/selection/selection_engine.hpp"
+#include "etil/core/dictionary.hpp"
+
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace etil::evolution {
+
+struct EvolutionConfig {
+    size_t population_limit = 10;
+    size_t generation_size = 5;
+    double mutation_rate = 0.8;   // prob mutation vs crossover
+    double prune_threshold = 0.01;
+    MutationConfig mutation_config;
+};
+
+/// Drives evolution of word implementations via genetic operators
+/// and fitness evaluation.
+class EvolutionEngine {
+public:
+    EvolutionEngine(EvolutionConfig config, etil::core::Dictionary& dict);
+
+    /// Run one generation of evolution for a word concept.
+    /// Returns the number of children created and evaluated.
+    size_t evolve_word(const std::string& word);
+
+    /// Evolve all words that have test cases registered.
+    void evolve_all();
+
+    /// Register test cases for a word.
+    void register_tests(const std::string& word, std::vector<TestCase> tests);
+
+    /// Check if a word has registered test cases.
+    bool has_tests(const std::string& word) const;
+
+    /// Get the number of generations run for a word.
+    size_t generations_run(const std::string& word) const;
+
+    /// Get registered word names.
+    std::vector<std::string> registered_words() const;
+
+    const EvolutionConfig& config() const { return config_; }
+    Fitness& fitness() { return fitness_; }
+
+private:
+    EvolutionConfig config_;
+    etil::core::Dictionary& dict_;
+    GeneticOps genetic_ops_;
+    Fitness fitness_;
+    etil::selection::SelectionEngine parent_selector_;
+
+    struct WordEvolution {
+        std::vector<TestCase> tests;
+        size_t generations = 0;
+    };
+    std::unordered_map<std::string, WordEvolution> word_state_;
+
+    void update_weights(
+        const std::string& word,
+        const std::vector<std::pair<etil::core::WordImplPtr, FitnessResult>>& results);
+    void prune(const std::string& word);
+};
+
+} // namespace etil::evolution

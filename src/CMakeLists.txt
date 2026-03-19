@@ -30,7 +30,9 @@ set(ETIL_SELECTION_SOURCES
 )
 
 set(ETIL_EVOLUTION_SOURCES
-    # Evolution sources will go here
+    evolution/genetic_ops.cpp
+    evolution/fitness.cpp
+    evolution/evolution_engine.cpp
 )
 
 set(ETIL_JIT_SOURCES
