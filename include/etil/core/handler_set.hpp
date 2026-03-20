@@ -145,6 +145,8 @@ private:
     bool handle_exit(const std::string& word);
     bool handle_again(const std::string& word);
 
+    void emit_marker(Instruction::Op op, BlockKind kind);
+
     std::ostream& err_;
     std::shared_ptr<ByteCode>& current_bytecode_;
     std::vector<size_t>& control_stack_;

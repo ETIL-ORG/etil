@@ -40,6 +40,9 @@ struct Instruction {
         DoLeave,        // Pop DO loop frame, branch to int_val (past LOOP)
         DoExit,         // Return from current word (early exit)
         PushJson,       // Parse JSON from word_name, create HeapJson, push as heap value
+        BlockBegin,     // No-op marker: start of control structure. int_val = BlockKind
+        BlockEnd,       // No-op marker: end of control structure. int_val = BlockKind
+        BlockSeparator, // No-op marker: boundary within structure (else). int_val = BlockKind
     };
 
     Op op;
@@ -48,6 +51,17 @@ struct Instruction {
     std::string word_name;      // For Call (lookup key) or PrintString (text)
     WordImpl* cached_impl = nullptr;  // Non-owning cache (Dictionary owns the WordImpl)
     uint64_t cached_generation = 0;   // Dictionary generation when cached_impl was set
+};
+
+/// Block kind for structure marker opcodes (BlockBegin/BlockEnd/BlockSeparator).
+enum class BlockKind : int64_t {
+    IfThen           = 1,
+    IfThenElse       = 2,
+    DoLoop           = 3,
+    DoPlusLoop       = 4,
+    BeginUntil       = 5,
+    BeginWhileRepeat = 6,
+    BeginAgain       = 7,
 };
 
 /// The ByteCode class that WordImpl already forward-declares.

@@ -477,51 +477,56 @@ TEST_F(ControlFlowHandlerSetTest, If) {
     auto result = handler->dispatch("if");
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    ASSERT_EQ(bytecode->size(), 1u);
-    const auto& instr = bytecode->instructions()[0];
-    EXPECT_EQ(instr.op, Instruction::Op::BranchIfFalse);
-    EXPECT_EQ(instr.int_val, 0);
+    ASSERT_EQ(bytecode->size(), 2u);  // BlockBegin + BranchIfFalse
+    EXPECT_EQ(bytecode->instructions()[0].op, Instruction::Op::BlockBegin);
+    EXPECT_EQ(bytecode->instructions()[0].int_val, static_cast<int64_t>(BlockKind::IfThen));
+    EXPECT_EQ(bytecode->instructions()[1].op, Instruction::Op::BranchIfFalse);
+    EXPECT_EQ(bytecode->instructions()[1].int_val, 0);
     ASSERT_EQ(control_stack.size(), 1u);
-    EXPECT_EQ(control_stack[0], 0u);
+    EXPECT_EQ(control_stack[0], 1u);  // position of BranchIfFalse (after BlockBegin)
 }
 
 TEST_F(ControlFlowHandlerSetTest, IfThen) {
-    handler->dispatch("if");
+    handler->dispatch("if");  // BlockBegin(0) + BranchIfFalse(1)
     Instruction dummy;
     dummy.op = Instruction::Op::PushInt;
     dummy.int_val = 1;
-    bytecode->append(std::move(dummy));
-    ASSERT_EQ(bytecode->size(), 2u);
+    bytecode->append(std::move(dummy));  // PushInt(2)
+    ASSERT_EQ(bytecode->size(), 3u);
 
-    auto result = handler->dispatch("then");
+    auto result = handler->dispatch("then");  // + BlockEnd
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    EXPECT_EQ(bytecode->instructions()[0].int_val, 2);
+    EXPECT_EQ(bytecode->instructions()[1].int_val, 3);  // BranchIfFalse targets after body
+    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::BlockEnd);
     EXPECT_TRUE(control_stack.empty());
 }
 
 TEST_F(ControlFlowHandlerSetTest, IfElseThen) {
-    handler->dispatch("if");
+    handler->dispatch("if");  // BlockBegin(0) + BranchIfFalse(1)
     Instruction body1;
     body1.op = Instruction::Op::PushInt;
     body1.int_val = 1;
-    bytecode->append(std::move(body1));
+    bytecode->append(std::move(body1));  // PushInt(2)
 
-    handler->dispatch("else");
-    ASSERT_EQ(bytecode->size(), 3u);
-    EXPECT_EQ(bytecode->instructions()[0].op, Instruction::Op::BranchIfFalse);
-    EXPECT_EQ(bytecode->instructions()[0].int_val, 3);
-    EXPECT_EQ(bytecode->instructions()[2].op, Instruction::Op::Branch);
+    handler->dispatch("else");  // BlockSeparator(3) + Branch(4), backpatch BranchIfFalse→5
+    EXPECT_EQ(bytecode->instructions()[0].op, Instruction::Op::BlockBegin);
+    EXPECT_EQ(bytecode->instructions()[0].int_val, static_cast<int64_t>(BlockKind::IfThenElse));
+    EXPECT_EQ(bytecode->instructions()[1].op, Instruction::Op::BranchIfFalse);
+    EXPECT_EQ(bytecode->instructions()[1].int_val, 5);  // past BlockSeparator + Branch
+    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::BlockSeparator);
+    EXPECT_EQ(bytecode->instructions()[4].op, Instruction::Op::Branch);
 
     Instruction body2;
     body2.op = Instruction::Op::PushInt;
     body2.int_val = 0;
-    bytecode->append(std::move(body2));
+    bytecode->append(std::move(body2));  // PushInt(5)
 
-    auto result = handler->dispatch("then");
+    auto result = handler->dispatch("then");  // + BlockEnd(6)
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    EXPECT_EQ(bytecode->instructions()[2].int_val, 4);
+    EXPECT_EQ(bytecode->instructions()[4].int_val, 6);  // Branch past else-body to BlockEnd
+    EXPECT_EQ(bytecode->instructions()[6].op, Instruction::Op::BlockEnd);
     EXPECT_TRUE(control_stack.empty());
 }
 
@@ -540,44 +545,47 @@ TEST_F(ControlFlowHandlerSetTest, ThenWithoutIf) {
 }
 
 TEST_F(ControlFlowHandlerSetTest, Do) {
-    auto result = handler->dispatch("do");
+    auto result = handler->dispatch("do");  // BlockBegin(0) + DoSetup(1)
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    ASSERT_EQ(bytecode->size(), 1u);
-    EXPECT_EQ(bytecode->instructions()[0].op, Instruction::Op::DoSetup);
+    ASSERT_EQ(bytecode->size(), 2u);
+    EXPECT_EQ(bytecode->instructions()[0].op, Instruction::Op::BlockBegin);
+    EXPECT_EQ(bytecode->instructions()[0].int_val, static_cast<int64_t>(BlockKind::DoLoop));
+    EXPECT_EQ(bytecode->instructions()[1].op, Instruction::Op::DoSetup);
     ASSERT_EQ(control_stack.size(), 1u);
-    EXPECT_EQ(control_stack[0], 1u);
+    EXPECT_EQ(control_stack[0], 2u);  // loop body starts after DoSetup
 }
 
 TEST_F(ControlFlowHandlerSetTest, DoLoop) {
-    handler->dispatch("do");
+    handler->dispatch("do");  // BlockBegin(0) + DoSetup(1)
     Instruction body;
     body.op = Instruction::Op::DoI;
-    bytecode->append(std::move(body));
+    bytecode->append(std::move(body));  // DoI(2)
 
-    auto result = handler->dispatch("loop");
+    auto result = handler->dispatch("loop");  // DoLoop(3) + BlockEnd(4)
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    ASSERT_EQ(bytecode->size(), 3u);
-    const auto& loop_instr = bytecode->instructions()[2];
-    EXPECT_EQ(loop_instr.op, Instruction::Op::DoLoop);
-    EXPECT_EQ(loop_instr.int_val, 1);
+    ASSERT_EQ(bytecode->size(), 5u);
+    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::DoLoop);
+    EXPECT_EQ(bytecode->instructions()[3].int_val, 2);  // loop body start
+    EXPECT_EQ(bytecode->instructions()[4].op, Instruction::Op::BlockEnd);
     EXPECT_TRUE(control_stack.empty());
 }
 
 TEST_F(ControlFlowHandlerSetTest, DoPlusLoop) {
-    handler->dispatch("do");
+    handler->dispatch("do");  // BlockBegin(0) + DoSetup(1)
     Instruction body;
     body.op = Instruction::Op::DoI;
-    bytecode->append(std::move(body));
+    bytecode->append(std::move(body));  // DoI(2)
 
-    auto result = handler->dispatch("+loop");
+    auto result = handler->dispatch("+loop");  // DoPlusLoop(3) + BlockEnd(4)
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    ASSERT_EQ(bytecode->size(), 3u);
-    const auto& ploop_instr = bytecode->instructions()[2];
-    EXPECT_EQ(ploop_instr.op, Instruction::Op::DoPlusLoop);
-    EXPECT_EQ(ploop_instr.int_val, 1);
+    ASSERT_EQ(bytecode->size(), 5u);
+    EXPECT_EQ(bytecode->instructions()[0].int_val, static_cast<int64_t>(BlockKind::DoPlusLoop));
+    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::DoPlusLoop);
+    EXPECT_EQ(bytecode->instructions()[3].int_val, 2);
+    EXPECT_EQ(bytecode->instructions()[4].op, Instruction::Op::BlockEnd);
     EXPECT_TRUE(control_stack.empty());
 }
 
@@ -604,22 +612,22 @@ TEST_F(ControlFlowHandlerSetTest, I) {
 }
 
 TEST_F(ControlFlowHandlerSetTest, BeginUntil) {
-    handler->dispatch("begin");
+    handler->dispatch("begin");  // BlockBegin(0)
     ASSERT_EQ(control_stack.size(), 1u);
-    EXPECT_EQ(control_stack[0], 0u);
+    EXPECT_EQ(control_stack[0], 1u);  // body starts after BlockBegin
 
     Instruction body;
     body.op = Instruction::Op::PushInt;
     body.int_val = 1;
-    bytecode->append(std::move(body));
+    bytecode->append(std::move(body));  // PushInt(1)
 
-    auto result = handler->dispatch("until");
+    auto result = handler->dispatch("until");  // BranchIfFalse(2) + BlockEnd(3)
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    ASSERT_EQ(bytecode->size(), 2u);
-    const auto& branch = bytecode->instructions()[1];
-    EXPECT_EQ(branch.op, Instruction::Op::BranchIfFalse);
-    EXPECT_EQ(branch.int_val, 0);
+    ASSERT_EQ(bytecode->size(), 4u);
+    EXPECT_EQ(bytecode->instructions()[2].op, Instruction::Op::BranchIfFalse);
+    EXPECT_EQ(bytecode->instructions()[2].int_val, 1);  // branch back to body start
+    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::BlockEnd);
     EXPECT_TRUE(control_stack.empty());
 }
 
@@ -631,33 +639,36 @@ TEST_F(ControlFlowHandlerSetTest, UntilWithoutBegin) {
 }
 
 TEST_F(ControlFlowHandlerSetTest, BeginWhileRepeat) {
-    handler->dispatch("begin");
+    handler->dispatch("begin");  // BlockBegin(0)
     ASSERT_EQ(control_stack.size(), 1u);
-    EXPECT_EQ(control_stack[0], 0u);
+    EXPECT_EQ(control_stack[0], 1u);  // body starts after BlockBegin
 
     Instruction cond;
     cond.op = Instruction::Op::PushInt;
     cond.int_val = 1;
-    bytecode->append(std::move(cond));
+    bytecode->append(std::move(cond));  // PushInt(1)
 
-    handler->dispatch("while");
-    ASSERT_EQ(bytecode->size(), 2u);
+    handler->dispatch("while");  // BranchIfFalse(2)
+    ASSERT_EQ(bytecode->size(), 3u);
     ASSERT_EQ(control_stack.size(), 2u);
-    EXPECT_EQ(control_stack[0], 0u);
-    EXPECT_EQ(control_stack[1], 1u);
+    EXPECT_EQ(control_stack[0], 1u);  // begin pos (after BlockBegin)
+    EXPECT_EQ(control_stack[1], 2u);  // while pos (BranchIfFalse)
+    EXPECT_EQ(bytecode->instructions()[0].int_val,
+              static_cast<int64_t>(BlockKind::BeginWhileRepeat));
 
     Instruction body;
     body.op = Instruction::Op::PushInt;
     body.int_val = 0;
-    bytecode->append(std::move(body));
+    bytecode->append(std::move(body));  // PushInt(3)
 
-    auto result = handler->dispatch("repeat");
+    auto result = handler->dispatch("repeat");  // Branch(4) + BlockEnd(5)
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    ASSERT_EQ(bytecode->size(), 4u);
-    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::Branch);
-    EXPECT_EQ(bytecode->instructions()[3].int_val, 0);
-    EXPECT_EQ(bytecode->instructions()[1].int_val, 4);
+    ASSERT_EQ(bytecode->size(), 6u);
+    EXPECT_EQ(bytecode->instructions()[4].op, Instruction::Op::Branch);
+    EXPECT_EQ(bytecode->instructions()[4].int_val, 1);  // branch back to begin body
+    EXPECT_EQ(bytecode->instructions()[2].int_val, 5);  // while branches past Branch (before BlockEnd)
+    EXPECT_EQ(bytecode->instructions()[5].op, Instruction::Op::BlockEnd);
     EXPECT_TRUE(control_stack.empty());
 }
 
@@ -703,14 +714,14 @@ TEST_F(ControlFlowHandlerSetTest, J) {
 }
 
 TEST_F(ControlFlowHandlerSetTest, LeaveWithDo) {
-    handler->dispatch("do");
+    handler->dispatch("do");  // BlockBegin(0) + DoSetup(1)
     auto result = handler->dispatch("leave");
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    // DoSetup at 0, DoLeave at 1
-    ASSERT_EQ(bytecode->size(), 2u);
-    EXPECT_EQ(bytecode->instructions()[1].op, Instruction::Op::DoLeave);
-    EXPECT_EQ(bytecode->instructions()[1].int_val, 0);  // placeholder
+    // BlockBegin(0), DoSetup(1), DoLeave(2)
+    ASSERT_EQ(bytecode->size(), 3u);
+    EXPECT_EQ(bytecode->instructions()[2].op, Instruction::Op::DoLeave);
+    EXPECT_EQ(bytecode->instructions()[2].int_val, 0);  // placeholder
 }
 
 TEST_F(ControlFlowHandlerSetTest, LeaveWithoutDo) {
@@ -721,19 +732,16 @@ TEST_F(ControlFlowHandlerSetTest, LeaveWithoutDo) {
 }
 
 TEST_F(ControlFlowHandlerSetTest, LeaveBackpatchedByLoop) {
-    handler->dispatch("do");
-    // Emit some body instructions
+    handler->dispatch("do");  // BlockBegin(0) + DoSetup(1)
     Instruction body;
     body.op = Instruction::Op::DoI;
-    bytecode->append(std::move(body));
-    handler->dispatch("leave");
-    // Now emit loop
-    handler->dispatch("loop");
-    // The leave instruction should be backpatched to point past the loop
-    // DoSetup(0), DoI(1), DoLeave(2), DoLoop(3) → leave should point to 4
-    ASSERT_EQ(bytecode->size(), 4u);
-    EXPECT_EQ(bytecode->instructions()[2].op, Instruction::Op::DoLeave);
-    EXPECT_EQ(bytecode->instructions()[2].int_val, 4);
+    bytecode->append(std::move(body));  // DoI(2)
+    handler->dispatch("leave");  // DoLeave(3)
+    handler->dispatch("loop");  // DoLoop(4) + BlockEnd(5)
+    // leave should point past loop (before BlockEnd) = 5
+    ASSERT_EQ(bytecode->size(), 6u);
+    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::DoLeave);
+    EXPECT_EQ(bytecode->instructions()[3].int_val, 5);
 }
 
 TEST_F(ControlFlowHandlerSetTest, Exit) {
@@ -745,21 +753,23 @@ TEST_F(ControlFlowHandlerSetTest, Exit) {
 }
 
 TEST_F(ControlFlowHandlerSetTest, BeginAgain) {
-    handler->dispatch("begin");
+    handler->dispatch("begin");  // BlockBegin(0)
     ASSERT_EQ(control_stack.size(), 1u);
-    EXPECT_EQ(control_stack[0], 0u);
+    EXPECT_EQ(control_stack[0], 1u);  // body starts after BlockBegin
 
     Instruction body;
     body.op = Instruction::Op::PushInt;
     body.int_val = 1;
-    bytecode->append(std::move(body));
+    bytecode->append(std::move(body));  // PushInt(1)
 
-    auto result = handler->dispatch("again");
+    auto result = handler->dispatch("again");  // Branch(2) + BlockEnd(3)
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(*result);
-    ASSERT_EQ(bytecode->size(), 2u);
-    EXPECT_EQ(bytecode->instructions()[1].op, Instruction::Op::Branch);
-    EXPECT_EQ(bytecode->instructions()[1].int_val, 0);
+    ASSERT_EQ(bytecode->size(), 4u);
+    EXPECT_EQ(bytecode->instructions()[0].int_val, static_cast<int64_t>(BlockKind::BeginAgain));
+    EXPECT_EQ(bytecode->instructions()[2].op, Instruction::Op::Branch);
+    EXPECT_EQ(bytecode->instructions()[2].int_val, 1);  // branch back to body
+    EXPECT_EQ(bytecode->instructions()[3].op, Instruction::Op::BlockEnd);
     EXPECT_TRUE(control_stack.empty());
 }
 

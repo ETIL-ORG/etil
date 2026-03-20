@@ -1818,6 +1818,12 @@ std::string format_instruction(const Instruction& instr) {
         return "DoExit";
     case Instruction::Op::PushJson:
         return "PushJson " + instr.word_name;
+    case Instruction::Op::BlockBegin:
+        return "BlockBegin " + std::to_string(instr.int_val);
+    case Instruction::Op::BlockEnd:
+        return "BlockEnd " + std::to_string(instr.int_val);
+    case Instruction::Op::BlockSeparator:
+        return "BlockSeparator " + std::to_string(instr.int_val);
     }
     return "Unknown";
 }

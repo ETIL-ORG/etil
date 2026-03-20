@@ -52,9 +52,19 @@ std::vector<std::string> ControlFlowHandlerSet::words() const {
     return result;
 }
 
+// --- Marker helpers ---
+
+void ControlFlowHandlerSet::emit_marker(Instruction::Op op, BlockKind kind) {
+    Instruction m;
+    m.op = op;
+    m.int_val = static_cast<int64_t>(kind);
+    current_bytecode_->append(std::move(m));
+}
+
 // --- Handler implementations ---
 
 bool ControlFlowHandlerSet::handle_if(const std::string& /*word*/) {
+    emit_marker(Instruction::Op::BlockBegin, BlockKind::IfThen);
     Instruction instr;
     instr.op = Instruction::Op::BranchIfFalse;
     instr.int_val = 0;  // placeholder
@@ -68,12 +78,19 @@ bool ControlFlowHandlerSet::handle_else(const std::string& /*word*/) {
         err_ << "Error: else without matching if\n";
         return false;
     }
+    // Change BlockBegin from IfThen to IfThenElse
+    size_t if_pos = control_stack_.back();
+    // BlockBegin is at if_pos - 1 (emitted just before BranchIfFalse)
+    if (if_pos > 0) {
+        current_bytecode_->backpatch(
+            if_pos - 1, static_cast<int64_t>(BlockKind::IfThenElse));
+    }
+    emit_marker(Instruction::Op::BlockSeparator, BlockKind::IfThenElse);
     Instruction branch;
     branch.op = Instruction::Op::Branch;
     branch.int_val = 0;  // placeholder
     size_t else_pos = current_bytecode_->size();
     current_bytecode_->append(std::move(branch));
-    size_t if_pos = control_stack_.back();
     control_stack_.pop_back();
     current_bytecode_->backpatch(
         if_pos, static_cast<int64_t>(current_bytecode_->size()));
@@ -90,15 +107,27 @@ bool ControlFlowHandlerSet::handle_then(const std::string& /*word*/) {
     control_stack_.pop_back();
     current_bytecode_->backpatch(
         pos, static_cast<int64_t>(current_bytecode_->size()));
+    // Determine if this was if/then or if/else/then from the BlockBegin marker
+    auto& instrs = current_bytecode_->instructions();
+    BlockKind kind = BlockKind::IfThen;
+    // Search backward for the BlockBegin that opened this structure
+    for (size_t i = pos; i > 0; --i) {
+        if (instrs[i - 1].op == Instruction::Op::BlockBegin) {
+            kind = static_cast<BlockKind>(instrs[i - 1].int_val);
+            break;
+        }
+    }
+    emit_marker(Instruction::Op::BlockEnd, kind);
     return true;
 }
 
 bool ControlFlowHandlerSet::handle_do(const std::string& /*word*/) {
+    emit_marker(Instruction::Op::BlockBegin, BlockKind::DoLoop);
     Instruction setup;
     setup.op = Instruction::Op::DoSetup;
     current_bytecode_->append(std::move(setup));
     control_stack_.push_back(current_bytecode_->size());
-    leave_fixups_.emplace_back();  // new leave fixup list for this loop level
+    leave_fixups_.emplace_back();
     return true;
 }
 
@@ -113,7 +142,6 @@ bool ControlFlowHandlerSet::handle_loop(const std::string& /*word*/) {
     loop_instr.op = Instruction::Op::DoLoop;
     loop_instr.int_val = static_cast<int64_t>(loop_start);
     current_bytecode_->append(std::move(loop_instr));
-    // Backpatch all LEAVE branches to point past this LOOP
     if (!leave_fixups_.empty()) {
         auto& fixups = leave_fixups_.back();
         for (size_t pos : fixups) {
@@ -122,6 +150,7 @@ bool ControlFlowHandlerSet::handle_loop(const std::string& /*word*/) {
         }
         leave_fixups_.pop_back();
     }
+    emit_marker(Instruction::Op::BlockEnd, BlockKind::DoLoop);
     return true;
 }
 
@@ -130,13 +159,20 @@ bool ControlFlowHandlerSet::handle_plus_loop(const std::string& /*word*/) {
         err_ << "Error: +loop without matching do\n";
         return false;
     }
+    // Change BlockBegin from DoLoop to DoPlusLoop
+    // BlockBegin was emitted by handle_do, right before DoSetup
     size_t loop_start = control_stack_.back();
+    if (loop_start >= 2) {
+        auto& instrs = current_bytecode_->instructions();
+        if (instrs[loop_start - 2].op == Instruction::Op::BlockBegin) {
+            instrs[loop_start - 2].int_val = static_cast<int64_t>(BlockKind::DoPlusLoop);
+        }
+    }
     control_stack_.pop_back();
     Instruction ploop;
     ploop.op = Instruction::Op::DoPlusLoop;
     ploop.int_val = static_cast<int64_t>(loop_start);
     current_bytecode_->append(std::move(ploop));
-    // Backpatch all LEAVE branches to point past this +LOOP
     if (!leave_fixups_.empty()) {
         auto& fixups = leave_fixups_.back();
         for (size_t pos : fixups) {
@@ -145,6 +181,7 @@ bool ControlFlowHandlerSet::handle_plus_loop(const std::string& /*word*/) {
         }
         leave_fixups_.pop_back();
     }
+    emit_marker(Instruction::Op::BlockEnd, BlockKind::DoPlusLoop);
     return true;
 }
 
@@ -156,6 +193,7 @@ bool ControlFlowHandlerSet::handle_i(const std::string& /*word*/) {
 }
 
 bool ControlFlowHandlerSet::handle_begin(const std::string& /*word*/) {
+    emit_marker(Instruction::Op::BlockBegin, BlockKind::BeginUntil);  // default; changed by while/again
     control_stack_.push_back(current_bytecode_->size());
     return true;
 }
@@ -171,10 +209,22 @@ bool ControlFlowHandlerSet::handle_until(const std::string& /*word*/) {
     branch.op = Instruction::Op::BranchIfFalse;
     branch.int_val = static_cast<int64_t>(begin_pos);
     current_bytecode_->append(std::move(branch));
+    emit_marker(Instruction::Op::BlockEnd, BlockKind::BeginUntil);
     return true;
 }
 
 bool ControlFlowHandlerSet::handle_while(const std::string& /*word*/) {
+    // Change BlockBegin from BeginUntil to BeginWhileRepeat
+    // BlockBegin was emitted by handle_begin, right before the begin_pos
+    if (control_stack_.size() >= 1) {
+        size_t begin_pos = control_stack_.back();
+        if (begin_pos > 0) {
+            auto& instrs = current_bytecode_->instructions();
+            if (instrs[begin_pos - 1].op == Instruction::Op::BlockBegin) {
+                instrs[begin_pos - 1].int_val = static_cast<int64_t>(BlockKind::BeginWhileRepeat);
+            }
+        }
+    }
     Instruction branch;
     branch.op = Instruction::Op::BranchIfFalse;
     branch.int_val = 0;  // placeholder
@@ -198,6 +248,7 @@ bool ControlFlowHandlerSet::handle_repeat(const std::string& /*word*/) {
     current_bytecode_->append(std::move(branch));
     current_bytecode_->backpatch(
         while_pos, static_cast<int64_t>(current_bytecode_->size()));
+    emit_marker(Instruction::Op::BlockEnd, BlockKind::BeginWhileRepeat);
     return true;
 }
 
@@ -254,12 +305,20 @@ bool ControlFlowHandlerSet::handle_again(const std::string& /*word*/) {
         err_ << "Error: again without matching begin\n";
         return false;
     }
+    // Change BlockBegin from BeginUntil to BeginAgain
     size_t begin_pos = control_stack_.back();
+    if (begin_pos > 0) {
+        auto& instrs = current_bytecode_->instructions();
+        if (instrs[begin_pos - 1].op == Instruction::Op::BlockBegin) {
+            instrs[begin_pos - 1].int_val = static_cast<int64_t>(BlockKind::BeginAgain);
+        }
+    }
     control_stack_.pop_back();
     Instruction branch;
     branch.op = Instruction::Op::Branch;
     branch.int_val = static_cast<int64_t>(begin_pos);
     current_bytecode_->append(std::move(branch));
+    emit_marker(Instruction::Op::BlockEnd, BlockKind::BeginAgain);
     return true;
 }
 

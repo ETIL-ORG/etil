@@ -368,6 +368,12 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
             return true;
         }
 
+        case Instruction::Op::BlockBegin:
+        case Instruction::Op::BlockEnd:
+        case Instruction::Op::BlockSeparator:
+            ++ip;  // no-op structure markers for AST decompilation
+            break;
+
         default:
             return false;
         }
