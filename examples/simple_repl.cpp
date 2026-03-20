@@ -4,6 +4,8 @@
 #include "etil/core/interpreter.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/version.hpp"
+#include "etil/selection/selection_engine.hpp"
+#include "etil/evolution/evolution_engine.hpp"
 
 #include <replxx.hxx>
 
@@ -372,6 +374,13 @@ int main(int argc, char* argv[]) {
     Dictionary dict;
     register_primitives(dict);
     Interpreter interp(dict, interp_out, interp_err);
+
+    // Wire selection and evolution engines for select-*/evolve-* primitives
+    etil::selection::SelectionEngine selection_engine;
+    etil::evolution::EvolutionConfig evo_config;
+    etil::evolution::EvolutionEngine evolution_engine(evo_config, dict);
+    interp.context().set_selection_engine(&selection_engine);
+    interp.context().set_evolution_engine(&evolution_engine);
 
     // Register handler words as concepts so help.til can attach metadata
     interp.register_handler_words();

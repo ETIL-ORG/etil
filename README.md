@@ -473,6 +473,7 @@ are not yet implemented:
 | [Q](#appendix-q-http-client-and-mongodb) | HTTP Client and MongoDB | 7 |
 | [R](#appendix-r-system-time-and-debug) | System, Time, and Debug | 21 |
 | [S](#appendix-s-observables) | Observables | 60 |
+| [T](#appendix-t-evolution-and-selection) | Evolution and Selection | 7 |
 
 ---
 
@@ -2566,6 +2567,139 @@ pipelines:
 ## License
 
 BSD-3-Clause
+
+## Appendix T: Evolution and Selection
+
+ETIL's core innovation: multiple implementations per word with runtime selection and evolutionary optimization. The selection engine chooses which implementation to execute; the evolution engine creates new implementations via AST-level genetic operators.
+
+### Selection Words
+
+These words control the runtime selection strategy. Available in both the REPL and MCP server sessions.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `select-strategy` | `( n -- )` | Set strategy: 0=latest, 1=weighted-random, 2=epsilon-greedy, 3=UCB1 |
+| `select-epsilon` | `( f -- )` | Set epsilon for epsilon-greedy (0.0=always exploit, 1.0=always explore) |
+| `select-off` | `( -- )` | Revert to deterministic latest-wins selection |
+
+**Strategy 0 — Latest (default):** Always picks the most recently registered implementation. Identical to standard FORTH behavior. Zero overhead.
+
+**Strategy 1 — Weighted Random:** Probability proportional to each implementation's `weight_` field. After evolution updates weights based on fitness, higher-fitness implementations are selected more often.
+
+**Strategy 2 — Epsilon-Greedy:** With probability (1-epsilon), pick the highest-weight implementation. With probability epsilon, pick uniformly at random. Classic explore/exploit tradeoff.
+
+**Strategy 3 — UCB1:** Upper Confidence Bound. Balances exploitation (high success rate) with exploration (under-tested implementations). Automatically explores new implementations.
+
+### Evolution Words
+
+These words drive the evolutionary pipeline. Available in both the REPL and MCP server sessions.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `evolve-register` | `( word-str tests-array -- flag )` | Register test cases for fitness evaluation |
+| `evolve-word` | `( word-str -- n )` | Run one generation of evolution, return children created |
+| `evolve-all` | `( -- )` | Evolve all words with registered test cases |
+| `evolve-status` | `( word-str -- n )` | Return number of generations evolved |
+
+### The Evolution Pipeline
+
+When `evolve-word` is called, the engine:
+
+1. **Selects parents** from existing implementations (weighted by fitness)
+2. **Decompiles** the parent's bytecode to an AST (Abstract Syntax Tree)
+3. **Mutates** the AST using one of 4 operators:
+   - **Substitute:** Replace a word call with a semantically compatible alternative (e.g., `mat-relu` to `mat-sigmoid`). Uses tiered tag matching for meaningful substitutions.
+   - **Perturb:** Add Gaussian noise to a numeric literal (e.g., `42` becomes `43`).
+   - **Move:** Relocate a word call to a different position in the sequence.
+   - **Control flow:** Wrap a word in `if/then` or unwrap an existing conditional.
+4. **Repairs** type mismatches by inserting stack shuffling (`swap`, `rot`, `roll`)
+5. **Compiles** the mutated AST back to bytecode with structure markers
+6. **Evaluates** the child against registered test cases (fitness = correctness + speed)
+7. **Updates weights** on all implementations based on fitness scores
+8. **Prunes** the weakest implementations if the population exceeds the limit
+
+### MLP Library Words (data/library/mlp.til)
+
+The MLP library provides feedforward neural network training in pure TIL. Load with `include data/library/mlp.til`.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `make-layer` | `( fan_in fan_out act-xt act'-xt -- layer )` | Create a layer with Xavier-initialized weights |
+| `make-network` | `( layer1 ... layerN n -- network )` | Assemble layers into a network |
+| `forward` | `( X network -- Y )` | Forward pass |
+| `train` | `( X Y network lr epochs -- network )` | Train for N epochs with SGD |
+| `predict` | `( X network -- Y )` | Inference (alias for `forward`) |
+
+### Examples
+
+**Multiple implementations with weighted selection:**
+
+```forth
+: activate mat-relu ;     \ Implementation 1
+: activate mat-sigmoid ;  \ Implementation 2
+
+\ Set weights (via MCP set_weight tool or programmatically)
+\ Then switch to weighted random selection:
+1 select-strategy
+
+\ Now "activate" probabilistically picks between ReLU and sigmoid
+\ based on their weights. Higher fitness = higher selection probability.
+```
+
+**XOR neural network training:**
+
+```forth
+include data/library/mlp.til
+
+7 random-seed
+2 4 ' mat-relu ' mat-relu' make-layer
+4 1 ' mat-sigmoid ' mat-sigmoid' make-layer
+2 make-network
+variable net
+net !
+
+\ Training data: X = 2x4 (inputs), Y = 1x4 (XOR outputs)
+array-new
+  array-new 0.0 array-push 0.0 array-push 1.0 array-push 1.0 array-push array-push
+  array-new 0.0 array-push 1.0 array-push 0.0 array-push 1.0 array-push array-push
+array->mat
+variable X
+X !
+
+array-new
+  array-new 0.0 array-push 1.0 array-push 1.0 array-push 0.0 array-push array-push
+array->mat
+variable Y
+Y !
+
+X @ Y @ net @ 1.0 5000 train net !
+\ Output: Epoch 0: loss = 0.2648 ... Epoch 4500: loss = 0.00006
+```
+
+**Registering test cases for evolution:**
+
+```forth
+: double dup + ;
+
+\ Build test cases as array of maps with "in" and "out" keys
+array-new
+  map-new s" in" array-new 3 array-push map-set
+         s" out" array-new 6 array-push map-set array-push
+  map-new s" in" array-new 5 array-push map-set
+         s" out" array-new 10 array-push map-set array-push
+
+s" double" swap evolve-register drop
+
+\ Run 10 generations of evolution
+10 0 do s" double" evolve-word drop loop
+
+\ Check how many generations ran
+s" double" evolve-status .   \ => 10
+```
+
+> **Note:** Evolution outcomes are **non-deterministic** — different random seeds produce different mutations, fitness scores, and surviving implementations. The error messages during `evolve-word` (e.g., "Error in 'mat-apply'") are expected — they come from mutated code that calls random words and fails fitness evaluation. The evolution engine discards these failed mutants automatically.
+
+---
 
 ## Author
 

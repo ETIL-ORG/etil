@@ -14,7 +14,7 @@ cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ../evolutionary-til
 # Build
 ninja
 
-# Run tests (1,252 tests)
+# Run tests (1,362 deterministic tests)
 ctest --output-on-failure
 
 # Run the REPL
@@ -197,6 +197,37 @@ ctest --test-dir build-debug --output-on-failure
 # Benchmarks
 ./build-debug/bin/etil_benchmark
 ```
+
+### Deterministic vs Non-Deterministic Tests (DT / NDT)
+
+ETIL tests are classified into two categories:
+
+**Deterministic Tests (DT)** — produce the same result every run. These are the default tests run by `ctest` and CI. All DTs must pass for a build to be considered healthy.
+
+**Non-Deterministic Tests (NDT)** — depend on random seeds, mutation outcomes, or evolutionary fitness landscapes. These test the AST-level evolution pipeline where results are inherently probabilistic. NDTs use GTest's `DISABLED_` prefix so CTest skips them by default.
+
+```bash
+# Run DTs only (default — what CI runs)
+ctest --test-dir build-debug --output-on-failure
+
+# Run NDTs locally (for manual investigation)
+./build-debug/bin/etil_ast_genetic_ops_tests --gtest_also_run_disabled_tests
+
+# Run all tests including NDTs
+ctest --test-dir build-debug --output-on-failure \
+  -- --gtest_also_run_disabled_tests
+```
+
+NDT failures are **expected to occur sometimes** and should be investigated rather than treated as bugs. Common causes: unfavorable random seed producing low mutation validity, fitness landscape that doesn't converge in the allotted generations, or type repair rejecting too many mutations.
+
+**Currently disabled tests:**
+
+| Suite | Test | Reason |
+|-------|------|--------|
+| `DISABLED_InterpreterFileTest` (14 tests) | All file tests | Cold filesystem timing on GitHub Actions VMs |
+| `ASTGeneticOpsTest.DISABLED_MutationValidityRate` | Validity rate | Random mutation outcomes vary per run |
+| `ASTGeneticOpsTest.DISABLED_ASTBetterThanBytecode` | AST vs bytecode | Comparative validity counts are probabilistic |
+| `ASTGeneticOpsTest.DISABLED_EndToEndEvolution` | End-to-end | Evolution outcomes depend on random mutations |
 
 ## Docker (MCP Server)
 
