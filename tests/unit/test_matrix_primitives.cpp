@@ -748,7 +748,7 @@ TEST_F(MatrixPrimitivesTest, MatApplyNotXt) {
     // Should fail — 42 is not an xt. 42 pushed back, matrix still below it
     EXPECT_EQ(ctx().data_stack().size(), 2u);
     // Clean up
-    auto v1 = ctx().data_stack().pop();
+    ctx().data_stack().pop();  // integer 42, no release needed
     auto v2 = ctx().data_stack().pop();
     if (v2) v2->release();
 }

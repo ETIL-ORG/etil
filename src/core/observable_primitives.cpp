@@ -801,13 +801,12 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
     // --- Temporal: Rate-Limiting ---
 
     case K::DebounceTime: {
-        int64_t quiet_us = obs->param();
         Value last_value = {};
         bool has_value = false;
         auto last_emission_time = std::chrono::steady_clock::now();
 
         bool completed = execute_observable(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
+            [&](Value v, ExecutionContext& /*c*/) -> bool {
                 if (has_value) value_release(last_value);
                 last_value = v;
                 value_addref(last_value);

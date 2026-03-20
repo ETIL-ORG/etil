@@ -250,13 +250,13 @@ private:
     // Immediate flag
     bool immediate_ = false;
 
+    // Evolution (before weight_ to match constructor init order)
+    uint64_t generation_;
+
     // Selection
     std::atomic<double> weight_;
     std::atomic<uint64_t> success_count_{0};
     std::atomic<uint64_t> failure_count_{0};
-    
-    // Evolution
-    uint64_t generation_;
     std::vector<ImplId> parent_ids_;
     MutationHistory mutations_;
     

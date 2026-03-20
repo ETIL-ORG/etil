@@ -613,6 +613,15 @@ std::string value_to_str_taint(const Value& v, bool* out_tainted) {
         }
         return "xt(?)";
     }
+    case Value::Type::Json:
+        if (v.as_ptr) v.as_json()->release();
+        return "json";
+    case Value::Type::Matrix:
+        if (v.as_ptr) v.as_matrix()->release();
+        return "matrix";
+    case Value::Type::Observable:
+        if (v.as_ptr) v.as_observable()->release();
+        return "observable";
     case Value::Type::DataRef:
         return "dataref";
     }
@@ -666,6 +675,15 @@ std::string value_to_str(const Value& v) {
         }
         return "xt(?)";
     }
+    case Value::Type::Json:
+        if (v.as_ptr) v.as_json()->release();
+        return "json";
+    case Value::Type::Matrix:
+        if (v.as_ptr) v.as_matrix()->release();
+        return "matrix";
+    case Value::Type::Observable:
+        if (v.as_ptr) v.as_observable()->release();
+        return "observable";
     case Value::Type::DataRef:
         return "dataref";
     }

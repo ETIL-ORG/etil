@@ -142,7 +142,8 @@ bool CompileHandlerSet::handle_j_pipe(const std::string& /*token*/,
     }
     // Validate JSON at compile time
     try {
-        nlohmann::json::parse(*result);
+        auto _unused = nlohmann::json::parse(*result);
+        (void)_unused;
     } catch (const nlohmann::json::parse_error& e) {
         err_ << "Error: j| invalid JSON: " << e.what() << "\n";
         abandon_definition_();

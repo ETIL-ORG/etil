@@ -52,7 +52,10 @@ private:
         : HeapObject(Kind::String), length_(len) {}
 
     size_t length_;
-    char data_[];  // flexible array member
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+    char data_[];  // flexible array member (intentional, single allocation)
+#pragma GCC diagnostic pop
 };
 
 } // namespace etil::core

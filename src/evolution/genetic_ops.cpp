@@ -40,7 +40,7 @@ bool GeneticOps::is_control_flow(Op op) {
     }
 }
 
-WordImplPtr GeneticOps::clone(const WordImpl& parent, Dictionary& dict) {
+WordImplPtr GeneticOps::clone(const WordImpl& parent, Dictionary& /*dict*/) {
     auto bc = parent.bytecode();
     if (!bc) return WordImplPtr();
 
@@ -88,7 +88,7 @@ bool GeneticOps::mutate(ByteCode& code) {
 WordImplPtr GeneticOps::crossover(
     const WordImpl& parent_a,
     const WordImpl& parent_b,
-    Dictionary& dict) {
+    Dictionary& /*dict*/) {
     auto bc_a = parent_a.bytecode();
     auto bc_b = parent_b.bytecode();
     if (!bc_a || !bc_b) return WordImplPtr();

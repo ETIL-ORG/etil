@@ -143,7 +143,7 @@ void EvolutionEngine::evolve_all() {
 }
 
 void EvolutionEngine::update_weights(
-    const std::string& word,
+    const std::string& /*word*/,
     const std::vector<std::pair<WordImplPtr, FitnessResult>>& results) {
 
     if (results.empty()) return;

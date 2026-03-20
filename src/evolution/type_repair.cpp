@@ -87,7 +87,6 @@ bool TypeRepair::repair_sequence(ASTNode& seq, const Dictionary& dict) {
             }
 
             // Check each input (TOS first)
-            bool needs_repair = false;
             for (size_t i = 0; i < sig.inputs.size(); ++i) {
                 size_t stack_pos = i;  // 0 = TOS
                 SigType needed = sig.inputs[sig.inputs.size() - 1 - i];
@@ -129,7 +128,7 @@ bool TypeRepair::repair_sequence(ASTNode& seq, const Dictionary& dict) {
                     type_stack.erase(type_stack.begin() + static_cast<long>(src_idx));
                     type_stack.push_back(moved_type);
                 }
-                needs_repair = true;
+                // repair applied
             }
 
             // Apply word's effect to type stack

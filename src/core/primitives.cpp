@@ -1788,7 +1788,7 @@ void dump_value(std::ostream& os, const Value& v, size_t depth, size_t max_depth
             os << indent << "  ";
             os << std::setw(4) << std::setfill('0') << std::hex << off << ":";
             for (size_t j = 0; j < 16 && (off + j) < show; ++j) {
-                uint8_t byte;
+                uint8_t byte = 0;
                 ba->get(off + j, byte);
                 os << " " << std::setw(2) << std::setfill('0') << std::hex
                    << static_cast<unsigned>(byte);

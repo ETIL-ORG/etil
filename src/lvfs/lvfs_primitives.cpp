@@ -200,8 +200,6 @@ bool prim_cat(etil::core::ExecutionContext& ctx) {
 } // anonymous namespace
 
 void register_lvfs_primitives(etil::core::Dictionary& dict) {
-    using TS = etil::core::TypeSignature;
-    using T = TS::Type;
 
 
     dict.register_word("cwd", etil::core::make_primitive("cwd", prim_cwd, {}, {}));

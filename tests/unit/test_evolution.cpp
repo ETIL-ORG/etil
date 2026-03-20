@@ -59,19 +59,11 @@ TEST_F(GeneticOpsTest, MutateChangesCode) {
     auto child = ops.clone(**impl, dict);
     ASSERT_TRUE(child && child->bytecode());
 
-    // Mutate many times — at least one should change something
-    bool any_changed = false;
-    auto original_size = child->bytecode()->size();
+    // Mutate many times — verify it doesn't crash
     for (int i = 0; i < 100; ++i) {
         auto child2 = ops.clone(**impl, dict);
         ops.mutate(*child2->bytecode());
-        if (child2->bytecode()->size() != original_size) {
-            any_changed = true;
-            break;
-        }
     }
-    // Note: mutation may not always change size, but perturb_constant changes values
-    // We just verify it doesn't crash
     SUCCEED();
 }
 

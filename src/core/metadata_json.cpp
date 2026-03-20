@@ -66,12 +66,20 @@ nlohmann::json word_impl_to_json(const WordImpl& impl) {
     // Serialize signature inputs/outputs
     auto type_to_string = [](TypeSignature::Type t) -> std::string {
         switch (t) {
-            case TypeSignature::Type::Unknown: return "unknown";
-            case TypeSignature::Type::Integer: return "integer";
-            case TypeSignature::Type::Float:   return "float";
-            case TypeSignature::Type::String:  return "string";
-            case TypeSignature::Type::Array:   return "array";
-            case TypeSignature::Type::Custom:  return "custom";
+            case TypeSignature::Type::Unknown:    return "unknown";
+            case TypeSignature::Type::Integer:    return "integer";
+            case TypeSignature::Type::Float:      return "float";
+            case TypeSignature::Type::Boolean:    return "boolean";
+            case TypeSignature::Type::String:     return "string";
+            case TypeSignature::Type::Array:      return "array";
+            case TypeSignature::Type::ByteArray:  return "bytearray";
+            case TypeSignature::Type::Map:        return "map";
+            case TypeSignature::Type::Json:       return "json";
+            case TypeSignature::Type::Matrix:     return "matrix";
+            case TypeSignature::Type::Observable: return "observable";
+            case TypeSignature::Type::Xt:         return "xt";
+            case TypeSignature::Type::DataRef:    return "dataref";
+            case TypeSignature::Type::Custom:     return "custom";
         }
         return "unknown";
     };

@@ -29,11 +29,6 @@ TypeSignature StackSimulator::infer_signature(
         return sig;
     }
 
-    // The number of items consumed from below what the word pushed
-    int net = static_cast<int>(state.type_stack.size()) - state.initial_depth;
-    // If we went below initial depth, that's how many inputs were needed
-    // We track this by how many Unknown types we had to assume
-
     // For a simple approach: inputs = items consumed, outputs = items produced
     // We can read them from the effect annotation on the root node
     if (ast.effect.valid) {
@@ -137,7 +132,6 @@ void StackSimulator::apply_word_signature(const TypeSignature& sig, SimState& st
 void StackSimulator::simulate_node(
     ASTNode& node, SimState& state, const Dictionary& dict) {
 
-    size_t depth_before = state.type_stack.size();
     int initial_before = state.initial_depth;
 
     switch (node.kind) {

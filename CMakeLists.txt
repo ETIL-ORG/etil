@@ -18,7 +18,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # GNU C++ specific flags
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
+    # -Wpedantic omitted: triggers 100+ warnings from Abseil's __int128 usage.
+    # Our one pedantic case (HeapString flexible array member) is suppressed
+    # with a targeted #pragma in heap_string.hpp.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address,undefined")
     # LTO disabled: GCC 13.3 ICE in try_forward_edges (cfgcleanup.cc:580)
     # Non-deterministic crash during LTO link phase, hits different files each build.
