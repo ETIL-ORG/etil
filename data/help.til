@@ -1475,23 +1475,28 @@ s" mat-col-vec" s" category" s" text" s" matrix" meta! drop
 s" mat*" s" description" s" text" s" Matrix multiply (DGEMM)" meta! drop
 s" mat*" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
 s" mat*" s" category" s" text" s" matrix" meta! drop
+s" mat*" s" semantic-tags" s" text" s" combining linear-algebra" meta! drop
 s" mat*" s" examples" s" code" s" 3 mat-eye 3 mat-eye mat* mat." meta! drop
 
 s" mat+" s" description" s" text" s" Element-wise matrix addition" meta! drop
 s" mat+" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
 s" mat+" s" category" s" text" s" matrix" meta! drop
+s" mat+" s" semantic-tags" s" text" s" combining element-wise" meta! drop
 
 s" mat-" s" description" s" text" s" Element-wise matrix subtraction" meta! drop
 s" mat-" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
 s" mat-" s" category" s" text" s" matrix" meta! drop
+s" mat-" s" semantic-tags" s" text" s" combining element-wise" meta! drop
 
 s" mat-scale" s" description" s" text" s" Multiply matrix by scalar" meta! drop
 s" mat-scale" s" stack-effect" s" text" s" ( mat scalar -- mat )" meta! drop
 s" mat-scale" s" category" s" text" s" matrix" meta! drop
+s" mat-scale" s" semantic-tags" s" text" s" element-wise shape-preserving" meta! drop
 
 s" mat-transpose" s" description" s" text" s" Transpose matrix" meta! drop
 s" mat-transpose" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-transpose" s" category" s" text" s" matrix" meta! drop
+s" mat-transpose" s" semantic-tags" s" text" s" structural shape-changing" meta! drop
 
 s" mat-solve" s" description" s" text" s" Solve Ax=b via LU factorization (DGESV). Flag true=success" meta! drop
 s" mat-solve" s" stack-effect" s" text" s" ( A b -- x flag )" meta! drop
@@ -1535,66 +1540,82 @@ s" mat." s" examples" s" code" s" 3 mat-eye mat." meta! drop
 s" mat-relu" s" description" s" text" s" Element-wise ReLU activation: max(0, x)" meta! drop
 s" mat-relu" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-relu" s" category" s" text" s" matrix" meta! drop
+s" mat-relu" s" semantic-tags" s" text" s" activation element-wise shape-preserving" meta! drop
 
 s" mat-sigmoid" s" description" s" text" s" Element-wise sigmoid activation: 1/(1+exp(-x))" meta! drop
 s" mat-sigmoid" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-sigmoid" s" category" s" text" s" matrix" meta! drop
+s" mat-sigmoid" s" semantic-tags" s" text" s" activation element-wise shape-preserving" meta! drop
 
 s" mat-tanh" s" description" s" text" s" Element-wise tanh activation" meta! drop
 s" mat-tanh" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-tanh" s" category" s" text" s" matrix" meta! drop
+s" mat-tanh" s" semantic-tags" s" text" s" activation element-wise shape-preserving" meta! drop
 
 s" mat-relu'" s" description" s" text" s" Element-wise ReLU derivative from pre-activation: x>0 ? 1 : 0" meta! drop
 s" mat-relu'" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-relu'" s" category" s" text" s" matrix" meta! drop
+s" mat-relu'" s" semantic-tags" s" text" s" activation-deriv element-wise shape-preserving" meta! drop
 
 s" mat-sigmoid'" s" description" s" text" s" Element-wise sigmoid derivative from pre-activation: s(x)*(1-s(x))" meta! drop
 s" mat-sigmoid'" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-sigmoid'" s" category" s" text" s" matrix" meta! drop
+s" mat-sigmoid'" s" semantic-tags" s" text" s" activation-deriv element-wise shape-preserving" meta! drop
 
 s" mat-tanh'" s" description" s" text" s" Element-wise tanh derivative from pre-activation: 1-tanh(x)^2" meta! drop
 s" mat-tanh'" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-tanh'" s" category" s" text" s" matrix" meta! drop
+s" mat-tanh'" s" semantic-tags" s" text" s" activation-deriv element-wise shape-preserving" meta! drop
 
 s" mat-hadamard" s" description" s" text" s" Element-wise matrix multiplication (Hadamard product)" meta! drop
 s" mat-hadamard" s" stack-effect" s" text" s" ( mat1 mat2 -- mat )" meta! drop
 s" mat-hadamard" s" category" s" text" s" matrix" meta! drop
+s" mat-hadamard" s" semantic-tags" s" text" s" combining element-wise" meta! drop
 
 s" mat-add-col" s" description" s" text" s" Broadcast-add column vector to every column of matrix" meta! drop
 s" mat-add-col" s" stack-effect" s" text" s" ( mat col -- mat )" meta! drop
 s" mat-add-col" s" category" s" text" s" matrix" meta! drop
+s" mat-add-col" s" semantic-tags" s" text" s" broadcasting" meta! drop
 
 s" mat-clip" s" description" s" text" s" Clamp matrix elements to [lo, hi]" meta! drop
 s" mat-clip" s" stack-effect" s" text" s" ( mat lo hi -- mat )" meta! drop
 s" mat-clip" s" category" s" text" s" matrix" meta! drop
+s" mat-clip" s" semantic-tags" s" text" s" element-wise shape-preserving" meta! drop
 
 s" mat-randn" s" description" s" text" s" Create matrix with standard normal random values (Box-Muller)" meta! drop
 s" mat-randn" s" stack-effect" s" text" s" ( rows cols -- mat )" meta! drop
 s" mat-randn" s" category" s" text" s" matrix" meta! drop
+s" mat-randn" s" semantic-tags" s" text" s" initializing" meta! drop
 
 s" mat-sum" s" description" s" text" s" Sum all matrix elements" meta! drop
 s" mat-sum" s" stack-effect" s" text" s" ( mat -- scalar )" meta! drop
 s" mat-sum" s" category" s" text" s" matrix" meta! drop
+s" mat-sum" s" semantic-tags" s" text" s" reducing scalar-output" meta! drop
 
 s" mat-col-sum" s" description" s" text" s" Sum across columns, producing a (rows x 1) column vector" meta! drop
 s" mat-col-sum" s" stack-effect" s" text" s" ( mat -- col_vec )" meta! drop
 s" mat-col-sum" s" category" s" text" s" matrix" meta! drop
+s" mat-col-sum" s" semantic-tags" s" text" s" reducing" meta! drop
 
 s" mat-mean" s" description" s" text" s" Mean of all matrix elements" meta! drop
 s" mat-mean" s" stack-effect" s" text" s" ( mat -- scalar )" meta! drop
 s" mat-mean" s" category" s" text" s" matrix" meta! drop
+s" mat-mean" s" semantic-tags" s" text" s" reducing scalar-output" meta! drop
 
 s" mat-softmax" s" description" s" text" s" Column-wise softmax (numerically stable)" meta! drop
 s" mat-softmax" s" stack-effect" s" text" s" ( mat -- mat )" meta! drop
 s" mat-softmax" s" category" s" text" s" matrix" meta! drop
+s" mat-softmax" s" semantic-tags" s" text" s" classification element-wise shape-preserving" meta! drop
 
 s" mat-cross-entropy" s" description" s" text" s" Cross-entropy loss: -mean(actual * log(predicted + 1e-15))" meta! drop
 s" mat-cross-entropy" s" stack-effect" s" text" s" ( predicted actual -- scalar )" meta! drop
 s" mat-cross-entropy" s" category" s" text" s" matrix" meta! drop
+s" mat-cross-entropy" s" semantic-tags" s" text" s" loss scalar-output" meta! drop
 
 s" mat-apply" s" description" s" text" s" Apply execution token to each matrix element" meta! drop
 s" mat-apply" s" stack-effect" s" text" s" ( mat xt -- mat )" meta! drop
 s" mat-apply" s" category" s" text" s" matrix" meta! drop
+s" mat-apply" s" semantic-tags" s" text" s" element-wise" meta! drop
 
 s" tanh" s" description" s" text" s" Scalar hyperbolic tangent" meta! drop
 s" tanh" s" stack-effect" s" text" s" ( x -- tanh(x) )" meta! drop
