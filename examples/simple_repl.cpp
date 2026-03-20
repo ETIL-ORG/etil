@@ -218,6 +218,8 @@ static void print_usage(const char* prog) {
         << "  -q, --quiet          Pipe-friendly mode: suppress banner, prompt,\n"
         << "                       stack status, and goodbye; infer --color=never\n"
         << "  -c, --config <path>  Load REPL config from <path>\n"
+        << "  -d, --data-dir <dir> Set data directory for startup .til files\n"
+        << "                       (default: data/ relative to CWD)\n"
         << "  --noconfig           Skip configuration file loading\n"
         << "  --color[=WHEN]       Enable color output: always, never, auto (default: auto)\n"
         << "\n"
@@ -333,6 +335,7 @@ int main(int argc, char* argv[]) {
         {"quiet",    no_argument,       nullptr, 'q'},
         {"noconfig", no_argument,       nullptr, OPT_NOCONFIG},
         {"config",   required_argument, nullptr, 'c'},
+        {"data-dir", required_argument, nullptr, 'd'},
         {"color",    optional_argument, nullptr, OPT_COLOR},
         {nullptr,    0,                 nullptr,  0 }
     };
@@ -341,16 +344,18 @@ int main(int argc, char* argv[]) {
     bool quiet = false;
     bool color_explicit = false;
     std::string config_path;
+    std::string data_dir;
     std::string color_mode = "auto";
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "hvqc:", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hvqc:d:", long_options, nullptr)) != -1) {
         switch (opt) {
         case 'h': print_usage(argv[0]); return 0;
         case 'v': print_version(); return 0;
         case 'q': quiet = true; break;
         case OPT_NOCONFIG: noconfig = true; break;
         case 'c': config_path = optarg; break;
+        case 'd': data_dir = optarg; break;
         case OPT_COLOR: color_mode = optarg ? optarg : "always"; color_explicit = true; break;
         default:  print_usage(argv[0]); return 1;
         }
@@ -385,9 +390,28 @@ int main(int argc, char* argv[]) {
     // Register handler words as concepts so help.til can attach metadata
     interp.register_handler_words();
 
+    // Resolve data directory: -d flag > ETIL_DATA_DIR env > "data" (CWD-relative)
+    if (data_dir.empty()) {
+        const char* env = std::getenv("ETIL_DATA_DIR");
+        if (env && env[0] != '\0') data_dir = env;
+    }
+
     // Default startup files when no config specifies them
     if (config.startup_files.empty()) {
-        config.startup_files = {"data/builtins.til", "data/help.til"};
+        std::string base = data_dir.empty() ? "data" : data_dir;
+        // Strip trailing slash
+        if (!base.empty() && base.back() == '/') base.pop_back();
+        config.startup_files = {base + "/builtins.til", base + "/help.til"};
+    } else if (!data_dir.empty()) {
+        // If config specified startup files AND --data-dir was given,
+        // prepend data_dir to relative paths
+        std::string base = data_dir;
+        if (!base.empty() && base.back() == '/') base.pop_back();
+        for (auto& f : config.startup_files) {
+            if (!f.empty() && f[0] != '/' && f[0] != '~') {
+                f = base + "/" + f;
+            }
+        }
     }
 
     // Load startup .til files (before CLI args and interactive loop)

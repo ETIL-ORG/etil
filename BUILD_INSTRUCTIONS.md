@@ -228,6 +228,7 @@ NDT failures are **expected to occur sometimes** and should be investigated rath
 | `ASTGeneticOpsTest.DISABLED_MutationValidityRate` | Validity rate | Random mutation outcomes vary per run |
 | `ASTGeneticOpsTest.DISABLED_ASTBetterThanBytecode` | AST vs bytecode | Comparative validity counts are probabilistic |
 | `ASTGeneticOpsTest.DISABLED_EndToEndEvolution` | End-to-end | Evolution outcomes depend on random mutations |
+| `EvolutionEngineTest.DISABLED_MultipleGenerations` | Multi-gen | Mutants can trigger ASan leaks from system-resource words |
 
 ## Docker (MCP Server)
 

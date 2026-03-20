@@ -112,17 +112,22 @@ std::string Interpreter::resolve_library_path(const std::string& relative_path) 
 std::string Interpreter::resolve_logical_path(const std::string& path) const {
     if (lvfs_) return lvfs_->resolve_logical_path(path);
 
+    // Only apply /home/ and /library/ prefix mapping when the corresponding
+    // directory is configured. Without it, absolute paths pass through as-is
+    // (enables running the REPL from any directory with --data-dir).
     static const std::string home_prefix = "/home/";
     static const std::string library_prefix = "/library/";
 
-    if (path.compare(0, home_prefix.size(), home_prefix) == 0) {
+    if (!home_dir_.empty() &&
+        path.compare(0, home_prefix.size(), home_prefix) == 0) {
         return resolve_home_path(path.substr(home_prefix.size()));
     }
-    if (path.compare(0, library_prefix.size(), library_prefix) == 0) {
+    if (!library_dir_.empty() &&
+        path.compare(0, library_prefix.size(), library_prefix) == 0) {
         return resolve_library_path(path.substr(library_prefix.size()));
     }
 
-    // No logical prefix — return as-is (startup files, etc.)
+    // No logical prefix (or no dirs configured) — return as-is
     return path;
 }
 
