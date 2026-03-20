@@ -47,6 +47,8 @@ private:
     // Mutation operators (each returns true if applied)
     bool substitute_call(ASTNode& ast);
     bool perturb_constant(ASTNode& ast);
+    bool move_block(ASTNode& ast);
+    bool mutate_control_flow(ASTNode& ast);
     bool block_crossover(ASTNode& ast_a, const ASTNode& ast_b);
 };
 

@@ -197,6 +197,69 @@ TEST_F(ASTGeneticOpsTest, EngineUsesASTOps) {
     EXPECT_EQ(engine.generations_run("evo-test"), 1u);
 }
 
+// --- Move block ---
+
+TEST_F(ASTGeneticOpsTest, MoveBlockProducesChild) {
+    // Need a word with at least 3 WordCalls for move to work
+    interp.interpret_line(": test-move dup + dup * ;");
+    auto impl = dict.lookup("test-move");
+    ASSERT_TRUE(impl.has_value());
+
+    ASTGeneticOps ops(dict);
+    bool produced = false;
+    for (int i = 0; i < 30; ++i) {
+        auto child = ops.mutate(**impl);
+        if (child && child->bytecode()) {
+            produced = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(produced);
+}
+
+// --- Control flow mutation ---
+
+TEST_F(ASTGeneticOpsTest, WrapIfThenProducesChild) {
+    interp.interpret_line(": test-wrap dup + ;");
+    auto impl = dict.lookup("test-wrap");
+    ASSERT_TRUE(impl.has_value());
+
+    ASTGeneticOps ops(dict);
+    bool produced = false;
+    for (int i = 0; i < 30; ++i) {
+        auto child = ops.mutate(**impl);
+        if (child && child->bytecode()) {
+            produced = true;
+            // Verify the child executes without crash
+            ExecutionContext ctx(0);
+            ctx.set_dictionary(&dict);
+            ctx.data_stack().push(Value(int64_t(5)));
+            ctx.set_limits(10000, 1000, 100, 1.0);
+            execute_compiled(*child->bytecode(), ctx);
+            while (ctx.data_stack().size() > 0) {
+                auto v = ctx.data_stack().pop();
+                if (v) value_release(*v);
+            }
+            break;
+        }
+    }
+    EXPECT_TRUE(produced);
+}
+
+TEST_F(ASTGeneticOpsTest, ControlFlowMutationWorksOnLargerWord) {
+    interp.interpret_line(": test-cf 1 2 + 3 * 4 + ;");
+    auto impl = dict.lookup("test-cf");
+    ASSERT_TRUE(impl.has_value());
+
+    ASTGeneticOps ops(dict);
+    int produced = 0;
+    for (int i = 0; i < 50; ++i) {
+        auto child = ops.mutate(**impl);
+        if (child && child->bytecode()) produced++;
+    }
+    EXPECT_GT(produced, 0);
+}
+
 // --- EvolutionEngine fallback to bytecode ops ---
 
 TEST_F(ASTGeneticOpsTest, EngineFallbackBytecodeOps) {

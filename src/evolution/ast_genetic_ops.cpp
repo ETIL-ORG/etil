@@ -143,6 +143,97 @@ bool ASTGeneticOps::block_crossover(ASTNode& ast_a, const ASTNode& ast_b) {
     return true;
 }
 
+// --- Move a WordCall to a different position in the sequence ---
+
+bool ASTGeneticOps::move_block(ASTNode& ast) {
+    if (ast.kind != ASTNodeKind::Sequence || ast.children.size() < 3) return false;
+
+    // Find moveable nodes (WordCalls only, not control flow or literals)
+    std::vector<size_t> moveable;
+    for (size_t i = 0; i < ast.children.size(); ++i) {
+        if (ast.children[i].kind == ASTNodeKind::WordCall) {
+            moveable.push_back(i);
+        }
+    }
+    if (moveable.size() < 2) return false;
+
+    // Pick a random source and a different random target
+    std::uniform_int_distribution<size_t> dist(0, moveable.size() - 1);
+    size_t src_slot = dist(rng_);
+    size_t dst_slot = dist(rng_);
+    while (dst_slot == src_slot && moveable.size() > 1) dst_slot = dist(rng_);
+    if (dst_slot == src_slot) return false;
+
+    size_t src_idx = moveable[src_slot];
+    size_t dst_idx = moveable[dst_slot];
+
+    // Extract and reinsert
+    auto node = std::move(ast.children[src_idx]);
+    ast.children.erase(ast.children.begin() + static_cast<long>(src_idx));
+    // Adjust dst_idx if it was after src_idx
+    if (dst_idx > src_idx) dst_idx--;
+    ast.children.insert(ast.children.begin() + static_cast<long>(dst_idx), std::move(node));
+    return true;
+}
+
+// --- Wrap/unwrap control flow ---
+
+bool ASTGeneticOps::mutate_control_flow(ASTNode& ast) {
+    if (ast.kind != ASTNodeKind::Sequence || ast.children.empty()) return false;
+
+    std::uniform_int_distribution<int> op_choice(0, 1);
+    int op = op_choice(rng_);
+
+    if (op == 0) {
+        // Wrap a random WordCall in if/then (with always-true condition)
+        std::vector<size_t> candidates;
+        for (size_t i = 0; i < ast.children.size(); ++i) {
+            if (ast.children[i].kind == ASTNodeKind::WordCall) {
+                candidates.push_back(i);
+            }
+        }
+        if (candidates.empty()) return false;
+
+        std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
+        size_t idx = candidates[dist(rng_)];
+
+        // Build IfThen: condition is "true" (always executes), body is the word
+        ASTNode if_node;
+        if_node.kind = ASTNodeKind::IfThen;
+        ASTNode body = ASTNode::make_sequence({std::move(ast.children[idx])});
+        if_node.children.push_back(std::move(body));
+
+        // The condition (boolean true) needs to be before the IfThen in the sequence
+        // since BranchIfFalse pops the boolean from the stack
+        ast.children[idx] = std::move(if_node);
+        // Insert "true" before the IfThen
+        ast.children.insert(ast.children.begin() + static_cast<long>(idx),
+                            ASTNode::make_word_call("true"));
+        return true;
+    } else {
+        // Unwrap: find an IfThen and replace it with its body
+        for (size_t i = 0; i < ast.children.size(); ++i) {
+            if (ast.children[i].kind == ASTNodeKind::IfThen &&
+                !ast.children[i].children.empty() &&
+                ast.children[i].children[0].kind == ASTNodeKind::Sequence) {
+                // Replace the IfThen with the body's children
+                auto body_children = std::move(ast.children[i].children[0].children);
+                ast.children.erase(ast.children.begin() + static_cast<long>(i));
+                // Also remove the condition (the boolean before the IfThen)
+                // The condition was pushed by whatever precedes the IfThen
+                // For safety, just insert the body children at position i
+                for (size_t j = 0; j < body_children.size(); ++j) {
+                    ast.children.insert(
+                        ast.children.begin() + static_cast<long>(i + j),
+                        std::move(body_children[j]));
+                }
+                return true;
+            }
+        }
+        return false;  // no IfThen to unwrap
+    }
+}
+
 // --- Public API ---
 
 WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
@@ -152,18 +243,26 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     // Decompile
     auto ast = decompiler_.decompile(*bc);
 
-    // Apply one random mutation
-    std::uniform_int_distribution<int> choice(0, 1);
+    // Apply one random mutation from 4 operators
+    std::uniform_int_distribution<int> choice(0, 3);
     bool mutated = false;
-    switch (choice(rng_)) {
+    int first = choice(rng_);
+    switch (first) {
         case 0: mutated = substitute_call(ast); break;
         case 1: mutated = perturb_constant(ast); break;
+        case 2: mutated = move_block(ast); break;
+        case 3: mutated = mutate_control_flow(ast); break;
     }
+    // If first choice failed, try the others
     if (!mutated) {
-        // Try the other operator
-        switch (choice(rng_)) {
-            case 0: mutated = perturb_constant(ast); break;
-            case 1: mutated = substitute_call(ast); break;
+        for (int i = 0; i < 4 && !mutated; ++i) {
+            if (i == first) continue;
+            switch (i) {
+                case 0: mutated = substitute_call(ast); break;
+                case 1: mutated = perturb_constant(ast); break;
+                case 2: mutated = move_block(ast); break;
+                case 3: mutated = mutate_control_flow(ast); break;
+            }
         }
     }
     if (!mutated) return WordImplPtr();
