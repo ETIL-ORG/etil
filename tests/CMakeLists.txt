@@ -156,6 +156,20 @@ target_link_libraries(etil_decompiler_tests
 etil_add_link_map(etil_decompiler_tests)
 gtest_discover_tests(etil_decompiler_tests)
 
+# AST compiler unit tests (round-trip fidelity)
+add_executable(etil_ast_compiler_tests
+    unit/test_ast_compiler.cpp
+)
+
+target_link_libraries(etil_ast_compiler_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_ast_compiler_tests)
+gtest_discover_tests(etil_ast_compiler_tests)
+
 # HTTP transport unit tests (helper methods only — no socket, safe to run natively)
 add_executable(etil_http_tests
     unit/test_http_transport.cpp
