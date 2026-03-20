@@ -1539,6 +1539,14 @@ bool prim_evolve_register(ExecutionContext& ctx) {
     std::string word(word_str->c_str(), word_str->length());
     word_str->release();
 
+    // Cap test case count to prevent DoS
+    if (arr->length() > 1000) {
+        ctx.err() << "Error: evolve-register max 1000 test cases\n";
+        arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
     // Parse test cases from array of maps
     std::vector<etil::evolution::TestCase> tests;
     for (size_t i = 0; i < arr->length(); ++i) {

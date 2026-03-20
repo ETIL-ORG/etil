@@ -48,10 +48,6 @@ private:
     bool substitute_call(ASTNode& ast);
     bool perturb_constant(ASTNode& ast);
     bool block_crossover(ASTNode& ast_a, const ASTNode& ast_b);
-
-    // Helpers
-    void collect_word_calls(const ASTNode& node, std::vector<ASTNode*>& out, ASTNode& root);
-    void collect_literals(const ASTNode& node, std::vector<ASTNode*>& out, ASTNode& root);
 };
 
 } // namespace etil::evolution

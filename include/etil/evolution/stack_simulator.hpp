@@ -24,7 +24,7 @@ public:
     /// Infer the TypeSignature for a word's AST.
     /// Returns a signature with variable_inputs/outputs flags set appropriately.
     etil::core::TypeSignature infer_signature(
-        const ASTNode& ast, const etil::core::Dictionary& dict);
+        ASTNode& ast, const etil::core::Dictionary& dict);
 
 private:
     struct SimState {
@@ -33,7 +33,7 @@ private:
         bool valid = true;
     };
 
-    void simulate_node(const ASTNode& node, SimState& state,
+    void simulate_node(ASTNode& node, SimState& state,
                        const etil::core::Dictionary& dict);
 
     void apply_word_signature(const etil::core::TypeSignature& sig,

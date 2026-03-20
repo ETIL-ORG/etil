@@ -122,8 +122,13 @@ bool TypeRepair::repair_sequence(ASTNode& seq, const Dictionary& dict) {
                     type_stack[sz-3] = type_stack[sz-2];
                     type_stack[sz-2] = type_stack[sz-1];
                     type_stack[sz-1] = tmp;
+                } else if (static_cast<size_t>(found) < type_stack.size()) {
+                    // General roll: move type at found_pos to TOS
+                    size_t src_idx = type_stack.size() - 1 - static_cast<size_t>(found);
+                    auto moved_type = type_stack[src_idx];
+                    type_stack.erase(type_stack.begin() + static_cast<long>(src_idx));
+                    type_stack.push_back(moved_type);
                 }
-                // For roll: more complex, but the type at found_pos moves to TOS
                 needs_repair = true;
             }
 

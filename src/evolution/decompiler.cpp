@@ -16,6 +16,7 @@ ASTNode Decompiler::decompile_range(
     const std::vector<Instruction>& instrs,
     size_t start, size_t end) {
 
+    end = std::min(end, instrs.size());
     std::vector<ASTNode> nodes;
     size_t ip = start;
 

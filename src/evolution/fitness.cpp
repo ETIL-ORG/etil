@@ -20,7 +20,7 @@ bool Fitness::run_single_test(
 
     ExecutionContext ctx(0);
     ctx.set_dictionary(&dict);
-    ctx.set_limits(instruction_budget, SIZE_MAX, SIZE_MAX, 10.0);
+    ctx.set_limits(instruction_budget, 10000, SIZE_MAX, 10.0);
 
     // Push inputs
     for (const auto& val : tc.inputs) {

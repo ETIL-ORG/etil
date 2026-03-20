@@ -16,7 +16,7 @@ bool StackSimulator::annotate(ASTNode& ast, const Dictionary& dict) {
 }
 
 TypeSignature StackSimulator::infer_signature(
-    const ASTNode& ast, const Dictionary& dict) {
+    ASTNode& ast, const Dictionary& dict) {
 
     SimState state;
     state.initial_depth = 0;
@@ -135,7 +135,7 @@ void StackSimulator::apply_word_signature(const TypeSignature& sig, SimState& st
 }
 
 void StackSimulator::simulate_node(
-    const ASTNode& node, SimState& state, const Dictionary& dict) {
+    ASTNode& node, SimState& state, const Dictionary& dict) {
 
     size_t depth_before = state.type_stack.size();
     int initial_before = state.initial_depth;
@@ -208,7 +208,7 @@ void StackSimulator::simulate_node(
         break;
 
     case ASTNodeKind::Sequence:
-        for (const auto& child : node.children) {
+        for (auto& child : node.children) {
             simulate_node(child, state, dict);
             if (!state.valid) break;
         }
@@ -272,29 +272,9 @@ void StackSimulator::simulate_node(
     }
 
     // Annotate the node with its effect
-    // consumed = how many items needed from the caller (external inputs)
-    // produced = how many items left on the stack for the caller (outputs)
-    auto& effect = const_cast<ASTNode&>(node).effect;
+    auto& effect = node.effect;
     int external_consumed = initial_before - state.initial_depth;
     int final_depth = static_cast<int>(state.type_stack.size());
-    int starting_depth = static_cast<int>(depth_before);
-    // produced = final stack size - (starting items that survived)
-    // The starting items that survived = starting_depth (all still there since
-    // anything consumed from below is tracked via initial_depth)
-    effect.consumed = external_consumed;
-    effect.produced = final_depth - starting_depth + external_consumed;
-    // Simplify: net stack change = final - starting.
-    // consumed = external items pulled from below.
-    // produced = what we added above starting depth = final - starting + consumed
-    // Wait, that's still wrong. Let me think differently:
-    //
-    // If we start with 0 items (depth_before=0, initial_depth=0):
-    //   dup + : need 1 from caller (initial_depth=-1), end with 1 on stack
-    //   consumed=1, produced=1
-    //
-    // final_depth=1, starting_depth=0, external_consumed=1
-    // produced should be final_depth = 1
-    // consumed should be external_consumed = 1
     effect.consumed = external_consumed;
     effect.produced = final_depth;
     effect.valid = state.valid;
