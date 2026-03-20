@@ -87,6 +87,21 @@ bool Dictionary::forget_word(const std::string& word) {
     return true;
 }
 
+bool Dictionary::remove_implementation_at(const std::string& word, size_t index) {
+    absl::MutexLock lock(&mutex_);
+    auto it = concepts_.find(word);
+    if (it == concepts_.end() || index >= it->second.implementations.size()) {
+        return false;
+    }
+    it->second.implementations.erase(
+        it->second.implementations.begin() + static_cast<long>(index));
+    if (it->second.implementations.empty()) {
+        concepts_.erase(it);
+    }
+    generation_.fetch_add(1, std::memory_order_release);
+    return true;
+}
+
 bool Dictionary::forget_all(const std::string& word) {
     absl::MutexLock lock(&mutex_);
     auto it = concepts_.find(word);

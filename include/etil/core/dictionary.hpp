@@ -58,6 +58,10 @@ public:
     /// implementation, the entire concept is erased. Returns true if found.
     bool forget_word(const std::string& word);
 
+    /// Remove a specific implementation by index. If it was the last
+    /// implementation, the entire concept is erased. Returns true if found.
+    bool remove_implementation_at(const std::string& word, size_t index);
+
     /// Remove a word and all its implementations from the dictionary.
     /// Returns true if found and removed.
     bool forget_all(const std::string& word);

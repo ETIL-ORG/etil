@@ -597,6 +597,24 @@ s" select-off" s" description" s" text" s" Revert to deterministic latest-wins w
 s" select-off" s" stack-effect" s" text" s" ( -- )" meta! drop
 s" select-off" s" category" s" text" s" system" meta! drop
 
+# --- Evolution ---
+
+s" evolve-register" s" description" s" text" s" Register test cases for evolutionary fitness evaluation of a word" meta! drop
+s" evolve-register" s" stack-effect" s" text" s" ( word-str tests-array -- flag )" meta! drop
+s" evolve-register" s" category" s" text" s" system" meta! drop
+
+s" evolve-word" s" description" s" text" s" Run one generation of AST-level evolution for a word, return children created" meta! drop
+s" evolve-word" s" stack-effect" s" text" s" ( word-str -- n )" meta! drop
+s" evolve-word" s" category" s" text" s" system" meta! drop
+
+s" evolve-all" s" description" s" text" s" Evolve all words that have registered test cases" meta! drop
+s" evolve-all" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" evolve-all" s" category" s" text" s" system" meta! drop
+
+s" evolve-status" s" description" s" text" s" Return number of generations evolved for a word" meta! drop
+s" evolve-status" s" stack-effect" s" text" s" ( word-str -- n )" meta! drop
+s" evolve-status" s" category" s" text" s" system" meta! drop
+
 # --- System ---
 
 s" sys-semver" s" description" s" text" s" Print project semantic version" meta! drop

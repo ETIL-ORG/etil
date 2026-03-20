@@ -21,6 +21,7 @@
 #include "etil/core/heap_string.hpp"
 #include "etil/core/interpreter.hpp"
 #include "etil/selection/selection_engine.hpp"
+#include "etil/evolution/evolution_engine.hpp"
 #include "etil/core/metadata_json.hpp"
 #include "etil/core/version.hpp"
 #include "absl/container/flat_hash_map.h"
@@ -1516,6 +1517,125 @@ bool prim_select_off(ExecutionContext& ctx) {
     return true;
 }
 
+// --- Evolution primitives ---
+
+// evolve-register ( word-str tests-array -- flag )
+// Register test cases for a word. Each test is a map: { "in": [values...], "out": [values...] }
+bool prim_evolve_register(ExecutionContext& ctx) {
+    auto* arr = pop_array(ctx);
+    if (!arr) return false;
+    auto* word_str = pop_string(ctx);
+    if (!word_str) { ctx.data_stack().push(Value::from(arr)); return false; }
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        word_str->release();
+        arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    std::string word(word_str->c_str(), word_str->length());
+    word_str->release();
+
+    // Parse test cases from array of maps
+    std::vector<etil::evolution::TestCase> tests;
+    for (size_t i = 0; i < arr->length(); ++i) {
+        Value map_val;
+        arr->get(i, map_val);
+        if (map_val.type != Value::Type::Map) continue;
+        auto* m = map_val.as_map();
+
+        etil::evolution::TestCase tc;
+
+        // Get "in" array
+        auto in_it = m->entries().find("in");
+        if (in_it != m->entries().end() && in_it->second.type == Value::Type::Array) {
+            auto* in_arr = in_it->second.as_array();
+            for (size_t j = 0; j < in_arr->length(); ++j) {
+                Value v;
+                in_arr->get(j, v);
+                tc.inputs.push_back(v);
+            }
+        }
+
+        // Get "out" array
+        auto out_it = m->entries().find("out");
+        if (out_it != m->entries().end() && out_it->second.type == Value::Type::Array) {
+            auto* out_arr = out_it->second.as_array();
+            for (size_t j = 0; j < out_arr->length(); ++j) {
+                Value v;
+                out_arr->get(j, v);
+                tc.expected.push_back(v);
+            }
+        }
+
+        tests.push_back(std::move(tc));
+    }
+    arr->release();
+
+    engine->register_tests(word, std::move(tests));
+    ctx.data_stack().push(Value(true));
+    return true;
+}
+
+// evolve-word ( word-str -- n )
+// Run one generation of evolution for a word. Returns number of children created.
+bool prim_evolve_word(ExecutionContext& ctx) {
+    auto* word_str = pop_string(ctx);
+    if (!word_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        word_str->release();
+        ctx.data_stack().push(Value(int64_t(0)));
+        return true;
+    }
+
+    std::string word(word_str->c_str(), word_str->length());
+    word_str->release();
+
+    size_t created = engine->evolve_word(word);
+    ctx.data_stack().push(Value(static_cast<int64_t>(created)));
+    return true;
+}
+
+// evolve-all ( -- )
+// Evolve all words that have registered test cases.
+bool prim_evolve_all(ExecutionContext& ctx) {
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        return true;
+    }
+    engine->evolve_all();
+    return true;
+}
+
+// evolve-status ( word-str -- n )
+// Returns the number of generations evolved for a word.
+bool prim_evolve_status(ExecutionContext& ctx) {
+    auto* word_str = pop_string(ctx);
+    if (!word_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        word_str->release();
+        ctx.data_stack().push(Value(int64_t(0)));
+        return true;
+    }
+
+    std::string word(word_str->c_str(), word_str->length());
+    word_str->release();
+
+    size_t gens = engine->generations_run(word);
+    ctx.data_stack().push(Value(static_cast<int64_t>(gens)));
+    return true;
+}
+
 // --- Help primitive ---
 
 namespace {
@@ -2732,6 +2852,11 @@ static const PrimEntry prim_table[] = {
     {"select-strategy",  prim_select_strategy,  1, 0, {T::Integer},      {}},
     {"select-epsilon",   prim_select_epsilon,   1, 0, {T::Unknown},      {}},
     {"select-off",       prim_select_off,       0, 0, {},                {}},
+    // Evolution
+    {"evolve-register",  prim_evolve_register,  2, 1, {T::String, T::Array}, {T::Unknown}},
+    {"evolve-word",      prim_evolve_word,      1, 1, {T::String},           {T::Integer}},
+    {"evolve-all",       prim_evolve_all,       0, 0, {},                    {}},
+    {"evolve-status",    prim_evolve_status,    1, 1, {T::String},           {T::Integer}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::Unknown}},

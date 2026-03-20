@@ -166,7 +166,7 @@ void EvolutionEngine::prune(const std::string& word) {
     if (!impls_opt) return;
 
     while (impls_opt->size() > config_.population_limit) {
-        // Find the weakest implementation
+        // Find the weakest implementation by weight
         double min_weight = 1e300;
         size_t min_idx = 0;
         for (size_t i = 0; i < impls_opt->size(); ++i) {
@@ -176,12 +176,7 @@ void EvolutionEngine::prune(const std::string& word) {
                 min_idx = i;
             }
         }
-        // Remove it (forget_word removes the latest, so we use forget_all
-        // and re-register all except the weakest)
-        // Simpler: just call forget_word repeatedly to peel off the latest
-        // until we're at the limit. But that removes from the end, not the weakest.
-        // For now, just call forget_word once (removes latest = newest child).
-        dict_.forget_word(word);
+        dict_.remove_implementation_at(word, min_idx);
         impls_opt = dict_.get_implementations(word);
         if (!impls_opt) break;
     }

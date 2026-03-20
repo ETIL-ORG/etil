@@ -20,6 +20,7 @@ namespace etil::net { struct HttpClientState; }
 namespace etil::db { struct MongoClientState; }
 namespace etil::mcp { struct RolePermissions; }
 namespace etil::selection { class SelectionEngine; }
+namespace etil::evolution { class EvolutionEngine; }
 
 namespace etil::core
 {
@@ -296,6 +297,10 @@ namespace etil::core {
         etil::selection::SelectionEngine* selection_engine() const { return selection_engine_; }
         void set_selection_engine(etil::selection::SelectionEngine* e) { selection_engine_ = e; }
 
+        // EvolutionEngine access (non-owning, for evolve-* primitives)
+        etil::evolution::EvolutionEngine* evolution_engine() const { return evolution_engine_; }
+        void set_evolution_engine(etil::evolution::EvolutionEngine* e) { evolution_engine_ = e; }
+
         // HTTP client state (non-owning, for http-get primitive)
         etil::net::HttpClientState* http_client_state() const { return http_client_state_; }
         void set_http_client_state(etil::net::HttpClientState* s) { http_client_state_ = s; }
@@ -472,6 +477,9 @@ namespace etil::core {
 
         // SelectionEngine (for evolutionary word selection)
         etil::selection::SelectionEngine* selection_engine_ = nullptr;
+
+        // EvolutionEngine (for evolve-* primitives)
+        etil::evolution::EvolutionEngine* evolution_engine_ = nullptr;
 
         // HTTP client state (for http-get primitive)
         etil::net::HttpClientState* http_client_state_ = nullptr;
