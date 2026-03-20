@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/evolution/ast_genetic_ops.hpp"
+#include "etil/evolution/mutation_helpers.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -24,31 +25,17 @@ void ASTGeneticOps::rebuild_index() {
 
 // --- Collect mutable nodes ---
 
-static void collect_word_calls_impl(ASTNode& node, std::vector<ASTNode*>& out) {
-    if (node.kind == ASTNodeKind::WordCall) {
-        out.push_back(&node);
-    }
-    for (auto& child : node.children) {
-        collect_word_calls_impl(child, out);
-    }
-}
-
-static void collect_literals_impl(ASTNode& node, std::vector<ASTNode*>& out) {
-    if (node.kind == ASTNodeKind::Literal &&
-        (node.literal_op == Instruction::Op::PushInt ||
-         node.literal_op == Instruction::Op::PushFloat)) {
-        out.push_back(&node);
-    }
-    for (auto& child : node.children) {
-        collect_literals_impl(child, out);
-    }
+template<typename Pred>
+static void collect_nodes(ASTNode& node, Pred pred, std::vector<ASTNode*>& out) {
+    if (pred(node)) out.push_back(&node);
+    for (auto& child : node.children) collect_nodes(child, pred, out);
 }
 
 // --- Substitute a word call with a semantically compatible alternative ---
 
 bool ASTGeneticOps::substitute_call(ASTNode& ast) {
     std::vector<ASTNode*> calls;
-    collect_word_calls_impl(ast, calls);
+    collect_nodes(ast, [](const ASTNode& n) { return n.kind == ASTNodeKind::WordCall; }, calls);
     if (calls.empty()) return false;
 
     // Pick a random call to substitute
@@ -95,21 +82,16 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
 
 bool ASTGeneticOps::perturb_constant(ASTNode& ast) {
     std::vector<ASTNode*> literals;
-    collect_literals_impl(ast, literals);
+    collect_nodes(ast, [](const ASTNode& n) {
+        return n.kind == ASTNodeKind::Literal &&
+               (n.literal_op == Instruction::Op::PushInt ||
+                n.literal_op == Instruction::Op::PushFloat);
+    }, literals);
     if (literals.empty()) return false;
 
     std::uniform_int_distribution<size_t> dist(0, literals.size() - 1);
     ASTNode* target = literals[dist(rng_)];
-
-    std::normal_distribution<double> noise(0.0, 0.1);
-
-    if (target->literal_op == Instruction::Op::PushInt) {
-        double scale = std::max(1.0, std::abs(static_cast<double>(target->int_val)));
-        target->int_val += static_cast<int64_t>(std::round(noise(rng_) * scale));
-    } else if (target->literal_op == Instruction::Op::PushFloat) {
-        double scale = std::max(1.0, std::abs(target->float_val));
-        target->float_val += noise(rng_) * scale;
-    }
+    perturb_numeric(target->literal_op, target->int_val, target->float_val, 0.1, rng_);
     return true;
 }
 
@@ -118,7 +100,7 @@ bool ASTGeneticOps::perturb_constant(ASTNode& ast) {
 bool ASTGeneticOps::block_crossover(ASTNode& ast_a, const ASTNode& ast_b) {
     // Collect WordCall nodes from both ASTs
     std::vector<ASTNode*> calls_a;
-    collect_word_calls_impl(ast_a, calls_a);
+    collect_nodes(ast_a, [](const ASTNode& n) { return n.kind == ASTNodeKind::WordCall; }, calls_a);
     if (calls_a.empty()) return false;
 
     // Find a call in A and replace it with one from B that has the same word

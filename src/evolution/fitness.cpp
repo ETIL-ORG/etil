@@ -11,6 +11,13 @@ namespace etil::evolution {
 
 using namespace etil::core;
 
+static void drain_stack(ExecutionContext& ctx) {
+    while (ctx.data_stack().size() > 0) {
+        auto v = ctx.data_stack().pop();
+        if (v) value_release(*v);
+    }
+}
+
 bool Fitness::run_single_test(
     WordImpl& impl,
     const TestCase& tc,
@@ -40,21 +47,14 @@ bool Fitness::run_single_test(
     elapsed_ns = std::chrono::duration<double, std::nano>(end - start).count();
 
     if (!ok) {
-        // Clean up stack
-        while (ctx.data_stack().size() > 0) {
-            auto v = ctx.data_stack().pop();
-            if (v) value_release(*v);
-        }
+        drain_stack(ctx);
         ctx.reset_limits();
         return false;
     }
 
     // Check outputs
     if (ctx.data_stack().size() != tc.expected.size()) {
-        while (ctx.data_stack().size() > 0) {
-            auto v = ctx.data_stack().pop();
-            if (v) value_release(*v);
-        }
+        drain_stack(ctx);
         ctx.reset_limits();
         return false;
     }
@@ -85,10 +85,7 @@ bool Fitness::run_single_test(
     }
 
     // Clean up remaining stack values
-    while (ctx.data_stack().size() > 0) {
-        auto v = ctx.data_stack().pop();
-        if (v) value_release(*v);
-    }
+    drain_stack(ctx);
     ctx.reset_limits();
     return match;
 }

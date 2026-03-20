@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/evolution/genetic_ops.hpp"
+#include "etil/evolution/mutation_helpers.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -53,13 +54,7 @@ WordImplPtr GeneticOps::clone(const WordImpl& parent, Dictionary& dict) {
     // Deep-copy bytecode (instructions only, not data field or registry)
     auto child_bc = std::make_shared<ByteCode>();
     for (const auto& instr : bc->instructions()) {
-        Instruction copy;
-        copy.op = instr.op;
-        copy.int_val = instr.int_val;
-        copy.float_val = instr.float_val;
-        copy.word_name = instr.word_name;
-        // cached_impl and cached_generation are NOT copied (must re-resolve)
-        child_bc->append(std::move(copy));
+        child_bc->append(copy_instruction(instr));
     }
     child->set_bytecode(child_bc);
     return child;
@@ -118,21 +113,11 @@ WordImplPtr GeneticOps::crossover(
     auto child_bc = std::make_shared<ByteCode>();
     // Take first part from parent A
     for (size_t i = 0; i < cut_a; ++i) {
-        Instruction copy;
-        copy.op = bc_a->instructions()[i].op;
-        copy.int_val = bc_a->instructions()[i].int_val;
-        copy.float_val = bc_a->instructions()[i].float_val;
-        copy.word_name = bc_a->instructions()[i].word_name;
-        child_bc->append(std::move(copy));
+        child_bc->append(copy_instruction(bc_a->instructions()[i]));
     }
     // Take second part from parent B
     for (size_t i = cut_b; i < bc_b->size(); ++i) {
-        Instruction copy;
-        copy.op = bc_b->instructions()[i].op;
-        copy.int_val = bc_b->instructions()[i].int_val;
-        copy.float_val = bc_b->instructions()[i].float_val;
-        copy.word_name = bc_b->instructions()[i].word_name;
-        child_bc->append(std::move(copy));
+        child_bc->append(copy_instruction(bc_b->instructions()[i]));
     }
 
     // Enforce max length
@@ -176,16 +161,8 @@ void GeneticOps::perturb_constant(ByteCode& code) {
     std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
     size_t idx = candidates[dist(rng_)];
     auto& instr = instrs[idx];
-
-    std::normal_distribution<double> noise(0.0, config_.constant_perturb_stddev);
-
-    if (instr.op == Op::PushInt) {
-        double scale = std::max(1.0, std::abs(static_cast<double>(instr.int_val)));
-        instr.int_val += static_cast<int64_t>(std::round(noise(rng_) * scale));
-    } else {
-        double scale = std::max(1.0, std::abs(instr.float_val));
-        instr.float_val += noise(rng_) * scale;
-    }
+    perturb_numeric(instr.op, instr.int_val, instr.float_val,
+                    config_.constant_perturb_stddev, rng_);
 }
 
 void GeneticOps::insert_instruction(ByteCode& code) {
