@@ -22,14 +22,24 @@ struct TypeSignature {
         Unknown,
         Integer,
         Float,
+        Boolean,
         String,
         Array,
+        ByteArray,
+        Map,
+        Json,
+        Matrix,
+        Observable,
+        Xt,
+        DataRef,
         Custom
     };
-    
+
     std::vector<Type> inputs;
     std::vector<Type> outputs;
-    
+    bool variable_inputs = false;   // true if input count is data-dependent
+    bool variable_outputs = false;  // true if output count is data-dependent
+
     bool matches(const TypeSignature& other) const;
 };
 

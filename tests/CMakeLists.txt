@@ -170,6 +170,20 @@ target_link_libraries(etil_ast_compiler_tests
 etil_add_link_map(etil_ast_compiler_tests)
 gtest_discover_tests(etil_ast_compiler_tests)
 
+# Stack simulator unit tests
+add_executable(etil_stack_simulator_tests
+    unit/test_stack_simulator.cpp
+)
+
+target_link_libraries(etil_stack_simulator_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_stack_simulator_tests)
+gtest_discover_tests(etil_stack_simulator_tests)
+
 # HTTP transport unit tests (helper methods only — no socket, safe to run natively)
 add_executable(etil_http_tests
     unit/test_http_transport.cpp
