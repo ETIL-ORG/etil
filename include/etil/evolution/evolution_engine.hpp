@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/evolution/genetic_ops.hpp"
+#include "etil/evolution/ast_genetic_ops.hpp"
 #include "etil/evolution/fitness.hpp"
 #include "etil/selection/selection_engine.hpp"
 #include "etil/core/dictionary.hpp"
@@ -19,6 +20,7 @@ struct EvolutionConfig {
     size_t generation_size = 5;
     double mutation_rate = 0.8;   // prob mutation vs crossover
     double prune_threshold = 0.01;
+    bool use_ast_ops = true;      // use AST-level operators (default)
     MutationConfig mutation_config;
 };
 
@@ -53,7 +55,8 @@ public:
 private:
     EvolutionConfig config_;
     etil::core::Dictionary& dict_;
-    GeneticOps genetic_ops_;
+    GeneticOps genetic_ops_;           // bytecode-level (fallback + constant perturbation)
+    ASTGeneticOps ast_genetic_ops_;    // AST-level (structural mutations)
     Fitness fitness_;
     etil::selection::SelectionEngine parent_selector_;
 

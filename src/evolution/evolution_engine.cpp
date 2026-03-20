@@ -15,6 +15,7 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
     : config_(config)
     , dict_(dict)
     , genetic_ops_(config.mutation_config)
+    , ast_genetic_ops_(dict)
     , parent_selector_(etil::selection::Strategy::WeightedRandom)
 {}
 
@@ -71,35 +72,45 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
 
     // Generate children
     std::uniform_real_distribution<double> coin(0.0, 1.0);
+    std::mt19937_64 local_rng(
+        std::chrono::steady_clock::now().time_since_epoch().count());
     size_t children_created = 0;
 
     for (size_t i = 0; i < config_.generation_size; ++i) {
         WordImplPtr child;
 
-        // Use parent_selector_'s implicit RNG via a local coin flip
-    std::mt19937_64 local_rng(std::chrono::steady_clock::now().time_since_epoch().count() + i);
-    if (coin(local_rng) < config_.mutation_rate
-            || evolvable.size() < 2) {
-            // Mutation: clone a parent and mutate
+        if (coin(local_rng) < config_.mutation_rate || evolvable.size() < 2) {
+            // Mutation
             auto* parent = parent_selector_.select(evolvable);
             if (!parent) continue;
-            child = genetic_ops_.clone(*parent, dict_);
-            if (!child) continue;
-            if (child->bytecode()) {
-                genetic_ops_.mutate(*child->bytecode());
-                child->add_mutation(
-                    MutationHistory::MutationType::Inline, "bytecode-mutation");
+
+            if (config_.use_ast_ops) {
+                // AST-level: decompile → mutate → repair → compile
+                child = ast_genetic_ops_.mutate(*parent);
+            } else {
+                // Bytecode-level fallback
+                child = genetic_ops_.clone(*parent, dict_);
+                if (child && child->bytecode()) {
+                    genetic_ops_.mutate(*child->bytecode());
+                    child->add_mutation(
+                        MutationHistory::MutationType::Inline, "bytecode-mutation");
+                }
             }
+            if (!child) continue;
         } else {
-            // Crossover: pick two parents
+            // Crossover
             auto* p1 = parent_selector_.select(evolvable);
             auto* p2 = parent_selector_.select(evolvable);
             if (!p1 || !p2) continue;
-            // Ensure different parents if possible
             for (int attempt = 0; attempt < 5 && p2 == p1 && evolvable.size() > 1; ++attempt) {
                 p2 = parent_selector_.select(evolvable);
             }
-            child = genetic_ops_.crossover(*p1, *p2, dict_);
+
+            if (config_.use_ast_ops) {
+                child = ast_genetic_ops_.crossover(*p1, *p2);
+            } else {
+                child = genetic_ops_.crossover(*p1, *p2, dict_);
+            }
             if (!child) continue;
         }
 

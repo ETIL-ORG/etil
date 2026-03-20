@@ -198,6 +198,20 @@ target_link_libraries(etil_type_repair_tests
 etil_add_link_map(etil_type_repair_tests)
 gtest_discover_tests(etil_type_repair_tests)
 
+# AST genetic operators unit tests
+add_executable(etil_ast_genetic_ops_tests
+    unit/test_ast_genetic_ops.cpp
+)
+
+target_link_libraries(etil_ast_genetic_ops_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_ast_genetic_ops_tests)
+gtest_discover_tests(etil_ast_genetic_ops_tests)
+
 # HTTP transport unit tests (helper methods only — no socket, safe to run natively)
 add_executable(etil_http_tests
     unit/test_http_transport.cpp
