@@ -35,6 +35,7 @@ set(ETIL_EVOLUTION_SOURCES
     evolution/ast_compiler.cpp
     evolution/stack_simulator.cpp
     evolution/signature_index.cpp
+    evolution/type_repair.cpp
     evolution/genetic_ops.cpp
     evolution/fitness.cpp
     evolution/evolution_engine.cpp

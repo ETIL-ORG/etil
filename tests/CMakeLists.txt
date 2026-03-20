@@ -184,6 +184,20 @@ target_link_libraries(etil_stack_simulator_tests
 etil_add_link_map(etil_stack_simulator_tests)
 gtest_discover_tests(etil_stack_simulator_tests)
 
+# Type repair unit tests
+add_executable(etil_type_repair_tests
+    unit/test_type_repair.cpp
+)
+
+target_link_libraries(etil_type_repair_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_type_repair_tests)
+gtest_discover_tests(etil_type_repair_tests)
+
 # HTTP transport unit tests (helper methods only — no socket, safe to run natively)
 add_executable(etil_http_tests
     unit/test_http_transport.cpp
