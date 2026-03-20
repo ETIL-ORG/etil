@@ -178,3 +178,68 @@ TEST_F(SignatureIndexTest, Generation) {
     index.rebuild(dict);
     EXPECT_EQ(index.generation(), dict.generation());
 }
+
+// ===================================================================
+// Compile-time type inference (Phase 5)
+// ===================================================================
+
+class CompileTimeInferenceTest : public ::testing::Test {
+protected:
+    Dictionary dict;
+    std::ostringstream out;
+    std::ostringstream err;
+    Interpreter interp{dict, out, err};
+
+    void SetUp() override {
+        register_primitives(dict);
+    }
+};
+
+TEST_F(CompileTimeInferenceTest, ColonDefinitionGetsSignature) {
+    interp.interpret_line(": double dup + ;");
+    auto impl = dict.lookup("double");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    // dup + : consumes 1, produces 1
+    EXPECT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.outputs.size(), 1u);
+}
+
+TEST_F(CompileTimeInferenceTest, TwoInputWord) {
+    interp.interpret_line(": add-them + ;");
+    auto impl = dict.lookup("add-them");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    EXPECT_EQ(sig.inputs.size(), 2u);
+    EXPECT_EQ(sig.outputs.size(), 1u);
+}
+
+TEST_F(CompileTimeInferenceTest, LiteralOnlyWord) {
+    interp.interpret_line(": push42 42 ;");
+    auto impl = dict.lookup("push42");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    EXPECT_EQ(sig.inputs.size(), 0u);
+    EXPECT_EQ(sig.outputs.size(), 1u);
+}
+
+TEST_F(CompileTimeInferenceTest, OpaqueWordMarkedVariable) {
+    interp.interpret_line(": run-it execute ;");
+    auto impl = dict.lookup("run-it");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    EXPECT_TRUE(sig.variable_inputs || sig.variable_outputs);
+}
+
+TEST_F(CompileTimeInferenceTest, UserWordUsableInIndex) {
+    interp.interpret_line(": my-double dup + ;");
+    SignatureIndex index;
+    index.rebuild(dict);
+    // my-double has signature (1, 1) — should appear in index
+    auto results = index.find_compatible(1, 1);
+    bool found = false;
+    for (const auto& name : results) {
+        if (name == "my-double") found = true;
+    }
+    EXPECT_TRUE(found);
+}

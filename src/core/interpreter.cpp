@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/core/interpreter.hpp"
+#include "etil/evolution/decompiler.hpp"
+#include "etil/evolution/stack_simulator.hpp"
 #include "etil/core/heap_map.hpp"
 #include "etil/core/heap_matrix.hpp"
 #include "etil/core/heap_observable.hpp"
@@ -459,6 +461,16 @@ void Interpreter::finalize_definition() {
     impl->set_bytecode(current_bytecode_);
     impl->set_weight(1.0);
     impl->set_generation(0);
+
+    // Infer type signature from bytecode via AST decompiler + stack simulator
+    {
+        etil::evolution::Decompiler decompiler;
+        etil::evolution::StackSimulator simulator;
+        auto ast = decompiler.decompile(*current_bytecode_);
+        auto sig = simulator.infer_signature(ast, dict_);
+        impl->set_signature(sig);
+    }
+
     dict_.register_word(compiling_word_name_, WordImplPtr(impl));
     ctx_.set_last_created(impl);  // for immediate, does>, etc.
 
