@@ -30,6 +30,8 @@ set(ETIL_SELECTION_SOURCES
 )
 
 set(ETIL_EVOLUTION_SOURCES
+    evolution/ast.cpp
+    evolution/decompiler.cpp
     evolution/genetic_ops.cpp
     evolution/fitness.cpp
     evolution/evolution_engine.cpp

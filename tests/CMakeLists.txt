@@ -142,6 +142,20 @@ target_link_libraries(etil_evolution_tests
 etil_add_link_map(etil_evolution_tests)
 gtest_discover_tests(etil_evolution_tests)
 
+# AST decompiler unit tests
+add_executable(etil_decompiler_tests
+    unit/test_decompiler.cpp
+)
+
+target_link_libraries(etil_decompiler_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_decompiler_tests)
+gtest_discover_tests(etil_decompiler_tests)
+
 # HTTP transport unit tests (helper methods only — no socket, safe to run natively)
 add_executable(etil_http_tests
     unit/test_http_transport.cpp
