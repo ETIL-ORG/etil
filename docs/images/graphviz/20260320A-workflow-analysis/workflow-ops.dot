@@ -1,0 +1,56 @@
+// ETIL Workflow — Process Improvements
+// Mar 16, 2026
+
+digraph Ops {
+    rankdir=TB;
+    fontname="Helvetica Neue";
+    fontsize=14;
+    bgcolor="white";
+    nodesep=0.8;
+    ranksep=1.0;
+    pad=0.6;
+
+    node [
+        fontname="Helvetica Neue"
+        fontsize=11
+        style="filled,rounded"
+        shape=box
+        penwidth=2
+        margin="0.18,0.10"
+    ];
+
+    edge [
+        fontname="Helvetica Neue"
+        fontsize=9
+    ];
+
+    // Title
+    title [
+        label=<<font point-size="18"><b>Process Improvements</b></font><br/><font point-size="11" color="#666666">March 16, 2026 · Workflow acceleration</font><br/><br/><font point-size="9" color="#999999">Tooling changes that enabled the fast iteration pace of Mar 17-20</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    // ================================================================
+    // BUILD OPS
+    // ================================================================
+
+    build_ops [
+        label=<<b>Build Ops Design</b><br/><font point-size="9">March 16</font><br/><br/><font point-size="8"><b>Problem:</b> Clean builds took 4-6 minutes,<br/>blocking iteration speed.<br/><br/><b>Solution:</b><br/>• Pre-built FetchContent deps → ~25s clean builds<br/>• Debug-first workflow (dev.sh)<br/>• branch.sh for feature branches<br/>• super-push.sh: build → test → bump → commit → push<br/><br/><b>Impact:</b> 10x faster iteration cycle.</font>>
+        fillcolor="#9B9B9B" fontcolor="white"
+        width=4.5
+    ];
+
+    subagent_policy [
+        label=<<b>Long-Running Jobs Policy</b><br/><font point-size="9">March 16</font><br/><br/><font point-size="8"><b>Problem:</b> CI builds (~11 min) and deploys blocked<br/>the Claude Code conversation context.<br/><br/><b>Solution:</b><br/>• Background agents for CI monitoring<br/>• Full output logged to /tmp/*.log<br/>• Never truncate build/test output<br/>• Agent reports back only PASS/FAIL summary<br/><br/><b>Impact:</b> Conversation stays responsive during builds.</font>>
+        fillcolor="#9B9B9B" fontcolor="white"
+        width=4.5
+    ];
+
+    build_ops -> subagent_policy [
+        label="  complementary:\n  fast local + async remote"
+        color="#666666"
+        penwidth=1.5
+        style=dashed
+    ];
+}

@@ -1,0 +1,136 @@
+// ETIL Workflow — Overview: The Design-Plan-Review Macro Cycle
+// Four iterations in 10 days: Mar 10-20, 2026
+
+digraph Overview {
+    rankdir=LR;
+    fontname="Helvetica Neue";
+    fontsize=14;
+    bgcolor="white";
+    nodesep=0.6;
+    ranksep=1.5;
+    pad=0.6;
+
+    node [
+        fontname="Helvetica Neue"
+        fontsize=10
+        style="filled,rounded"
+        shape=box
+        penwidth=2
+        margin="0.15,0.10"
+    ];
+
+    edge [
+        fontname="Helvetica Neue"
+        fontsize=8
+    ];
+
+    // Title
+    title [
+        label=<<font point-size="18"><b>The Design-Plan-Review Macro Cycle</b></font><br/><font point-size="11" color="#666666">4 iterations · 10 days · v0.8.15 → v1.6.0</font><br/><br/><font point-size="9" color="#999999">Each iteration's review feeds the next iteration's design</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    // ================================================================
+    // ITERATION NODES (left to right temporal flow)
+    // ================================================================
+
+    iter1 [
+        label=<<b>Iteration 1</b><br/><font point-size="9">MLP Feasibility</font><br/><font point-size="8" color="#CCCCCC">Mar 10-18</font><br/><br/><font point-size="8">Design → Plan → Status</font><br/><br/><font point-size="7">17 C++ matrix primitives<br/>v0.8.15 → v1.0.0</font>>
+        fillcolor="#4A90D9" fontcolor="white"
+        width=2.2
+    ];
+
+    iter2 [
+        label=<<b>Iteration 2</b><br/><font point-size="9">Observable System</font><br/><font point-size="8" color="#CCCCCC">Mar 12-17</font><br/><br/><font point-size="8">Design → Plan → Gap → Plan</font><br/><br/><font point-size="7">34 reactive operators<br/>v0.9.0 → v0.9.8</font>>
+        fillcolor="#7BC67E" fontcolor="white"
+        width=2.2
+    ];
+
+    iter3 [
+        label=<<b>Iteration 3</b><br/><font point-size="9">Evolution Pipeline</font><br/><font point-size="8" color="#CCCCCC">Mar 18-19</font><br/><br/><font point-size="8">Plan → Review → Design → Plan</font><br/><br/><font point-size="7">AST-level genetic programming<br/>v1.0.0 → v1.5.0</font>>
+        fillcolor="#F5A623" fontcolor="white"
+        width=2.2
+    ];
+
+    iter4 [
+        label=<<b>Iteration 4</b><br/><font point-size="9">Hardening</font><br/><font point-size="8" color="#CCCCCC">Mar 20</font><br/><br/><font point-size="8">Gap → Plan → Assessment</font><br/><br/><font point-size="7">Zero warnings, retrospective<br/>v1.5.0 → v1.6.0</font>>
+        fillcolor="#D0021B" fontcolor="white"
+        width=2.2
+    ];
+
+    // Forward temporal flow
+    iter1 -> iter3 [
+        label="  status report's\n  critical gaps"
+        color="#333333"
+        penwidth=3
+        style=bold
+    ];
+
+    iter3 -> iter4 [
+        label="  implementation\n  done → audit"
+        color="#333333"
+        penwidth=3
+        style=bold
+    ];
+
+    // Iter 2 runs in parallel
+    iter1 -> iter2 [
+        label="  parallel track\n  (different subsystem)"
+        color="#999999"
+        penwidth=1.5
+        style=dashed
+    ];
+
+    // Backward reference: final assessment → original design
+    iter4 -> iter1 [
+        label="  final assessment compares\n  v1.6.0 against v0.8.15 goals"
+        color="#F5A623"
+        style=dashed
+        penwidth=2.5
+        constraint=false
+    ];
+
+    // ================================================================
+    // THE ABSTRACT CYCLE (below)
+    // ================================================================
+
+    subgraph cluster_cycle {
+        label=<<b>The Cycle Pattern</b>>;
+        labeljust=c;
+        fontsize=11;
+        fontcolor="#333333";
+        style="rounded,filled";
+        fillcolor="#FAFAFA";
+        color="#888888";
+        penwidth=1.5;
+        margin=20;
+
+        c_d [label=<<b>DESIGN</b><br/><font point-size="7">analyze gaps,<br/>propose architecture</font>> fillcolor="#4A90D9" fontcolor="white" shape=ellipse width=1.4 height=0.7 fontsize=9];
+        c_p [label=<<b>PLAN</b><br/><font point-size="7">break into stages,<br/>estimate, prioritize</font>> fillcolor="#7BC67E" fontcolor="white" shape=ellipse width=1.4 height=0.7 fontsize=9];
+        c_i [label=<<b>IMPLEMENT</b><br/><font point-size="7">branch, code, test,<br/>super-push, deploy</font>> fillcolor="#50E3C2" fontcolor="white" shape=ellipse width=1.4 height=0.7 fontsize=9];
+        c_r [label=<<b>REVIEW</b><br/><font point-size="7">gap analysis,<br/>assess vs goals</font>> fillcolor="#F5A623" fontcolor="white" shape=ellipse width=1.4 height=0.7 fontsize=9];
+
+        c_d -> c_p [penwidth=2.5 color="#333333"];
+        c_p -> c_i [penwidth=2.5 color="#333333"];
+        c_i -> c_r [penwidth=2.5 color="#333333"];
+        c_r -> c_d [penwidth=2.5 color="#333333" label="  gaps feed\n  next cycle"];
+    }
+
+    // ================================================================
+    // DOCUMENT COUNT SUMMARY
+    // ================================================================
+
+    summary [
+        label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="6">
+        <tr><td colspan="2" bgcolor="#333333"><font color="white"><b>20 Design Documents in 10 Days</b></font></td></tr>
+        <tr><td bgcolor="#4A90D9"><font color="white">Design / Analysis</font></td><td bgcolor="#EBF5FB"> 7 documents</td></tr>
+        <tr><td bgcolor="#7BC67E"><font color="white">Implementation Plan</font></td><td bgcolor="#F0FFF0"> 8 documents</td></tr>
+        <tr><td bgcolor="#F5A623"><font color="white">Review / Assessment</font></td><td bgcolor="#FFF8E1"> 2 documents</td></tr>
+        <tr><td bgcolor="#D0021B"><font color="white">Gap Analysis</font></td><td bgcolor="#FEECEC"> 2 documents</td></tr>
+        <tr><td bgcolor="#BD10E0"><font color="white">Status Report</font></td><td bgcolor="#F5EEF8"> 1 document</td></tr>
+        </table>>
+        shape=plaintext
+        style=""
+    ];
+}

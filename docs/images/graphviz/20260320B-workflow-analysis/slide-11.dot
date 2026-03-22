@@ -1,0 +1,30 @@
+digraph slide11 {
+    size="7.8,4.5!"; ratio=fill; rankdir=LR;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.8; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue"];
+
+    backref [
+        label=<<font point-size="8"><b>← AST Evolution Plan</b><br/>Mar 19 · audits Stage 6</font>>
+        shape=octagon fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C"
+        fontsize=8 penwidth=1.5 width=2.0
+    ];
+
+    prev [label=<<font point-size="8"><b>AST Evolution Plan</b><br/>Mar 19</font>>
+        fillcolor="#C4E2C6" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    curr [
+        label=<<b><font point-size="12">Gap Analysis + Completion + Cleanup</font></b><br/><font point-size="9" color="white">March 20 · GAP + PLAN + PLAN (3 documents)</font><br/><br/><font point-size="8" color="#FFCCCC"><b>Stage 6 Gap Analysis</b> — found bugs:<br/>• Roll type-stack not updated in type_repair.cpp<br/>• Fitness limits allow DoS (SIZE_MAX)<br/>• move_block + control_flow_mutation missing</font><br/><br/><font point-size="8" color="#CCFFCC"><b>Stage 6 Completion Plan</b> — 5 phases:<br/>P0 fixes → DRY → operators → tests → type inference</font><br/><br/><font point-size="8" color="#CCFFCC"><b>Build Warning Cleanup</b> — parallel effort:<br/>27 warnings eliminated, GCC LTO ICE → -flto off</font>>
+        fillcolor="#C62828" fontcolor="white" fontsize=10 width=3.8 penwidth=3 color="#8E0000"
+    ];
+
+    next [label=<<font point-size="8"><b>MLP Goal Assessment</b><br/>Mar 20</font>>
+        fillcolor="#FCDBA3" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    backref -> curr [style=dashed color="#E65100" penwidth=1.5 arrowhead=vee];
+    prev -> curr [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">done → audit</font>>];
+    curr -> next [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">enables</font>>];
+}

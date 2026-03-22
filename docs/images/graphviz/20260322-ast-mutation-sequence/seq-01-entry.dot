@@ -1,0 +1,61 @@
+// AST Mutation Sequence — Slide 1: Entry Point
+// EvolutionEngine::evolve_word() dispatches to AST pipeline
+
+digraph seq01 {
+    size="7.8,5.5!"; ratio=fill; rankdir=TB;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.5; ranksep=0.6; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue" fontsize=8];
+
+    title [
+        label=<<font point-size="14"><b>1. Entry Point: evolve_word()</b></font><br/><font point-size="9" color="#666666">EvolutionEngine selects parent and dispatches to AST pipeline</font>>
+        shape=plaintext style=""
+    ];
+
+    // Caller
+    caller [
+        label=<<b>evolve-word</b><br/><font point-size="8">TIL primitive</font><br/><font point-size="7" color="#DDDDDD">User invokes evolution<br/>on a named word</font>>
+        fillcolor="#9B9B9B" fontcolor="white" fontsize=9 width=2.0
+    ];
+
+    // Engine
+    engine [
+        label=<<b>EvolutionEngine::evolve_word(name)</b><br/><font point-size="8" color="#333333">evolution_engine.cpp:45-135</font><br/><br/><font point-size="8">1. Lookup word in Dictionary</font><br/><font point-size="8">2. Get latest implementation as <b>parent</b></font><br/><font point-size="8">3. Check <b>use_ast_ops</b> flag (default: true)</font><br/><font point-size="8">4. Dispatch to AST or bytecode pipeline</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=9 width=4.0 penwidth=3 color="#2A70B9"
+    ];
+
+    // Decision
+    decision [
+        label=<<b>use_ast_ops?</b>>
+        shape=diamond fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C"
+        fontsize=10 width=1.8 height=0.8
+    ];
+
+    // AST path
+    ast_path [
+        label=<<b>ASTGeneticOps::mutate(parent)</b><br/><font point-size="7" color="#DDDDDD">Decompile → Mutate → Repair → Compile</font>>
+        fillcolor="#7BC67E" fontcolor="white" fontsize=9 width=3.0
+    ];
+
+    // Bytecode path
+    bc_path [
+        label=<<b>GeneticOps::clone + mutate</b><br/><font point-size="7" color="#888888">Legacy bytecode-level random mutation</font>>
+        fillcolor="#CCCCCC" fontcolor="#888888" fontsize=8 width=2.5
+        style="filled,rounded,dashed"
+    ];
+
+    // Result
+    result [
+        label=<<b>child WordImplPtr</b><br/><font point-size="7">New implementation registered<br/>in Dictionary with fitness weight</font>>
+        fillcolor="#F5A623" fontcolor="white" fontsize=9 width=2.5
+    ];
+
+    title -> caller [style=invis];
+    caller -> engine [label="  evolve-word primitive\n  calls engine" color="#333333" penwidth=2];
+    engine -> decision [color="#333333" penwidth=2];
+    decision -> ast_path [label=" true (default)" color="#2E7D32" penwidth=2.5 fontcolor="#2E7D32"];
+    decision -> bc_path [label=" false " color="#999999" penwidth=1 style=dashed fontcolor="#999999"];
+    ast_path -> result [label="  child or null" color="#333333" penwidth=2];
+    bc_path -> result [color="#999999" penwidth=1 style=dashed];
+}

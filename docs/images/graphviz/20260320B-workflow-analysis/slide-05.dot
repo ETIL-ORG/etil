@@ -1,0 +1,23 @@
+digraph slide05 {
+    size="7.8,4.5!"; ratio=fill; rankdir=LR;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.8; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue"];
+
+    prev [label=<<font point-size="8"><b>Temporal + AVO</b><br/>Mar 15-16</font>>
+        fillcolor="#B8D4EE" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    curr [
+        label=<<b><font point-size="12">Process Improvements</font></b><br/><font point-size="9" color="#333333">March 16 · OPS (2 documents)</font><br/><br/><font point-size="8"><b>Build Ops Design</b><br/>Problem: clean builds took 4-6 minutes.<br/>Solution: pre-built deps → ~25s clean builds,<br/>debug-first workflow, super-push.sh.<br/>Impact: 10x faster iteration cycle.</font><br/><br/><font point-size="8"><b>Long-Running Jobs Policy</b><br/>Problem: CI builds blocked conversation context.<br/>Solution: background agents for CI monitoring,<br/>full output to /tmp/*.log, PASS/FAIL summary.</font>>
+        fillcolor="#9B9B9B" fontcolor="white" fontsize=10 width=3.8 penwidth=3 color="#777777"
+    ];
+
+    next [label=<<font point-size="8"><b>RxJS Gap Analysis</b><br/>Mar 17</font>>
+        fillcolor="#EBA0A8" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    prev -> curr [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee];
+    curr -> next [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee];
+}

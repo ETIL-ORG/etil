@@ -1,0 +1,23 @@
+digraph slide03 {
+    size="7.8,4.5!"; ratio=fill; rankdir=LR;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.8; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue"];
+
+    prev [label=<<font point-size="8"><b>MLP Primitives Plan</b><br/>Mar 10</font>>
+        fillcolor="#C4E2C6" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    curr [
+        label=<<b><font point-size="12">Observable Design</font></b><br/><font point-size="9" color="#DDDDDD">March 12 · DESIGN</font><br/><br/><font point-size="8" color="white">Designed HeapObservable: linked-list pipeline<br/>nodes with per-node state for closure emulation.</font><br/><br/><font point-size="8" color="#DDDDDD">Chose <b>Approach 3B</b> over alternatives:</font><br/><font point-size="8" color="#DDDDDD">• 3A: CREATE/DOES&gt; (too FORTH-specific)</font><br/><font point-size="8" color="#DDDDDD">• 3C: stack passing (too fragile)</font><br/><br/><font point-size="8" color="white">21 core operators: creation, transform,<br/>accumulate, limiting, combination, terminal.</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=10 width=3.8 penwidth=3 color="#2A70B9"
+    ];
+
+    next [label=<<font point-size="8"><b>Temporal + AVO</b><br/>Mar 15-16</font>>
+        fillcolor="#B8D4EE" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    prev -> curr [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">parallel track</font>>];
+    curr -> next [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">extends</font>>];
+}

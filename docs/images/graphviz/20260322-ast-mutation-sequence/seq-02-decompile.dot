@@ -1,0 +1,45 @@
+// AST Mutation Sequence — Slide 2: Decompile
+// Bytecode → AST via marker-based recursive descent
+
+digraph seq02 {
+    size="7.8,5.5!"; ratio=fill; rankdir=TB;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.5; ranksep=0.6; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue" fontsize=8];
+
+    title [
+        label=<<font point-size="14"><b>2. Decompile: Bytecode → AST</b></font><br/><font point-size="9" color="#666666">Marker opcodes guide recursive descent reconstruction</font>>
+        shape=plaintext style=""
+    ];
+
+    // Input
+    bytecode [
+        label=<<b>Parent ByteCode</b><br/><font point-size="8" color="#DDDDDD">Flat instruction vector with<br/>BlockBegin / BlockEnd / BlockSeparator<br/>marker opcodes embedded by compiler</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=9 width=3.2
+    ];
+
+    // Decompiler
+    decompiler [
+        label=<<b>Decompiler::decompile(code)</b><br/><font point-size="8" color="#333333">decompiler.cpp</font><br/><br/><font point-size="8">Walk instruction stream left-to-right:</font><br/><br/><font point-size="8"><b>BlockBegin(kind)</b> encountered:</font><br/><font point-size="7">  → find_matching_block_end() via depth counting</font><br/><font point-size="7">  → decompile_block(kind, start, end)</font><br/><font point-size="7">  → recursively decompile interior children</font><br/><br/><font point-size="8"><b>Leaf instructions:</b></font><br/><font point-size="7">  PushInt → ASTNode::make_literal_int()</font><br/><font point-size="7">  PushFloat → ASTNode::make_literal_float()</font><br/><font point-size="7">  Call → ASTNode::make_word_call(name)</font><br/><font point-size="7">  DoI → ASTNode::make_do_i()</font><br/><font point-size="7">  etc. (21 node kinds total)</font>>
+        fillcolor="#7BC67E" fontcolor="white" fontsize=9 width=4.0 penwidth=3 color="#5BA65E"
+    ];
+
+    // Output
+    ast [
+        label=<<b>ASTNode (Sequence)</b><br/><font point-size="8" color="#333333">Root node containing tree of children</font><br/><br/><font point-size="7">Sequence</font><br/><font point-size="7">├── Literal(42)</font><br/><font point-size="7">├── WordCall("dup")</font><br/><font point-size="7">├── IfThenElse</font><br/><font point-size="7">│   ├── then: Sequence[WordCall("mat+")]</font><br/><font point-size="7">│   └── else: Sequence[WordCall("mat-")]</font><br/><font point-size="7">├── WordCall("swap")</font><br/><font point-size="7">└── DoLoop</font><br/><font point-size="7">    └── body: Sequence[WordCall("i"), ...]</font>>
+        fillcolor="#F5A623" fontcolor="white" fontsize=9 width=3.5
+    ];
+
+    // Markers explanation
+    markers [
+        label=<<font point-size="8"><b>Marker Opcodes</b> (7 BlockKinds)</font><br/><font point-size="7">IfThen · IfThenElse · DoLoop · DoPlusLoop<br/>BeginUntil · BeginWhileRepeat · BeginAgain</font><br/><font point-size="7" color="#BF360C">Emitted by compiler as no-op hints.<br/>Zero runtime cost. Enable unambiguous decompilation.</font>>
+        shape=note fillcolor="#FFF3E0" color="#E65100" fontcolor="#333333"
+        fontsize=8 penwidth=1.5
+    ];
+
+    title -> bytecode [style=invis];
+    bytecode -> decompiler [label="  instructions[]" color="#333333" penwidth=2];
+    decompiler -> ast [label="  structured tree" color="#333333" penwidth=2];
+    markers -> decompiler [style=dashed color="#E65100" penwidth=1 arrowhead=none];
+}

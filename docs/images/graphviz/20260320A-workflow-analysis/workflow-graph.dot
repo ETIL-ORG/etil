@@ -1,0 +1,314 @@
+// ETIL Design-Plan-Review Macro Workflow
+// Four iterations: Mar 10-20, 2026
+
+digraph ETIL_Workflow {
+    rankdir=TB;
+    fontname="Helvetica Neue";
+    fontsize=14;
+    bgcolor="white";
+    newrank=true;
+    nodesep=0.6;
+    ranksep=0.8;
+    pad=0.5;
+
+    node [
+        fontname="Helvetica Neue"
+        fontsize=9
+        style="filled,rounded"
+        shape=box
+        penwidth=1.5
+        margin="0.12,0.06"
+    ];
+
+    edge [
+        fontname="Helvetica Neue"
+        fontsize=7
+    ];
+
+    // ================================================================
+    // TITLE + LEGEND
+    // ================================================================
+    title [
+        label=<<table border="0" cellborder="0" cellspacing="8">
+        <tr><td colspan="6"><font point-size="16"><b>ETIL Design-Plan-Review Workflow</b></font></td></tr>
+        <tr><td colspan="6"><font point-size="10" color="#666666">Four iterations · Mar 10-20, 2026 · v0.8.15 → v1.6.0</font></td></tr>
+        <tr>
+        <td bgcolor="#4A90D9"><font color="white"> Design </font></td>
+        <td bgcolor="#7BC67E"><font color="white"> Plan </font></td>
+        <td bgcolor="#F5A623"><font color="white"> Review </font></td>
+        <td bgcolor="#D0021B"><font color="white"> Gap Analysis </font></td>
+        <td bgcolor="#BD10E0"><font color="white"> Status </font></td>
+        <td bgcolor="#9B9B9B"><font color="white"> Ops </font></td>
+        </tr>
+        <tr>
+        <td colspan="3"><font point-size="8">─── solid = forward flow</font></td>
+        <td colspan="3"><font point-size="8">- - - dashed = backward reference</font></td>
+        </tr>
+        </table>>
+        shape=plaintext
+        style=""
+        fillcolor="white"
+    ];
+
+    // ================================================================
+    // ITERATION 1: MLP FEASIBILITY (Mar 10-18)
+    // ================================================================
+    subgraph cluster_iter1 {
+        label=<<b>Iteration 1: MLP Feasibility</b>  <font point-size="8" color="#555555">v0.8.15 → v1.0.0 · Mar 10-18</font>>;
+        labeljust=l;
+        fontsize=10;
+        style="rounded,filled";
+        fillcolor="#EBF5FB";
+        color="#4A90D9";
+        penwidth=2;
+        margin=14;
+
+        mlp_design [
+            label=<<b>MLP Design Analysis</b><br/><font point-size="7">Mar 10 · v0.8.15</font><br/><font point-size="6">Identified 8 critical gaps:<br/>activation fns, weight init,<br/>broadcasting, loss functions</font>>
+            fillcolor="#4A90D9" fontcolor="white"
+        ];
+
+        mlp_plan [
+            label=<<b>MLP Primitives Plan</b><br/><font point-size="7">Mar 10 · 3 stages</font><br/><font point-size="6">17 C++ primitives: forward<br/>→ backprop → classification</font>>
+            fillcolor="#7BC67E" fontcolor="white"
+        ];
+
+        mlp_status [
+            label=<<b>MLP Status Report</b><br/><font point-size="7">Mar 18 · v1.0.0</font><br/><font point-size="6">17/17 primitives DONE<br/>TIL library: NOT DONE<br/>Selection engine: CRITICAL GAP</font>>
+            fillcolor="#BD10E0" fontcolor="white"
+        ];
+
+        mlp_design -> mlp_plan [color="#4A90D9" penwidth=2];
+        mlp_plan -> mlp_status [color="#888888" penwidth=1.5 style=dashed label="8 days later "];
+    }
+
+    // ================================================================
+    // ITERATION 2: OBSERVABLES (Mar 12-17)
+    // ================================================================
+    subgraph cluster_iter2 {
+        label=<<b>Iteration 2: Observable System</b>  <font point-size="8" color="#555555">v0.9.0 → v0.9.8 · Mar 12-17</font>>;
+        labeljust=l;
+        fontsize=10;
+        style="rounded,filled";
+        fillcolor="#F0FFF0";
+        color="#7BC67E";
+        penwidth=2;
+        margin=14;
+
+        obs_design [
+            label=<<b>Observable Design</b><br/><font point-size="7">Mar 12</font><br/><font point-size="6">HeapObservable with<br/>per-node state in heap</font>>
+            fillcolor="#4A90D9" fontcolor="white"
+        ];
+
+        obs_temporal [
+            label=<<b>Temporal Design+Plan</b><br/><font point-size="7">Mar 15</font><br/><font point-size="6">13 temporal ops: debounce,<br/>throttle, delay, timeout</font>>
+            fillcolor="#4A90D9" fontcolor="white"
+        ];
+
+        avo [
+            label=<<b>AVO Design+Plan</b><br/><font point-size="7">Mar 16</font><br/><font point-size="6">Async Via Observables:<br/>unify all I/O as streams</font>>
+            fillcolor="#4A90D9" fontcolor="white"
+        ];
+
+        rxjs_gap [
+            label=<<b>RxJS Gap Analysis</b><br/><font point-size="7">Mar 17</font><br/><font point-size="6">40+ operators scored →<br/>10 high-priority identified</font>>
+            fillcolor="#D0021B" fontcolor="white"
+        ];
+
+        obs_gap_plan [
+            label=<<b>Gap Fill Plan</b><br/><font point-size="7">Mar 17</font><br/><font point-size="6">8+2 operators in 2 stages</font>>
+            fillcolor="#7BC67E" fontcolor="white"
+        ];
+
+        obs_design -> obs_temporal [color="#4A90D9" penwidth=1.5];
+        obs_design -> avo [color="#4A90D9" penwidth=1.5];
+        rxjs_gap -> obs_gap_plan [color="#D0021B" penwidth=1.5];
+    }
+
+    // ================================================================
+    // BUILD OPS (Mar 16)
+    // ================================================================
+    subgraph cluster_ops {
+        label=<<b>Process</b> <font point-size="8" color="#555555">Mar 16</font>>;
+        labeljust=l;
+        fontsize=10;
+        style="rounded,filled";
+        fillcolor="#F5F5F5";
+        color="#9B9B9B";
+        penwidth=1.5;
+        margin=14;
+
+        build_ops [
+            label=<<b>Build Ops</b><br/><font point-size="6">~25s builds, debug-first</font>>
+            fillcolor="#9B9B9B" fontcolor="white"
+        ];
+
+        subagent_policy [
+            label=<<b>Long Jobs Policy</b><br/><font point-size="6">Background agents + logs</font>>
+            fillcolor="#9B9B9B" fontcolor="white"
+        ];
+    }
+
+    // ================================================================
+    // ITERATION 3: EVOLUTION PIPELINE (Mar 18-19)
+    // ================================================================
+    subgraph cluster_iter3 {
+        label=<<b>Iteration 3: Evolution Pipeline</b>  <font point-size="8" color="#555555">v1.0.0 → v1.5.0 · Mar 18-19</font>>;
+        labeljust=l;
+        fontsize=10;
+        style="rounded,filled";
+        fillcolor="#FFF8E1";
+        color="#F5A623";
+        penwidth=2;
+        margin=14;
+
+        mlp_layers_plan [
+            label=<<b>MLP Layers 1-3 Plan</b><br/><font point-size="7">Mar 18</font><br/><font point-size="6">L1: TIL MLP library (mlp.til)<br/>L2: SelectionEngine (4 strategies)<br/>L3: EvolutionEngine (fitness eval)</font>>
+            fillcolor="#7BC67E" fontcolor="white"
+        ];
+
+        mlp_layers_review [
+            label=<<b>Layers 1-3 Review</b><br/><font point-size="7">Mar 18 · v1.3.0</font><br/><font point-size="6">All 3 layers implemented<br/>XOR trains to &lt;0.001 MSE</font>>
+            fillcolor="#F5A623" fontcolor="white"
+        ];
+
+        ast_design [
+            label=<<b>AST Evolution Design</b><br/><font point-size="7">Mar 19 · 500+ lines</font><br/><font point-size="6">Key insight: structural mutation<br/>7 stages: markers → decompiler →<br/>compiler → types → repair →<br/>semantic tags → genetic operators</font>>
+            fillcolor="#4A90D9" fontcolor="white"
+        ];
+
+        ast_plan [
+            label=<<b>AST Evolution Plan</b><br/><font point-size="7">Mar 19 · v1.3.2→v1.5.0</font><br/><font point-size="6">7 independently testable stages<br/>66 new tests across all stages</font>>
+            fillcolor="#7BC67E" fontcolor="white"
+        ];
+
+        mlp_layers_plan -> mlp_layers_review [color="#F5A623" penwidth=1.5 label=" same-day"];
+        mlp_layers_review -> ast_design [color="#555555" penwidth=1.5 style=dashed
+            label=" random bytecode mutation\n produces garbage → need\n structural approach"];
+        ast_design -> ast_plan [color="#4A90D9" penwidth=2];
+    }
+
+    // ================================================================
+    // ITERATION 4: HARDENING & ASSESSMENT (Mar 20)
+    // ================================================================
+    subgraph cluster_iter4 {
+        label=<<b>Iteration 4: Hardening &amp; Assessment</b>  <font point-size="8" color="#555555">v1.5.0 → v1.6.0 · Mar 20</font>>;
+        labeljust=l;
+        fontsize=10;
+        style="rounded,filled";
+        fillcolor="#FEECEC";
+        color="#D0021B";
+        penwidth=2;
+        margin=14;
+
+        stage6_gap [
+            label=<<b>Stage 6 Gap Analysis</b><br/><font point-size="7">Mar 20 · v1.5.1</font><br/><font point-size="6">2 missing operators, roll bug,<br/>security: fitness limits needed</font>>
+            fillcolor="#D0021B" fontcolor="white"
+        ];
+
+        stage6_plan [
+            label=<<b>Stage 6 Completion</b><br/><font point-size="7">Mar 20 · 5 phases</font><br/><font point-size="6">P0 fixes → DRY → operators<br/>→ tests → type inference</font>>
+            fillcolor="#7BC67E" fontcolor="white"
+        ];
+
+        warning_plan [
+            label=<<b>Build Warning Cleanup</b><br/><font point-size="7">Mar 20</font><br/><font point-size="6">27 warnings eliminated<br/>GCC LTO ICE → -flto disabled</font>>
+            fillcolor="#7BC67E" fontcolor="white"
+        ];
+
+        mlp_assessment [
+            label=<<b>MLP Goal Assessment</b><br/><font point-size="7">Mar 20 · v1.6.0</font><br/><font point-size="6"><b>7/8 sections complete</b><br/>1362 tests, zero warnings<br/><br/><i>"The Evolutionary in ETIL</i><br/><i>is no longer aspirational"</i></font>>
+            fillcolor="#F5A623" fontcolor="white"
+            penwidth=3 color="#333333"
+        ];
+
+        stage6_gap -> stage6_plan [color="#D0021B" penwidth=1.5];
+        stage6_plan -> mlp_assessment [color="#888888" penwidth=1];
+        warning_plan -> mlp_assessment [color="#888888" penwidth=1];
+    }
+
+    // ================================================================
+    // FORWARD TEMPORAL FLOW (bold black, inter-iteration)
+    // ================================================================
+
+    mlp_status -> mlp_layers_plan [
+        label="  critical gaps\n  drive next iteration"
+        color="#333333"
+        penwidth=3
+        style=bold
+    ];
+
+    ast_plan -> stage6_gap [
+        label="  implementation\n  done → audit"
+        color="#333333"
+        penwidth=3
+        style=bold
+    ];
+
+    // ================================================================
+    // BACKWARD REFERENCES (dashed colored arrows)
+    // These show the cyclic nature: reviews look back at
+    // earlier designs to measure progress and find gaps
+    // ================================================================
+
+    // Final assessment references original design (spans 3 iterations)
+    mlp_assessment -> mlp_design [
+        label="compares v0.8.15 goals "
+        color="#F5A623"
+        style=dashed
+        penwidth=2
+        constraint=false
+    ];
+
+    // Final assessment references v1.0.0 status
+    mlp_assessment -> mlp_status [
+        label="compares v1.0.0 status "
+        color="#F5A623"
+        style=dashed
+        penwidth=2
+        constraint=false
+    ];
+
+    // Layers plan references original design
+    mlp_layers_plan -> mlp_design [
+        label="implements\nsections 3-6 "
+        color="#7BC67E"
+        style=dashed
+        penwidth=1.5
+        constraint=false
+    ];
+
+    // Gap analysis audits AST plan
+    stage6_gap -> ast_plan [
+        label=" audits Stage 6"
+        color="#D0021B"
+        style=dashed
+        penwidth=1.5
+        constraint=false
+    ];
+
+    // ================================================================
+    // CYCLE DIAGRAM (compact inset)
+    // ================================================================
+    subgraph cluster_cycle {
+        label=<<b>The Macro Cycle</b>>;
+        labeljust=c;
+        fontsize=10;
+        fontcolor="#333333";
+        style="rounded,filled";
+        fillcolor="#FAFAFA";
+        color="#888888";
+        penwidth=1.5;
+        margin=14;
+
+        c_d [label=<<b>DESIGN</b>> fillcolor="#4A90D9" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+        c_p [label=<<b>PLAN</b>> fillcolor="#7BC67E" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+        c_i [label=<<b>IMPLEMENT</b>> fillcolor="#50E3C2" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+        c_r [label=<<b>REVIEW</b>> fillcolor="#F5A623" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+
+        c_d -> c_p [penwidth=2 color="#333333"];
+        c_p -> c_i [penwidth=2 color="#333333"];
+        c_i -> c_r [penwidth=2 color="#333333"];
+        c_r -> c_d [penwidth=2 color="#333333" label=" gaps feed\n next cycle" fontsize=6];
+    }
+}

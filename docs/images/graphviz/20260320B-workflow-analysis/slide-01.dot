@@ -1,0 +1,23 @@
+digraph slide01 {
+    size="7.8,4.5!"; ratio=fill; rankdir=LR;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.8; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue"];
+
+    prev [label=<<font point-size="9" color="#AAAAAA"><b>START</b><br/>v0.8.15</font>>
+        fillcolor="#E8E8E8" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed" shape=ellipse];
+
+    curr [
+        label=<<b><font point-size="12">MLP Design Analysis</font></b><br/><font point-size="9" color="#DDDDDD">March 10 · v0.8.15 · DESIGN</font><br/><br/><font point-size="8" color="white">Analyzed ETIL matrix subsystem for MLP feasibility.</font><br/><font point-size="8" color="white">Found <b>8 critical gaps</b> across 4 categories:</font><br/><br/><font point-size="8" color="#DDDDDD">• Element-wise ops (mat-hadamard, mat-add-col)</font><br/><font point-size="8" color="#DDDDDD">• Activation functions (relu, sigmoid, tanh + derivatives)</font><br/><font point-size="8" color="#DDDDDD">• Weight initialization (mat-randn, xavier, he)</font><br/><font point-size="8" color="#DDDDDD">• Loss functions (MSE, softmax, cross-entropy)</font><br/><br/><font point-size="8" color="white">Recommended deferring in-place ops.</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=10 width=3.8 penwidth=3 color="#2A70B9"
+    ];
+
+    next [label=<<font point-size="8"><b>MLP Primitives Plan</b><br/>Mar 10</font>>
+        fillcolor="#C4E2C6" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    prev -> curr [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999"> </font>>];
+    curr -> next [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">informs</font>>];
+}

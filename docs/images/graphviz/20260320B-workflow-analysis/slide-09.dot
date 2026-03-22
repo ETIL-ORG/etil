@@ -1,0 +1,23 @@
+digraph slide09 {
+    size="7.8,4.5!"; ratio=fill; rankdir=LR;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.8; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue"];
+
+    prev [label=<<font point-size="8"><b>Layers 1-3 Review</b><br/>Mar 18</font>>
+        fillcolor="#FCDBA3" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    curr [
+        label=<<b><font point-size="12">AST Evolution Design</font></b><br/><font point-size="9" color="#DDDDDD">March 19 · 500+ lines · DESIGN</font><br/><br/><font point-size="8" color="white"><b>Key insight:</b> Don't mutate bytecode randomly.</font><br/><font point-size="8" color="white">Decompile to AST → mutate structurally → recompile.</font><br/><br/><font point-size="8" color="#DDDDDD"><b>7-stage pipeline:</b></font><br/><font point-size="8" color="#DDDDDD">0. Marker opcodes (compiler hints)</font><br/><font point-size="8" color="#DDDDDD">1. Bytecode → AST decompiler</font><br/><font point-size="8" color="#DDDDDD">2. AST → bytecode compiler</font><br/><font point-size="8" color="#DDDDDD">3. Stack simulator + type inference</font><br/><font point-size="8" color="#DDDDDD">4. Type-directed repair</font><br/><font point-size="8" color="#DDDDDD">5. Semantic tags for tiered substitution</font><br/><font point-size="8" color="#DDDDDD">6. AST genetic operators (4 types)</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=10 width=3.8 penwidth=3 color="#2A70B9"
+    ];
+
+    next [label=<<font point-size="8"><b>AST Evolution Plan</b><br/>Mar 19</font>>
+        fillcolor="#C4E2C6" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    prev -> curr [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">mutation fails →<br/>structural approach</font>>];
+    curr -> next [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">informs</font>>];
+}

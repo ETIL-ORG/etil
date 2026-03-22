@@ -1,0 +1,122 @@
+digraph overview {
+    rankdir=LR;
+    fontname="Helvetica Neue";
+    fontsize=14;
+    bgcolor="white";
+    newrank=true;
+    nodesep=0.5;
+    ranksep=1.0;
+    pad=0.6;
+
+    node [fontname="Helvetica Neue" fontsize=9 style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue" fontsize=7];
+
+    // Title
+    title [
+        label=<<font point-size="20"><b>ETIL Design-Plan-Review Workflow</b></font><br/><font point-size="12" color="#666666">20 documents · 4 iterations · 10 days · v0.8.15 → v1.6.0</font><br/><font point-size="10" color="#999999">Each iteration's review feeds the next iteration's design</font>>
+        shape=plaintext style=""
+    ];
+
+    // Legend row
+    subgraph cluster_legend {
+        label=""; style=invis; margin=8;
+        node [fontsize=8 width=0.9 height=0.3];
+        l_d [label="Design" fillcolor="#4A90D9" fontcolor="white"];
+        l_p [label="Plan" fillcolor="#7BC67E" fontcolor="white"];
+        l_r [label="Review / Assessment" fillcolor="#F5A623" fontcolor="white"];
+        l_g [label="Gap Analysis" fillcolor="#D0021B" fontcolor="white"];
+        l_s [label="Status Report" fillcolor="#BD10E0" fontcolor="white"];
+        l_o [label="Process / Ops" fillcolor="#9B9B9B" fontcolor="white"];
+        l_d -> l_p -> l_r -> l_g -> l_s -> l_o [style=invis];
+    }
+
+    // ================================================================
+    // TIMELINE NODES — all 12 states left to right
+    // ================================================================
+
+    s01 [label=<<b>MLP Design</b><br/><font point-size="7">Mar 10</font>> fillcolor="#4A90D9" fontcolor="white" width=1.2];
+    s02 [label=<<b>MLP Plan</b><br/><font point-size="7">Mar 10</font>> fillcolor="#7BC67E" fontcolor="white" width=1.2];
+    s03 [label=<<b>Observable</b><br/><font point-size="7">Mar 12</font>> fillcolor="#4A90D9" fontcolor="white" width=1.2];
+    s04 [label=<<b>Temporal+AVO</b><br/><font point-size="7">Mar 15-16</font>> fillcolor="#4A90D9" fontcolor="white" width=1.2];
+    s05 [label=<<b>Build Ops</b><br/><font point-size="7">Mar 16</font>> fillcolor="#9B9B9B" fontcolor="white" width=1.2];
+    s06 [label=<<b>RxJS Gap</b><br/><font point-size="7">Mar 17</font>> fillcolor="#D0021B" fontcolor="white" width=1.2];
+    s07 [label=<<b>MLP Status</b><br/><font point-size="7">Mar 18</font>> fillcolor="#BD10E0" fontcolor="white" width=1.2];
+    s08 [label=<<b>Layers 1-3</b><br/><font point-size="7">Mar 18</font>> fillcolor="#F5A623" fontcolor="white" width=1.2];
+    s09 [label=<<b>AST Design</b><br/><font point-size="7">Mar 19</font>> fillcolor="#4A90D9" fontcolor="white" width=1.2];
+    s10 [label=<<b>AST Plan</b><br/><font point-size="7">Mar 19</font>> fillcolor="#7BC67E" fontcolor="white" width=1.2];
+    s11 [label=<<b>Gap+Fix+Warn</b><br/><font point-size="7">Mar 20</font>> fillcolor="#D0021B" fontcolor="white" width=1.2];
+    s12 [label=<<b>Assessment</b><br/><font point-size="7">Mar 20</font>> fillcolor="#F5A623" fontcolor="white" width=1.2 penwidth=3 color="#333333"];
+
+    // Forward flow
+    s01 -> s02 [color="#333333" penwidth=2];
+    s02 -> s03 [color="#999999" penwidth=1.5 style=dashed label=<<font point-size="6">parallel track</font>>];
+    s03 -> s04 [color="#333333" penwidth=2];
+    s04 -> s05 [color="#999999" penwidth=1.5];
+    s05 -> s06 [color="#999999" penwidth=1.5];
+    s06 -> s07 [color="#999999" penwidth=1.5];
+    s07 -> s08 [color="#333333" penwidth=2 label=<<font point-size="6">gaps drive</font>>];
+    s08 -> s09 [color="#333333" penwidth=2 label=<<font point-size="6">insight</font>>];
+    s09 -> s10 [color="#333333" penwidth=2];
+    s10 -> s11 [color="#333333" penwidth=2 label=<<font point-size="6">audit</font>>];
+    s11 -> s12 [color="#333333" penwidth=2];
+
+    // Back-reference polygons
+    br1 [label=<<font point-size="7">refs MLP Design<br/>sections 2-6</font>> shape=octagon fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C" fontsize=7 penwidth=1.5];
+    br2 [label=<<font point-size="7">implements MLP Design<br/>sections 3-6</font>> shape=octagon fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C" fontsize=7 penwidth=1.5];
+    br3 [label=<<font point-size="7">audits AST Plan<br/>Stage 6</font>> shape=octagon fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C" fontsize=7 penwidth=1.5];
+    br4 [label=<<font point-size="7">compares<br/>v0.8.15 goals</font>> shape=octagon fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C" fontsize=7 penwidth=1.5];
+    br5 [label=<<font point-size="7">compares<br/>v1.0.0 status</font>> shape=octagon fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C" fontsize=7 penwidth=1.5];
+
+    // Back-ref connections
+    br1 -> s07 [style=dashed color="#E65100" penwidth=1.5 constraint=false];
+    s07 -> s01 [style=dashed color="#E65100" penwidth=1 constraint=false arrowhead=none];
+
+    br2 -> s08 [style=dashed color="#E65100" penwidth=1.5 constraint=false];
+    s08 -> s01 [style=dashed color="#E65100" penwidth=1 constraint=false arrowhead=none];
+
+    br3 -> s11 [style=dashed color="#E65100" penwidth=1.5 constraint=false];
+    s11 -> s10 [style=dashed color="#E65100" penwidth=1 constraint=false arrowhead=none];
+
+    br4 -> s12 [style=dashed color="#E65100" penwidth=1.5 constraint=false];
+    s12 -> s01 [style=dashed color="#E65100" penwidth=1.5 constraint=false arrowhead=none];
+
+    br5 -> s12 [style=dashed color="#E65100" penwidth=1.5 constraint=false];
+    s12 -> s07 [style=dashed color="#E65100" penwidth=1 constraint=false arrowhead=none];
+
+    // Iteration brackets (bottom labels)
+    iter1 [label=<<font point-size="9" color="#4A90D9"><b>Iteration 1</b><br/>MLP Feasibility<br/>v0.8.15→v1.0.0</font>> shape=plaintext style=""];
+    iter2 [label=<<font point-size="9" color="#7BC67E"><b>Iteration 2</b><br/>Observables<br/>v0.9.0→v0.9.8</font>> shape=plaintext style=""];
+    iter3 [label=<<font point-size="9" color="#F5A623"><b>Iteration 3</b><br/>Evolution Pipeline<br/>v1.0.0→v1.5.0</font>> shape=plaintext style=""];
+    iter4 [label=<<font point-size="9" color="#D0021B"><b>Iteration 4</b><br/>Hardening<br/>v1.5.0→v1.6.0</font>> shape=plaintext style=""];
+
+    // Cycle inset
+    subgraph cluster_cycle {
+        label=<<b>The Macro Cycle</b>>;
+        labeljust=c; fontsize=10; fontcolor="#333333";
+        style="rounded,filled"; fillcolor="#FAFAFA"; color="#888888";
+        penwidth=1.5; margin=14;
+
+        c_d [label=<<b>DESIGN</b>> fillcolor="#4A90D9" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+        c_p [label=<<b>PLAN</b>> fillcolor="#7BC67E" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+        c_i [label=<<b>IMPLEMENT</b>> fillcolor="#50E3C2" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+        c_r [label=<<b>REVIEW</b>> fillcolor="#F5A623" fontcolor="white" shape=ellipse width=1.0 height=0.5 fontsize=8];
+
+        c_d -> c_p [penwidth=2 color="#333333"];
+        c_p -> c_i [penwidth=2 color="#333333"];
+        c_i -> c_r [penwidth=2 color="#333333"];
+        c_r -> c_d [penwidth=2 color="#333333" label=<<font point-size="6"> gaps feed<br/> next cycle</font>>];
+    }
+
+    // Summary table
+    summary [
+        label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+        <tr><td colspan="2" bgcolor="#333333"><font color="white" point-size="9"><b>Document Count</b></font></td></tr>
+        <tr><td bgcolor="#4A90D9"><font color="white" point-size="8">Design</font></td><td bgcolor="#EBF5FB"><font point-size="8"> 7 </font></td></tr>
+        <tr><td bgcolor="#7BC67E"><font color="white" point-size="8">Plan</font></td><td bgcolor="#F0FFF0"><font point-size="8"> 8 </font></td></tr>
+        <tr><td bgcolor="#F5A623"><font color="white" point-size="8">Review</font></td><td bgcolor="#FFF8E1"><font point-size="8"> 2 </font></td></tr>
+        <tr><td bgcolor="#D0021B"><font color="white" point-size="8">Gap</font></td><td bgcolor="#FEECEC"><font point-size="8"> 2 </font></td></tr>
+        <tr><td bgcolor="#BD10E0"><font color="white" point-size="8">Status</font></td><td bgcolor="#F5EEF8"><font point-size="8"> 1 </font></td></tr>
+        </table>>
+        shape=plaintext style=""
+    ];
+}

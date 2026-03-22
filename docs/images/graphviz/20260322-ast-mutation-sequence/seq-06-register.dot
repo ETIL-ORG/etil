@@ -1,0 +1,46 @@
+// AST Mutation Sequence — Slide 6: Create Child and Register
+// Wrap in WordImpl, evaluate fitness, register in Dictionary
+
+digraph seq06 {
+    size="7.8,5.5!"; ratio=fill; rankdir=TB;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.5; ranksep=0.6; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue" fontsize=8];
+
+    title [
+        label=<<font point-size="14"><b>6. Create Child and Register</b></font><br/><font point-size="9" color="#666666">New implementation enters the Dictionary for selection</font>>
+        shape=plaintext style=""
+    ];
+
+    bytecode [
+        label=<<b>New ByteCode</b><br/><font point-size="7">Compiled from repaired AST</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=9 width=2.2
+    ];
+
+    create [
+        label=<<b>Create Child WordImpl</b><br/><font point-size="8" color="#333333">ast_genetic_ops.cpp:277-285</font><br/><br/><font point-size="8">1. Allocate new WordImpl(parent.name(), next_id())</font><br/><font point-size="8">2. Set <b>generation</b> = parent.generation + 1</font><br/><font point-size="8">3. Record <b>parent ID</b> for lineage tracking</font><br/><font point-size="8">4. Copy parent's <b>weight</b> as starting fitness</font><br/><font point-size="8">5. Copy parent's <b>TypeSignature</b></font><br/><font point-size="8">6. Attach new bytecode</font><br/><font point-size="8">7. Record mutation type: "ast-mutation"</font>>
+        fillcolor="#7BC67E" fontcolor="white" fontsize=9 width=4.0 penwidth=3 color="#5BA65E"
+    ];
+
+    evaluate [
+        label=<<b>Fitness Evaluation</b><br/><font point-size="8" color="#333333">evolution_engine.cpp</font><br/><br/><font point-size="8">Run child against registered test cases:</font><br/><font point-size="8">• Execute with budgeted limits (10000 instructions)</font><br/><font point-size="8">• Compare output to expected results</font><br/><font point-size="8">• Assign <b>fitness weight</b> based on pass rate</font>>
+        fillcolor="#F5A623" fontcolor="white" fontsize=9 width=3.5
+    ];
+
+    register [
+        label=<<b>Dictionary::register_word(name, child)</b><br/><font point-size="8" color="#333333">Appended to concept's implementation vector</font><br/><br/><font point-size="7">Now available for SelectionEngine to choose:</font><br/><font point-size="7">• Latest (always newest)</font><br/><font point-size="7">• WeightedRandom (by fitness weight)</font><br/><font point-size="7">• EpsilonGreedy (exploit best, explore random)</font><br/><font point-size="7">• UCB1 (upper confidence bound)</font>>
+        fillcolor="#9C27B0" fontcolor="white" fontsize=9 width=3.8
+    ];
+
+    prune [
+        label=<<b>Prune weakest</b><br/><font point-size="7">remove_implementation_at()</font><br/><font point-size="7">if population exceeds limit</font>>
+        fillcolor="#D0021B" fontcolor="white" fontsize=8 width=2.0
+    ];
+
+    title -> bytecode [style=invis];
+    bytecode -> create [label="  attach bytecode" color="#333333" penwidth=2];
+    create -> evaluate [label="  child WordImplPtr" color="#333333" penwidth=2];
+    evaluate -> register [label="  weighted child" color="#333333" penwidth=2];
+    register -> prune [label="  if over limit" color="#C62828" penwidth=1.5 style=dashed];
+}

@@ -1,0 +1,41 @@
+// AST Mutation Sequence — Slide 5: Compile AST → Bytecode
+// Reconstruct executable bytecode with markers and backpatching
+
+digraph seq05 {
+    size="7.8,5.5!"; ratio=fill; rankdir=TB;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.5; ranksep=0.6; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue" fontsize=8];
+
+    title [
+        label=<<font point-size="14"><b>5. Compile: AST → Bytecode</b></font><br/><font point-size="9" color="#666666">Recursive emission with branch backpatching</font>>
+        shape=plaintext style=""
+    ];
+
+    ast [
+        label=<<b>Repaired AST</b><br/><font point-size="7" color="#90EE90">Type-safe, shuffles inserted</font>>
+        fillcolor="#2E7D32" fontcolor="white" fontsize=9 width=2.5
+    ];
+
+    compiler [
+        label=<<b>ASTCompiler::compile(ast)</b><br/><font point-size="8" color="#333333">ast_compiler.cpp</font><br/><br/><font point-size="8">Recursive <b>emit(bc, node)</b> switch on node kind:</font><br/><br/><font point-size="7" color="#555555"><b>Sequence</b> → emit each child in order</font><br/><font point-size="7" color="#555555"><b>Literal</b> → PushInt / PushFloat / PushBool / PushString</font><br/><font point-size="7" color="#555555"><b>WordCall</b> → Call instruction with word name</font><br/><font point-size="7" color="#555555"><b>IfThen</b> → BlockBegin + BranchIfFalse(placeholder)</font><br/><font point-size="7" color="#555555">         emit body, backpatch jump target + BlockEnd</font><br/><font point-size="7" color="#555555"><b>IfThenElse</b> → same + BlockSeparator + else body</font><br/><font point-size="7" color="#555555"><b>DoLoop</b> → BlockBegin + DoSetup, emit body,</font><br/><font point-size="7" color="#555555">         DoLoop(back-jump) + BlockEnd</font><br/><font point-size="7" color="#555555"><b>BeginUntil</b> → BlockBegin, emit body,</font><br/><font point-size="7" color="#555555">             BranchIfFalse(back-jump) + BlockEnd</font><br/><font point-size="7" color="#555555"><b>Leave</b> → backpatch_leaves() targets loop end</font>>
+        fillcolor="#7BC67E" fontcolor="white" fontsize=9 width=4.2 penwidth=3 color="#5BA65E"
+    ];
+
+    bytecode [
+        label=<<b>New ByteCode</b><br/><font point-size="8" color="#333333">shared_ptr&lt;ByteCode&gt;</font><br/><br/><font point-size="7">Flat instruction vector with:</font><br/><font point-size="7">• Marker opcodes (for future decompilation)</font><br/><font point-size="7">• Backpatched branch targets</font><br/><font point-size="7">• Ready for inner interpreter execution</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=9 width=3.0
+    ];
+
+    roundtrip [
+        label=<<font point-size="8"><b>Round-trip fidelity guarantee:</b></font><br/><font point-size="7">decompile(compile(decompile(BC))) == decompile(BC)</font><br/><font point-size="7" color="#BF360C">Markers ensure no structural information is lost.</font>>
+        shape=note fillcolor="#FFF3E0" color="#E65100" fontcolor="#333333"
+        fontsize=8 penwidth=1.5
+    ];
+
+    title -> ast [style=invis];
+    ast -> compiler [label="  repaired tree" color="#333333" penwidth=2];
+    compiler -> bytecode [label="  new instructions[]" color="#333333" penwidth=2];
+    roundtrip -> compiler [style=dashed color="#E65100" penwidth=1 arrowhead=none];
+}

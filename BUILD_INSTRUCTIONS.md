@@ -1,5 +1,8 @@
 # Build Instructions for ETIL
 
+- Project was originally built with Ubuntu 24.04.
+- Windows is not supported.
+
 ## Quick Start
 
 ```bash
@@ -230,9 +233,18 @@ NDT failures are **expected to occur sometimes** and should be investigated rath
 | `ASTGeneticOpsTest.DISABLED_EndToEndEvolution` | End-to-end | Evolution outcomes depend on random mutations |
 | `EvolutionEngineTest.DISABLED_MultipleGenerations` | Multi-gen | Mutants can trigger ASan leaks from system-resource words |
 
+
+
 ## Docker (MCP Server)
 
-The MCP server runs inside Docker per project security rules:
+### _WARNING_ : DO NOT RUN THE MCP SERVER ON A NETWORK *ANYWHERE* UNLESS IT IS RUNNING IN A CONTAINER (SANDBOX) THAT AGGRESSIVELY PROTECTS THE HOST SYSTEM.
+
+WHY? Because the MCP Server ```etil_mcp_server``` allows programmatic access to it's environment... 
+Running it outside a container is just _asking_ to be hacked. 
+
+_Be paranoid._ 
+
+The MCP server must be run inside Docker per project security rules at [docs/claude-design/20260214A-ETIL-Server-Security-Rules.md](docs/claude-design/20260214A-ETIL-Server-Security-Rules.md)
 
 ```bash
 docker build -t etil-mcp .
@@ -242,8 +254,10 @@ docker run -d --rm --read-only \
   --tmpfs /tmp:size=10M \
   etil-mcp --port 8080
 ```
+- See `scripts/deploy.sh` for full deployment examples.
+- See `data/auth-config/*.json.example` for JWT/RBAC configuration.
 
-See `data/auth-config/*.json.example` for JWT/RBAC configuration.
+---
 
 ## Troubleshooting
 

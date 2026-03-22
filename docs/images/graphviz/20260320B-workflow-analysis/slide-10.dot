@@ -1,0 +1,23 @@
+digraph slide10 {
+    size="7.8,4.5!"; ratio=fill; rankdir=LR;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.8; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue"];
+
+    prev [label=<<font point-size="8"><b>AST Evolution Design</b><br/>Mar 19</font>>
+        fillcolor="#B8D4EE" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    curr [
+        label=<<b><font point-size="12">AST Evolution Plan</font></b><br/><font point-size="9" color="#333333">March 19 · v1.3.2→v1.5.0 · PLAN</font><br/><br/><font point-size="8">Each of 7 stages independently testable:</font><br/><br/><font point-size="8">Stage 0: BlockBegin/BlockEnd marker opcodes</font><br/><font point-size="8">Stage 1: AST types + recursive descent decompiler</font><br/><font point-size="8">Stage 2: AST compiler with backpatched branches</font><br/><font point-size="8">Stage 3: Stack simulator, type inference</font><br/><font point-size="8">Stage 4: Type-directed repair (swap/rot/roll)</font><br/><font point-size="8">Stage 5: Semantic tags on 22 words</font><br/><font point-size="8">Stage 6: 4 genetic operators + engine integration</font><br/><br/><font point-size="8"><b>66 new tests</b> across all stages.</font>>
+        fillcolor="#7BC67E" fontcolor="white" fontsize=10 width=3.8 penwidth=3 color="#5BA65E"
+    ];
+
+    next [label=<<font point-size="8"><b>Stage 6 Gap Analysis</b><br/>Mar 20</font>>
+        fillcolor="#EBA0A8" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    prev -> curr [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee];
+    curr -> next [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">done → audit</font>>];
+}

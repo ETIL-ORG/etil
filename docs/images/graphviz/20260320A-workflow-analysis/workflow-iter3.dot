@@ -1,0 +1,121 @@
+// ETIL Workflow — Iteration 3: Evolution Pipeline
+// v1.0.0 → v1.5.0 · Mar 18-19, 2026
+
+digraph Iter3 {
+    rankdir=TB;
+    fontname="Helvetica Neue";
+    fontsize=14;
+    bgcolor="white";
+    nodesep=0.8;
+    ranksep=1.0;
+    pad=0.6;
+
+    node [
+        fontname="Helvetica Neue"
+        fontsize=11
+        style="filled,rounded"
+        shape=box
+        penwidth=2
+        margin="0.18,0.10"
+    ];
+
+    edge [
+        fontname="Helvetica Neue"
+        fontsize=9
+    ];
+
+    // Title
+    title [
+        label=<<font point-size="18"><b>Iteration 3: Evolution Pipeline</b></font><br/><font point-size="11" color="#666666">v1.0.0 → v1.5.0 · Mar 18-19, 2026 · AST-level genetic programming</font><br/><br/><font point-size="9" color="#999999">From "primitives work" to full evolutionary programming system</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    // Legend
+    subgraph cluster_legend {
+        label="";
+        style=invis;
+        margin=0;
+        node [fontsize=9 width=1.2 height=0.35];
+        leg_d [label="Design" fillcolor="#4A90D9" fontcolor="white"];
+        leg_p [label="Plan" fillcolor="#7BC67E" fontcolor="white"];
+        leg_r [label="Review" fillcolor="#F5A623" fontcolor="white"];
+        leg_d -> leg_p -> leg_r [style=invis];
+    }
+
+    title -> leg_d [style=invis];
+
+    // ================================================================
+    // TRIGGER: Status report from Iteration 1
+    // ================================================================
+
+    trigger [
+        label=<<font point-size="9" color="#333333"><b>← From Iteration 1:</b> MLP Status Report (v1.0.0)<br/>Critical gaps: no TIL library, no selection engine, no evolution engine</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    // ================================================================
+    // MAIN FLOW
+    // ================================================================
+
+    mlp_layers_plan [
+        label=<<b>MLP Layers 1-3 Plan</b><br/><font point-size="9">March 18</font><br/><br/><font point-size="8">Three implementation layers to close the gaps:</font><br/><br/><font point-size="8"><b>Layer 1 — TIL MLP Library</b> (mlp.til)<br/>  make-layer, make-network, forward, backward,<br/>  sgd-update, train-step, train, predict<br/>  Prerequisite: mat-col-vec primitive</font><br/><br/><font point-size="8"><b>Layer 2 — SelectionEngine</b><br/>  4 strategies: Latest, WeightedRandom,<br/>  EpsilonGreedy, UCB1</font><br/><br/><font point-size="8"><b>Layer 3 — EvolutionEngine</b><br/>  Genetic operators, fitness evaluation,<br/>  population management</font>>
+        fillcolor="#7BC67E" fontcolor="white"
+        width=4.5
+    ];
+
+    mlp_layers_review [
+        label=<<b>Layers 1-3 Review</b><br/><font point-size="9">March 18 · v1.3.0 (same day!)</font><br/><br/><font point-size="8" color="#90EE90">✓ Layer 1: MLP library working — 275 lines of TIL</font><br/><font point-size="8" color="#90EE90">✓ Layer 2: SelectionEngine with all 4 strategies</font><br/><font point-size="8" color="#90EE90">✓ Layer 3: EvolutionEngine with GeneticOps</font><br/><br/><font point-size="8"><b>XOR validation:</b> trains to &lt;0.001 MSE in 2000 epochs<br/>[0,0]→0.008  [0,1]→0.991  [1,0]→0.994  [1,1]→0.007</font><br/><br/><font point-size="8" color="#FFB3B3"><b>But:</b> bytecode-level random mutation produces garbage.<br/>Need structured, type-aware mutation approach.</font>>
+        fillcolor="#F5A623" fontcolor="white"
+        width=4.5
+    ];
+
+    ast_design [
+        label=<<b>AST Evolution Design</b><br/><font point-size="9">March 19 · 500+ lines</font><br/><br/><font point-size="8"><b>Key insight:</b> Don't mutate bytecode randomly.<br/>Decompile to AST → mutate structurally → recompile.</font><br/><br/><font point-size="8"><b>7-stage pipeline:</b><br/>  0. Marker opcodes (compiler hints for decompiler)<br/>  1. Bytecode → AST decompiler<br/>  2. AST → bytecode compiler (round-trip fidelity)<br/>  3. Stack simulator + type inference<br/>  4. Type-directed repair (deterministic shuffle insertion)<br/>  5. Semantic tags (tiered substitution queries)<br/>  6. AST genetic operators (4 mutation types)</font><br/><br/><font point-size="8"><b>Innovations:</b><br/>  • Stack shuffles as type permutation operators<br/>  • 4 signature categories (fully/partially/opaque/constrained)<br/>  • Compile-time type inference for : definitions</font>>
+        fillcolor="#4A90D9" fontcolor="white"
+        width=4.5
+    ];
+
+    ast_plan [
+        label=<<b>AST Evolution Implementation Plan</b><br/><font point-size="9">March 19 · v1.3.2 → v1.5.0</font><br/><br/><font point-size="8">Each of 7 stages independently testable and mergeable:<br/><br/>Stage 0: BlockBegin/BlockEnd/BlockSeparator opcodes<br/>Stage 1: AST types + recursive descent decompiler<br/>Stage 2: AST compiler with backpatched branches<br/>Stage 3: Stack simulator, signature index<br/>Stage 4: Type-directed repair (swap/rot/roll insertion)<br/>Stage 5: Semantic tags on 22 matrix/MLP words<br/>Stage 6: 4 genetic operators + EvolutionEngine integration<br/><br/><b>66 new tests</b> across all stages.</font>>
+        fillcolor="#7BC67E" fontcolor="white"
+        width=4.5
+    ];
+
+    // Flow
+    trigger -> mlp_layers_plan [color="#333333" penwidth=2.5 style=bold label="  critical gaps drive plan"];
+
+    mlp_layers_plan -> mlp_layers_review [
+        color="#F5A623" penwidth=2
+        label="  same-day implementation\n  and review"
+    ];
+
+    mlp_layers_review -> ast_design [
+        color="#555555" penwidth=2 style=dashed
+        label="  random mutation fails →\n  need structural approach"
+    ];
+
+    ast_design -> ast_plan [
+        color="#4A90D9" penwidth=2.5
+        label="  design informs plan"
+    ];
+
+    // Backward reference
+    mlp_layers_plan -> trigger [
+        label="  implements sections\n  3-6 of original MLP\n  design (Mar 10)"
+        color="#7BC67E"
+        style=dashed
+        penwidth=1.5
+        constraint=false
+    ];
+
+    // What happened next
+    next [
+        label=<<font point-size="9" color="#333333"><b>→ Drives Iteration 4:</b> After all 7 stages implemented,<br/>gap analysis reveals bugs and missing pieces (Mar 20)</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    ast_plan -> next [style=dotted color="#999999" penwidth=1];
+}

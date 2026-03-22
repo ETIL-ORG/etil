@@ -1,0 +1,69 @@
+// AST Mutation Sequence — Slide 3: Select and Apply Mutation Operator
+// One of 4 operators chosen randomly, with fallback
+
+digraph seq03 {
+    size="7.8,5.5!"; ratio=fill; rankdir=TB;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.5; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue" fontsize=8];
+
+    title [
+        label=<<font point-size="14"><b>3. Select and Apply Mutation Operator</b></font><br/><font point-size="9" color="#666666">Random selection with sequential fallback on failure</font>>
+        shape=plaintext style=""
+    ];
+
+    ast_in [
+        label=<<b>AST (from decompiler)</b>>
+        fillcolor="#F5A623" fontcolor="white" fontsize=9 width=2.5
+    ];
+
+    select [
+        label=<<b>Random operator selection</b><br/><font point-size="7">PRNG picks one of 4, tries others on failure</font>>
+        shape=diamond fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C"
+        fontsize=9 width=2.5 height=0.7
+    ];
+
+    // 4 operators
+    op1 [
+        label=<<b>substitute_call(ast)</b><br/><font point-size="7" color="#DDDDDD">1. Collect all WordCall nodes</font><br/><font point-size="7" color="#DDDDDD">2. Pick random call</font><br/><font point-size="7" color="#DDDDDD">3. Query SignatureIndex for alternatives</font><br/><font point-size="7" color="#DDDDDD">4. Tiered selection: L1 60% / L2 25% / L3 15%</font><br/><font point-size="7" color="#DDDDDD">5. Replace word name in AST node</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=8 width=3.0
+    ];
+
+    op2 [
+        label=<<b>perturb_constant(ast)</b><br/><font point-size="7" color="#DDDDDD">1. Collect all numeric Literal nodes</font><br/><font point-size="7" color="#DDDDDD">2. Pick random literal</font><br/><font point-size="7" color="#DDDDDD">3. Apply Gaussian noise (σ=0.1 × |value|)</font><br/><font point-size="7" color="#DDDDDD">4. Modify value in-place</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=8 width=3.0
+    ];
+
+    op3 [
+        label=<<b>move_block(ast)</b><br/><font point-size="7" color="#DDDDDD">1. Require Sequence with ≥3 children</font><br/><font point-size="7" color="#DDDDDD">2. Pick two different random positions</font><br/><font point-size="7" color="#DDDDDD">3. Extract node, reinsert elsewhere</font><br/><font point-size="7" color="#DDDDDD">4. Changes execution order</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=8 width=3.0
+    ];
+
+    op4 [
+        label=<<b>mutate_control_flow(ast)</b><br/><font point-size="7" color="#DDDDDD">50% wrap: WordCall → if true then WordCall</font><br/><font point-size="7" color="#DDDDDD">50% unwrap: IfThen → extract body inline</font><br/><font point-size="7" color="#DDDDDD">Alters control flow topology</font>>
+        fillcolor="#4A90D9" fontcolor="white" fontsize=8 width=3.0
+    ];
+
+    ast_out [
+        label=<<b>Mutated AST</b><br/><font point-size="7">May have type mismatches → needs repair</font>>
+        fillcolor="#D0021B" fontcolor="white" fontsize=9 width=2.5
+    ];
+
+    fail [
+        label=<<font point-size="8" color="#C62828"><b>All 4 fail → return null</b><br/>No child produced</font>>
+        shape=plaintext style=""
+    ];
+
+    title -> ast_in [style=invis];
+    ast_in -> select [color="#333333" penwidth=2];
+    select -> op1 [label=" try 1st" color="#333333" penwidth=1.5];
+    select -> op2 [label=" try 2nd" color="#888888" penwidth=1 style=dashed];
+    select -> op3 [label=" try 3rd" color="#888888" penwidth=1 style=dashed];
+    select -> op4 [label=" try 4th" color="#888888" penwidth=1 style=dashed];
+    op1 -> ast_out [label=" true" color="#2E7D32" penwidth=2];
+    op2 -> ast_out [label=" true" color="#2E7D32" penwidth=1.5];
+    op3 -> ast_out [label=" true" color="#2E7D32" penwidth=1.5];
+    op4 -> ast_out [label=" true" color="#2E7D32" penwidth=1.5];
+    select -> fail [label=" all false" color="#C62828" penwidth=1 style=dashed];
+}

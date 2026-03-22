@@ -39,15 +39,25 @@ ETIL MCP server directly for a richer experience:
 
 ### Interactive REPL: Simple Read-Evaluate-Process-Loop for the console.
 
-- Note: Further development on the REPL is not planned.
-- Use the TUI or another MCP client as the primary ETIL interface.
 - The REPL only works with a subset of the words, and is primarily a comparative testing tool. 
 
 ```bash
-./build/bin/etil_repl            # interactive mode
-echo '42 . cr' | 
+# interactive mode
+$ build/bin/etil_repl --data-dir evolutionary-til/data
+Evolutionary TIL REPL v1.6.0
+Type '/help' for commands, '/quit' to exit
 
-./build-debug/bin/etil_repl -q   # pipe-friendly quiet mode
+> /help dup
+dup
+  Description:  Duplicate top of stack
+  Stack effect: ( x -- x x )
+  Category:     stack
+> : x 41 + . ;
+> 1 x
+42
+
+# pipe-friendly quiet mode
+./build/bin/etil_repl -q
 ```
 
 - Line editing (arrow keys, Home/End, Ctrl-A/E/K)

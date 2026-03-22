@@ -1,0 +1,30 @@
+digraph slide08 {
+    size="7.8,4.5!"; ratio=fill; rankdir=LR;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.4; ranksep=0.8; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue"];
+
+    backref [
+        label=<<font point-size="8"><b>← MLP Design Analysis</b><br/>Mar 10 · implements sections 3-6</font>>
+        shape=octagon fillcolor="#FFF3E0" color="#E65100" fontcolor="#BF360C"
+        fontsize=8 penwidth=1.5 width=2.2
+    ];
+
+    prev [label=<<font point-size="8"><b>MLP Status Report</b><br/>Mar 18</font>>
+        fillcolor="#DDA8F0" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    curr [
+        label=<<b><font point-size="12">Layers 1-3 Plan + Review</font></b><br/><font point-size="9" color="#333333">March 18 · v1.3.0 · PLAN + REVIEW (same day!)</font><br/><br/><font point-size="8"><b>Plan:</b> Three layers to close status report gaps:</font><br/><font point-size="8">L1: TIL MLP library (mlp.til) — 275 lines</font><br/><font point-size="8">L2: SelectionEngine — 4 strategies</font><br/><font point-size="8">L3: EvolutionEngine — fitness evaluation</font><br/><br/><font point-size="8"><b>Review:</b> All 3 layers implemented same day.</font><br/><font point-size="8" color="#2E7D32">XOR trains to &lt;0.001 MSE in 2000 epochs.</font><br/><br/><font point-size="8" color="#C62828"><b>But:</b> bytecode-level random mutation<br/>produces garbage → need structural approach.</font>>
+        fillcolor="#F5A623" fontcolor="white" fontsize=10 width=3.8 penwidth=3 color="#C68400"
+    ];
+
+    next [label=<<font point-size="8"><b>AST Evolution Design</b><br/>Mar 19</font>>
+        fillcolor="#B8D4EE" fontcolor="#888888" fontsize=8 width=1.3 height=0.6
+        penwidth=1 style="filled,rounded,dashed"];
+
+    backref -> curr [style=dashed color="#E65100" penwidth=1.5 arrowhead=vee];
+    prev -> curr [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">gaps drive</font>>];
+    curr -> next [style=dotted color="#BBBBBB" penwidth=1.5 arrowhead=vee label=<<font point-size="7" color="#999999">insight drives</font>>];
+}

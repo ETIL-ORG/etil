@@ -1,0 +1,127 @@
+// ETIL Workflow — Iteration 4: Hardening and Assessment
+// v1.5.0 → v1.6.0 · Mar 20, 2026
+
+digraph Iter4 {
+    rankdir=TB;
+    fontname="Helvetica Neue";
+    fontsize=14;
+    bgcolor="white";
+    nodesep=0.8;
+    ranksep=1.0;
+    pad=0.6;
+
+    node [
+        fontname="Helvetica Neue"
+        fontsize=11
+        style="filled,rounded"
+        shape=box
+        penwidth=2
+        margin="0.18,0.10"
+    ];
+
+    edge [
+        fontname="Helvetica Neue"
+        fontsize=9
+    ];
+
+    // Title
+    title [
+        label=<<font point-size="18"><b>Iteration 4: Hardening &amp; Assessment</b></font><br/><font point-size="11" color="#666666">v1.5.0 → v1.6.0 · March 20, 2026 · Zero warnings, full retrospective</font><br/><br/><font point-size="9" color="#999999">Close the loop: audit, fix, assess against original goals</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    // Legend
+    subgraph cluster_legend {
+        label="";
+        style=invis;
+        margin=0;
+        node [fontsize=9 width=1.2 height=0.35];
+        leg_g [label="Gap Analysis" fillcolor="#D0021B" fontcolor="white"];
+        leg_p [label="Plan" fillcolor="#7BC67E" fontcolor="white"];
+        leg_r [label="Assessment" fillcolor="#F5A623" fontcolor="white"];
+        leg_g -> leg_p -> leg_r [style=invis];
+    }
+
+    title -> leg_g [style=invis];
+
+    // ================================================================
+    // TRIGGER
+    // ================================================================
+
+    trigger [
+        label=<<font point-size="9" color="#333333"><b>← From Iteration 3:</b> AST Evolution Plan complete (v1.5.0)<br/>All 7 stages implemented. Time to audit.</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    // ================================================================
+    // GAP ANALYSIS → COMPLETION
+    // ================================================================
+
+    stage6_gap [
+        label=<<b>Stage 6 Gap Analysis &amp; Code Review</b><br/><font point-size="9">March 20 · v1.5.1</font><br/><br/><font point-size="8">Deep audit of Stage 6 (AST genetic operators)<br/>against the implementation plan:</font><br/><br/><font point-size="8" color="#FFB3B3"><b>Bugs found:</b><br/>• Roll type-stack not updated in type_repair.cpp<br/>• Stale header declarations in ast_genetic_ops.hpp<br/>• Fitness set_limits allows DoS (SIZE_MAX)<br/>• evolve-register has no test case cap</font><br/><br/><font point-size="8" color="#FFB3B3"><b>Missing:</b><br/>• move_block operator not implemented<br/>• control_flow_mutation not implemented<br/>• Several test categories missing</font>>
+        fillcolor="#D0021B" fontcolor="white"
+        width=4.5
+    ];
+
+    stage6_plan [
+        label=<<b>Stage 6 Completion Plan</b><br/><font point-size="9">March 20 · 5 phases</font><br/><br/><font point-size="8"><b>Phase 1:</b> P0 bug fixes (roll type-stack, stale headers,<br/>  fitness limits 10000, test case cap 1000)<br/><b>Phase 2:</b> DRY refactoring (shared mutation helpers,<br/>  perturb_numeric extraction)<br/><b>Phase 3:</b> Missing operators (move_block,<br/>  control_flow_mutation with wrap/unwrap)<br/><b>Phase 4:</b> Test coverage (validity tests, DT/NDT split)<br/><b>Phase 5:</b> Compile-time type inference<br/>  (every : definition gets TypeSignature at ;)</font>>
+        fillcolor="#7BC67E" fontcolor="white"
+        width=4.5
+    ];
+
+    // ================================================================
+    // PARALLEL: BUILD WARNING CLEANUP
+    // ================================================================
+
+    warning_plan [
+        label=<<b>Build Warning Cleanup Plan</b><br/><font point-size="9">March 20</font><br/><br/><font point-size="8">Separate effort running in parallel:</font><br/><br/><font point-size="8">• <b>27 ETIL code warnings</b> eliminated<br/>• <b>GCC 13.3 LTO ICE</b> (internal compiler error:<br/>  non-deterministic crash in cfgcleanup.cc)<br/>  → Disabled -flto globally<br/>• <b>-Wpedantic dropped</b> (100 Abseil __int128 warnings,<br/>  can't suppress via system includes on ALIAS target)<br/>• Our one pedantic case: #pragma suppressed</font>>
+        fillcolor="#7BC67E" fontcolor="white"
+        width=4.5
+    ];
+
+    // ================================================================
+    // FINAL ASSESSMENT — THE PAYOFF
+    // ================================================================
+
+    mlp_assessment [
+        label=<<b>MLP Goal Assessment</b><br/><font point-size="9">March 20 · v1.6.0</font><br/><br/><font point-size="8">Comprehensive comparison: original design (v0.8.15)<br/>vs status report (v1.0.0) vs current implementation (v1.6.0):</font><br/><br/><font point-size="8" color="#90EE90"><b>7/8 design sections complete</b><br/>• Element-wise ops ✓  Activation functions ✓<br/>• Weight initialization ✓  Broadcasting ✓<br/>• Loss functions ✓  Matrix slicing ✓<br/>• Forward pass ✓  Backpropagation ✓<br/>• Evolutionary angle ✓ (far beyond original spec)</font><br/><br/><font point-size="8" color="#DDDDDD">1 deferred by design: in-place operations (optimization only)</font><br/><br/><font point-size="8"><b>Beyond the original spec:</b> AST-level evolution pipeline,<br/>4-strategy selection engine, compile-time type inference,<br/>1362 tests, zero build warnings</font><br/><br/><font point-size="10"><i>"The Evolutionary in ETIL is no longer aspirational."</i></font>>
+        fillcolor="#F5A623" fontcolor="white"
+        width=4.5
+        penwidth=3
+        color="#333333"
+    ];
+
+    // Flow
+    trigger -> stage6_gap [color="#333333" penwidth=2.5 style=bold label="  implementation complete → audit"];
+    stage6_gap -> stage6_plan [color="#D0021B" penwidth=2.5 label="  gaps drive completion plan"];
+    stage6_plan -> mlp_assessment [color="#888888" penwidth=1.5 label="  all phases done"];
+    warning_plan -> mlp_assessment [color="#888888" penwidth=1.5 label="  zero warnings"];
+
+    // Backward references to earlier iterations
+    stage6_gap -> trigger [
+        label="  audits Stage 6\n  of AST plan (Iter 3)"
+        color="#D0021B"
+        style=dashed
+        penwidth=1.5
+        constraint=false
+    ];
+
+    mlp_assessment -> trigger [
+        label="  compares v1.0.0\n  status (Iter 1)"
+        color="#F5A623"
+        style=dashed
+        penwidth=2
+        constraint=false
+    ];
+
+    // Closes the full cycle
+    cycle_close [
+        label=<<font point-size="9" color="#333333"><b>← References all the way back to</b> MLP Design Analysis (Mar 10, v0.8.15)<br/>Completes the full design-plan-review cycle across 4 iterations in 10 days.</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    mlp_assessment -> cycle_close [style=dotted color="#F5A623" penwidth=1.5];
+}

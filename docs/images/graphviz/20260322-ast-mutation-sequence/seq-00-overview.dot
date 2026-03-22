@@ -1,0 +1,89 @@
+// AST Mutation Sequence — Overview: Full Pipeline
+// Compact 4:3-ish aspect ratio for presentation
+
+digraph overview {
+    rankdir=TB;
+    fontname="Helvetica Neue"; fontsize=14;
+    bgcolor="white"; newrank=true;
+    nodesep=0.6; ranksep=0.7; pad=0.4;
+
+    node [fontname="Helvetica Neue" fontsize=10 style="filled,rounded" shape=box penwidth=2];
+    edge [fontname="Helvetica Neue" fontsize=8];
+
+    // Title
+    title [
+        label=<<font point-size="18"><b>AST Mutation Pipeline</b></font><br/><font point-size="10" color="#666666">EvolutionEngine::evolve_word()</font>>
+        shape=plaintext style=""
+    ];
+
+    // Row 1 cluster
+    subgraph cluster_row1 {
+        style=invis; margin=8;
+        parent [
+            label=<<b>Parent</b><br/><font point-size="8">WordImpl + bytecode</font>>
+            fillcolor="#9B9B9B" fontcolor="white" width=1.4
+        ];
+
+        decompile [
+            label=<<b>DECOMPILE</b><br/><font point-size="8">Marker-based recursive descent</font><br/><font point-size="7" color="#DDDDDD">ByteCode → ASTNode</font>>
+            fillcolor="#4A90D9" fontcolor="white" width=1.8
+        ];
+
+        mutate [
+            label=<<b>MUTATE</b><br/><font point-size="8">1 of 4 operators (random + fallback)</font><br/><font point-size="7" color="#FFCCCC">ASTNode → ASTNode</font>>
+            fillcolor="#D0021B" fontcolor="white" width=1.8
+        ];
+
+        parent -> decompile [color="#333333" penwidth=3 label=<<font point-size="7"> bytecode </font>>];
+        decompile -> mutate [color="#333333" penwidth=3 label=<<font point-size="7"> AST </font>>];
+    }
+
+    // Row 2 cluster
+    subgraph cluster_row2 {
+        style=invis; margin=8;
+        repair [
+            label=<<b>REPAIR</b><br/><font point-size="8">Type-directed shuffle insertion</font><br/><font point-size="7" color="#333333">ASTNode → ASTNode</font>>
+            fillcolor="#7BC67E" fontcolor="white" width=1.8
+        ];
+
+        compile [
+            label=<<b>COMPILE</b><br/><font point-size="8">Recursive emission + backpatching</font><br/><font point-size="7" color="#DDDDDD">ASTNode → ByteCode</font>>
+            fillcolor="#4A90D9" fontcolor="white" width=1.8
+        ];
+
+        repair -> compile [color="#333333" penwidth=3 label=<<font point-size="7"> repaired AST </font>>];
+    }
+
+    // Row 3 cluster
+    subgraph cluster_row3 {
+        style=invis; margin=8;
+        evaluate [
+            label=<<b>EVALUATE</b><br/><font point-size="8">Run test cases, assign fitness</font><br/><font point-size="7" color="#333333">ByteCode → weight</font>>
+            fillcolor="#F5A623" fontcolor="white" width=1.8
+        ];
+
+        register [
+            label=<<b>REGISTER</b><br/><font point-size="8">Add to Dictionary, prune weakest</font><br/><font point-size="7" color="white">WordImplPtr → Dict</font>>
+            fillcolor="#9C27B0" fontcolor="white" width=1.8
+        ];
+
+        evaluate -> register [color="#333333" penwidth=3 label=<<font point-size="7"> weighted child </font>>];
+    }
+
+    // Cross-row connections
+    mutate -> repair [color="#333333" penwidth=3 label=<<font point-size="7"> mutated AST </font>>];
+    compile -> evaluate [color="#333333" penwidth=3 label=<<font point-size="7"> bytecode </font>>];
+
+    // Failure paths
+    mutate_fail [label=<<font point-size="8" color="#C62828"><b>all 4 fail → discard</b></font>> shape=plaintext style=""];
+    repair_fail [label=<<font point-size="8" color="#C62828"><b>unrepairable → discard</b></font>> shape=plaintext style=""];
+
+    mutate -> mutate_fail [style=dashed color="#C62828" penwidth=1.5];
+    repair -> repair_fail [style=dashed color="#C62828" penwidth=1.5];
+
+    // Feedback loop
+    register -> parent [
+        label=<<font point-size="8"> next generation:<br/> child becomes parent</font>>
+        color="#F5A623" penwidth=2.5 style=dashed constraint=false
+    ];
+}

@@ -1,0 +1,112 @@
+// ETIL Workflow — Iteration 2: Observable System
+// v0.9.0 → v0.9.8 · Mar 12-17, 2026
+
+digraph Iter2 {
+    rankdir=TB;
+    fontname="Helvetica Neue";
+    fontsize=14;
+    bgcolor="white";
+    nodesep=0.8;
+    ranksep=1.0;
+    pad=0.6;
+
+    node [
+        fontname="Helvetica Neue"
+        fontsize=11
+        style="filled,rounded"
+        shape=box
+        penwidth=2
+        margin="0.18,0.10"
+    ];
+
+    edge [
+        fontname="Helvetica Neue"
+        fontsize=9
+    ];
+
+    // Title
+    title [
+        label=<<font point-size="18"><b>Iteration 2: Observable System</b></font><br/><font point-size="11" color="#666666">v0.9.0 → v0.9.8 · Mar 12-17, 2026 · 34 reactive stream operators</font><br/><br/><font point-size="9" color="#999999">RxJS-style reactive pipelines in a stack-based language</font>>
+        shape=plaintext
+        style=""
+    ];
+
+    // Legend
+    subgraph cluster_legend {
+        label="";
+        style=invis;
+        margin=0;
+        node [fontsize=9 width=1.2 height=0.35];
+        leg_d [label="Design" fillcolor="#4A90D9" fontcolor="white"];
+        leg_p [label="Plan" fillcolor="#7BC67E" fontcolor="white"];
+        leg_g [label="Gap Analysis" fillcolor="#D0021B" fontcolor="white"];
+        leg_d -> leg_p -> leg_g [style=invis];
+    }
+
+    title -> leg_d [style=invis];
+
+    // ================================================================
+    // THREE PARALLEL DESIGN TRACKS
+    // ================================================================
+
+    obs_design [
+        label=<<b>Observable Design</b><br/><font point-size="9">March 12</font><br/><br/><font point-size="8">Designed HeapObservable: linked-list pipeline nodes<br/>with per-node state for closure emulation.<br/><br/>Chose <b>Approach 3B</b> over alternatives:<br/>• 3A: CREATE/DOES&gt; (too FORTH-specific)<br/>• 3C: stack passing (too fragile)<br/><br/>21 core operators: creation, transform,<br/>accumulate, limiting, combination, terminal.</font>>
+        fillcolor="#4A90D9" fontcolor="white"
+        width=4.0
+    ];
+
+    obs_temporal [
+        label=<<b>Temporal Operators Design + Plan</b><br/><font point-size="9">March 15 · Two documents</font><br/><br/><font point-size="8">Extended Observable with time-aware operators.<br/>534-line design doc + 98-line plan.<br/><br/><b>13 temporal operators</b> in 3 tiers:<br/>• Tier 1: delay, timeout, debounce, throttle<br/>• Tier 2: buffer-time, timestamp, time-interval<br/>• Tier 3: audit-time, sample-time, take-until-time,<br/>  delay-each, retry-delay</font>>
+        fillcolor="#4A90D9" fontcolor="white"
+        width=4.0
+    ];
+
+    avo [
+        label=<<b>AVO Design + Plan</b><br/><font point-size="9">March 16 · Async Via Observables</font><br/><br/><font point-size="8">Vision: <b>unify ALL I/O as Observable streams</b>.<br/><br/>4 phases:<br/>1. Buffer operators (buffer, buffer-when, window, flat-map)<br/>2. Streaming file I/O (replace sync file words)<br/>3. Streaming HTTP (replace http-get/post)<br/>4. Remove 13 synchronous file I/O words</font>>
+        fillcolor="#4A90D9" fontcolor="white"
+        width=4.0
+    ];
+
+    obs_design -> obs_temporal [
+        label="  extends with\n  time awareness"
+        color="#4A90D9"
+        penwidth=2
+    ];
+
+    obs_design -> avo [
+        label="  evolves into\n  unified I/O vision"
+        color="#4A90D9"
+        penwidth=2
+    ];
+
+    // ================================================================
+    // GAP ANALYSIS → PLAN (the review sub-cycle)
+    // ================================================================
+
+    rxjs_gap [
+        label=<<b>RxJS Gap Analysis</b><br/><font point-size="9">March 17 · v0.9.0</font><br/><br/><font point-size="8">Scored <b>40+ RxJS operators</b> on two axes:<br/>• Applicability (high/medium/low for ETIL)<br/>• Difficulty (easy/medium/hard to implement)<br/><br/>Identified <b>10 high-applicability, easy</b> operators<br/>not yet implemented (tap, pairwise, first, last,<br/>take-while, distinct-until, start-with, finalize,<br/>switch-map, catch).</font>>
+        fillcolor="#D0021B" fontcolor="white"
+        width=4.0
+    ];
+
+    obs_gap_plan [
+        label=<<b>Observable Gap Fill Plan</b><br/><font point-size="9">March 17</font><br/><br/><font point-size="8">Two stages prioritized by gap analysis:<br/><br/><b>Stage 1:</b> 8 easy operators with clear semantics<br/><b>Stage 2:</b> 2 medium operators (switch-map, catch)<br/><br/>Each with execution logic snippets and test cases.</font>>
+        fillcolor="#7BC67E" fontcolor="white"
+        width=4.0
+    ];
+
+    rxjs_gap -> obs_gap_plan [
+        label="  gap analysis prioritizes\n  implementation order"
+        color="#D0021B"
+        penwidth=2.5
+    ];
+
+    // Implicit backward reference
+    rxjs_gap -> obs_design [
+        label="  reviews what's\n  been built (v0.9.0)"
+        color="#D0021B"
+        style=dashed
+        penwidth=1.5
+        constraint=false
+    ];
+}

@@ -1,0 +1,49 @@
+// AST Mutation Sequence — Slide 4: Type-Directed Repair
+// Deterministic shuffle insertion to fix type mismatches
+
+digraph seq04 {
+    size="7.8,5.5!"; ratio=fill; rankdir=TB;
+    fontname="Helvetica Neue"; bgcolor="white";
+    newrank=true; nodesep=0.5; ranksep=0.5; pad="0.3,0.2";
+    node [fontname="Helvetica Neue" style="filled,rounded" shape=box penwidth=1.5];
+    edge [fontname="Helvetica Neue" fontsize=8];
+
+    title [
+        label=<<font point-size="14"><b>4. Type-Directed Repair</b></font><br/><font point-size="9" color="#666666">Deterministic shuffle insertion fixes type mismatches after mutation</font>>
+        shape=plaintext style=""
+    ];
+
+    mutated [
+        label=<<b>Mutated AST</b><br/><font point-size="7" color="#FFB3B3">May have type mismatches at WordCall sites</font>>
+        fillcolor="#D0021B" fontcolor="white" fontsize=9 width=2.8
+    ];
+
+    repair [
+        label=<<b>TypeRepair::repair(ast, dict)</b><br/><font point-size="8" color="#333333">type_repair.cpp</font><br/><br/><font point-size="8">For each WordCall in the AST:</font><br/><br/><font point-size="8">1. <b>Simulate type stack</b> up to this point</font><br/><font point-size="8">2. <b>Lookup word's TypeSignature</b> from Dictionary</font><br/><font point-size="8">3. <b>Compare</b> stack TOS types vs expected inputs</font><br/><font point-size="8">4. On <b>mismatch</b>: search deeper in stack</font><br/><font point-size="8">5. <b>Insert minimal shuffle</b> before the call:</font><br/><br/><font point-size="7" color="#555555">   depth 1 → insert <b>swap</b></font><br/><font point-size="7" color="#555555">   depth 2 → insert <b>rot</b></font><br/><font point-size="7" color="#555555">   depth N → insert <b>push(N) roll</b></font><br/><br/><font point-size="8">6. <b>Update simulated type stack</b> after shuffle</font><br/><font point-size="8">7. Continue to next WordCall</font>>
+        fillcolor="#7BC67E" fontcolor="white" fontsize=9 width=4.2 penwidth=3 color="#5BA65E"
+    ];
+
+    // Example
+    example [
+        label=<<font point-size="8"><b>Example:</b> substitute_call replaced mat+ with mat*</font><br/><br/><font point-size="7">Before repair — stack has: [Float, Matrix, Matrix]</font><br/><font point-size="7">mat* expects: (Matrix, Matrix -- Matrix) ✓ OK at TOS</font><br/><br/><font point-size="7">Before repair — stack has: [Matrix, Float, Matrix]</font><br/><font point-size="7">mat* expects: (Matrix, Matrix -- Matrix)</font><br/><font point-size="7" color="#C62828">✗ TOS is Matrix but depth-1 is Float, need Matrix</font><br/><font point-size="7" color="#2E7D32">→ find Matrix at depth-2, insert <b>rot</b></font><br/><font point-size="7" color="#2E7D32">→ stack becomes [Float, Matrix, Matrix] → mat* proceeds</font>>
+        shape=note fillcolor="#FFF3E0" color="#E65100" fontcolor="#333333"
+        fontsize=8 penwidth=1.5 width=4.0
+    ];
+
+    // Outputs
+    repaired [
+        label=<<b>Repaired AST</b><br/><font point-size="7" color="#90EE90">All type mismatches resolved<br/>Shuffle words inserted deterministically</font>>
+        fillcolor="#2E7D32" fontcolor="white" fontsize=9 width=2.5
+    ];
+
+    failed [
+        label=<<font point-size="8" color="#C62828"><b>Repair failed → return null</b><br/>Needed type not on stack anywhere</font>>
+        shape=plaintext style=""
+    ];
+
+    title -> mutated [style=invis];
+    mutated -> repair [label="  mutated AST" color="#333333" penwidth=2];
+    repair -> repaired [label=" true" color="#2E7D32" penwidth=2];
+    repair -> failed [label=" false" color="#C62828" penwidth=1 style=dashed];
+    example -> repair [style=dashed color="#E65100" penwidth=1 arrowhead=none];
+}
