@@ -20,10 +20,16 @@ set(ETIL_CORE_SOURCES
     core/observable_primitives.cpp
     lvfs/lvfs.cpp
     lvfs/lvfs_primitives.cpp
-    fileio/file_io_primitives.cpp
-    fileio/uv_session.cpp
-    fileio/async_file_io.cpp
 )
+
+# File I/O sources — excluded for WASM (no libuv, no OS filesystem)
+if(NOT ETIL_WASM_TARGET)
+    list(APPEND ETIL_CORE_SOURCES
+        fileio/file_io_primitives.cpp
+        fileio/uv_session.cpp
+        fileio/async_file_io.cpp
+    )
+endif()
 
 set(ETIL_SELECTION_SOURCES
     selection/selection_engine.cpp
@@ -66,18 +72,30 @@ target_include_directories(etil
         $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(etil
-    PUBLIC
-        Threads::Threads
-        ${llvm_libs}
-        TBB::tbb
-        absl::flat_hash_map
-        absl::flat_hash_set
-        absl::synchronization
-        spdlog::spdlog
-        nlohmann_json::nlohmann_json
-        uv_a
-)
+if(ETIL_WASM_TARGET)
+    target_link_libraries(etil
+        PUBLIC
+            absl::flat_hash_map
+            absl::flat_hash_set
+            absl::synchronization
+            spdlog::spdlog
+            nlohmann_json::nlohmann_json
+    )
+    target_compile_definitions(etil PUBLIC ETIL_WASM_BUILD)
+else()
+    target_link_libraries(etil
+        PUBLIC
+            Threads::Threads
+            ${llvm_libs}
+            TBB::tbb
+            absl::flat_hash_map
+            absl::flat_hash_set
+            absl::synchronization
+            spdlog::spdlog
+            nlohmann_json::nlohmann_json
+            uv_a
+    )
+endif()
 
 # HTTP client primitives (http-get)
 if(ETIL_BUILD_HTTP_CLIENT)
@@ -99,24 +117,26 @@ if(ETIL_BUILD_MONGODB)
     target_compile_definitions(etil PUBLIC ETIL_MONGODB_ENABLED)
 endif()
 
-# Linear algebra primitives (mat-new, mat*, mat-solve, etc.)
-target_sources(etil PRIVATE
-    core/matrix_primitives.cpp
-)
-target_link_libraries(etil PUBLIC ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
-if(DEFINED OPENBLAS_INCLUDE_DIRS)
-    # FetchContent OpenBLAS: headers not on default include path
-    target_include_directories(etil PRIVATE ${OPENBLAS_INCLUDE_DIRS})
-endif()
+# Linear algebra primitives — excluded for WASM (no OpenBLAS/LAPACK)
+if(NOT ETIL_WASM_TARGET)
+    target_sources(etil PRIVATE
+        core/matrix_primitives.cpp
+    )
+    target_link_libraries(etil PUBLIC ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
+    if(DEFINED OPENBLAS_INCLUDE_DIRS)
+        # FetchContent OpenBLAS: headers not on default include path
+        target_include_directories(etil PRIVATE ${OPENBLAS_INCLUDE_DIRS})
+    endif()
 
-if(ETIL_USE_JEMALLOC AND JEMALLOC_FOUND)
-    target_link_libraries(etil PUBLIC ${JEMALLOC_LIBRARIES})
-endif()
+    if(ETIL_USE_JEMALLOC AND JEMALLOC_FOUND)
+        target_link_libraries(etil PUBLIC ${JEMALLOC_LIBRARIES})
+    endif()
 
-# Set compiler-specific options
-target_compile_options(etil PRIVATE
-    $<$<CXX_COMPILER_ID:GNU>:-march=native -mtune=native>
-)
+    # Set compiler-specific options
+    target_compile_options(etil PRIVATE
+        $<$<CXX_COMPILER_ID:GNU>:-march=native -mtune=native>
+    )
+endif()
 
 # Install rules
 install(TARGETS etil
@@ -130,6 +150,8 @@ install(DIRECTORY ../include/etil
     DESTINATION include
 )
 
+# MCP library — excluded for WASM (no server in browser)
+if(NOT ETIL_WASM_TARGET)
 # MCP library (separate from core — MCP deps don't leak into base library)
 set(ETIL_MCP_SOURCES
     mcp/json_rpc.cpp
@@ -176,3 +198,5 @@ if(ETIL_BUILD_JWT)
     target_link_libraries(etil_mcp PUBLIC jwt-cpp::jwt-cpp)
     target_compile_definitions(etil_mcp PUBLIC ETIL_JWT_ENABLED)
 endif()
+
+endif() # NOT ETIL_WASM_TARGET

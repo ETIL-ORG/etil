@@ -16,17 +16,19 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# GNU C++ specific flags
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    # -Wpedantic omitted: triggers 100+ warnings from Abseil's __int128 usage.
-    # Our one pedantic case (HeapString flexible array member) is suppressed
-    # with a targeted #pragma in heap_string.hpp.
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address,undefined")
-    # LTO disabled: GCC 13.3 ICE in try_forward_edges (cfgcleanup.cc:580)
-    # Non-deterministic crash during LTO link phase, hits different files each build.
-    # Re-enable when upgrading to GCC 14+.
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native")
+# Compiler-specific flags
+if(NOT ETIL_WASM_TARGET)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # -Wpedantic omitted: triggers 100+ warnings from Abseil's __int128 usage.
+        # Our one pedantic case (HeapString flexible array member) is suppressed
+        # with a targeted #pragma in heap_string.hpp.
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address,undefined")
+        # LTO disabled: GCC 13.3 ICE in try_forward_edges (cfgcleanup.cc:580)
+        # Non-deterministic crash during LTO link phase, hits different files each build.
+        # Re-enable when upgrading to GCC 14+.
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native")
+    endif()
 endif()
 
 # Options
@@ -37,6 +39,16 @@ option(ETIL_USE_JEMALLOC "Use jemalloc allocator" OFF)
 option(ETIL_BUILD_HTTP_CLIENT "Build HTTP client primitives (http-get)" ON)
 option(ETIL_BUILD_JWT "Build JWT authentication" ON)
 option(ETIL_BUILD_MONGODB "Build MongoDB integration (requires ETIL_BUILD_JWT)" ON)
+option(ETIL_WASM_TARGET "Build for WebAssembly via Emscripten" OFF)
+
+# WASM target forces off incompatible features
+if(ETIL_WASM_TARGET)
+    set(ETIL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(ETIL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(ETIL_BUILD_HTTP_CLIENT OFF CACHE BOOL "" FORCE)
+    set(ETIL_BUILD_JWT OFF CACHE BOOL "" FORCE)
+    set(ETIL_BUILD_MONGODB OFF CACHE BOOL "" FORCE)
+endif()
 
 # Include custom CMake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
