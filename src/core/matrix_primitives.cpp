@@ -12,8 +12,7 @@
 #include "etil/core/value_helpers.hpp"
 #include "etil/core/word_impl.hpp"
 
-#include <cblas.h>
-#include <lapacke.h>
+#include "etil/core/matrix_backend.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -435,11 +434,10 @@ bool prim_mat_mul(ExecutionContext& ctx) {
     }
     int64_t M = A->rows(), N = B->cols(), K = A->cols();
     auto* C = new HeapMatrix(M, N);
-    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-                static_cast<int>(M), static_cast<int>(N), static_cast<int>(K),
-                1.0, A->data(), A->lda(),
-                B->data(), B->lda(),
-                0.0, C->data(), C->lda());
+    backend::mat_multiply(A->data(), A->lda(),
+                          B->data(), B->lda(),
+                          C->data(), C->lda(),
+                          static_cast<int>(M), static_cast<int>(N), static_cast<int>(K));
     A->release();
     B->release();
     ctx.data_stack().push(Value::from(C));
@@ -540,16 +538,13 @@ bool prim_mat_solve(ExecutionContext& ctx) {
     auto* x = new HeapMatrix(n, nrhs);
     std::copy(b->data(), b->data() + b->size(), x->data());
 
-    std::vector<lapack_int> ipiv(n);
-    lapack_int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, n, nrhs,
-                                     Acopy->data(), n, ipiv.data(),
-                                     x->data(), n);
+    bool ok = backend::mat_solve(Acopy->data(), x->data(), n, nrhs);
     A->release();
     b->release();
     delete Acopy;
 
     ctx.data_stack().push(Value::from(x));
-    ctx.data_stack().push(Value(info == 0));
+    ctx.data_stack().push(Value(ok));
     return true;
 }
 
@@ -567,14 +562,10 @@ bool prim_mat_inv(ExecutionContext& ctx) {
     std::copy(A->data(), A->data() + A->size(), inv->data());
     A->release();
 
-    std::vector<lapack_int> ipiv(n);
-    lapack_int info = LAPACKE_dgetrf(LAPACK_COL_MAJOR, n, n, inv->data(), n, ipiv.data());
-    if (info == 0) {
-        info = LAPACKE_dgetri(LAPACK_COL_MAJOR, n, inv->data(), n, ipiv.data());
-    }
+    bool ok = backend::mat_inverse(inv->data(), n);
 
     ctx.data_stack().push(Value::from(inv));
-    ctx.data_stack().push(Value(info == 0));
+    ctx.data_stack().push(Value(ok));
     return true;
 }
 
@@ -592,21 +583,12 @@ bool prim_mat_det(ExecutionContext& ctx) {
     std::copy(A->data(), A->data() + A->size(), LU->data());
     A->release();
 
-    std::vector<lapack_int> ipiv(n);
-    lapack_int info = LAPACKE_dgetrf(LAPACK_COL_MAJOR, n, n, LU->data(), n, ipiv.data());
-
     double det = 0.0;
-    if (info == 0) {
-        det = 1.0;
-        for (int i = 0; i < n; ++i) {
-            det *= LU->get(i, i);
-            if (ipiv[i] != i + 1) det = -det;  // row swap changes sign
-        }
-    }
+    bool ok = backend::mat_determinant(LU->data(), n, det);
     delete LU;
 
     ctx.data_stack().push(Value(det));
-    ctx.data_stack().push(Value(info == 0));
+    ctx.data_stack().push(Value(ok));
     return true;
 }
 
@@ -638,14 +620,13 @@ bool prim_mat_eigen(ExecutionContext& ctx) {
     int n = static_cast<int>(A->rows());
 
     if (is_symmetric(A)) {
-        // Symmetric: DSYEV returns real eigenvalues + orthonormal eigenvectors
+        // Symmetric: real eigenvalues + orthonormal eigenvectors
         auto* evec = new HeapMatrix(n, n);
         std::copy(A->data(), A->data() + A->size(), evec->data());
         A->release();
 
         std::vector<double> w(n);
-        lapack_int info = LAPACKE_dsyev(LAPACK_COL_MAJOR, 'V', 'U', n,
-                                         evec->data(), n, w.data());
+        bool ok = backend::mat_eigen_symmetric(evec->data(), n, w.data());
 
         // Pack eigenvalues into a column vector (n×1 matrix)
         auto* eval = new HeapMatrix(n, 1);
@@ -653,9 +634,9 @@ bool prim_mat_eigen(ExecutionContext& ctx) {
 
         ctx.data_stack().push(Value::from(eval));
         ctx.data_stack().push(Value::from(evec));
-        ctx.data_stack().push(Value(info == 0));
+        ctx.data_stack().push(Value(ok));
     } else {
-        // General: DGEEV
+        // General: complex eigenvalues + right eigenvectors
         auto* Acopy = new HeapMatrix(n, n);
         std::copy(A->data(), A->data() + A->size(), Acopy->data());
         A->release();
@@ -663,11 +644,9 @@ bool prim_mat_eigen(ExecutionContext& ctx) {
         std::vector<double> wr(n), wi(n);
         auto* vr = new HeapMatrix(n, n);  // right eigenvectors
 
-        lapack_int info = LAPACKE_dgeev(LAPACK_COL_MAJOR, 'N', 'V', n,
-                                         Acopy->data(), n,
-                                         wr.data(), wi.data(),
-                                         nullptr, 1,  // no left eigenvectors
-                                         vr->data(), n);
+        bool ok = backend::mat_eigen_general(Acopy->data(), n,
+                                              wr.data(), wi.data(),
+                                              vr->data());
         delete Acopy;
 
         // Pack eigenvalues: real parts in column 0, imaginary in column 1
@@ -679,7 +658,7 @@ bool prim_mat_eigen(ExecutionContext& ctx) {
 
         ctx.data_stack().push(Value::from(eval));
         ctx.data_stack().push(Value::from(vr));
-        ctx.data_stack().push(Value(info == 0));
+        ctx.data_stack().push(Value(ok));
     }
     return true;
 }
@@ -699,14 +678,9 @@ bool prim_mat_svd(ExecutionContext& ctx) {
     auto* U = new HeapMatrix(m, minmn);
     auto* Vt = new HeapMatrix(minmn, n);
     std::vector<double> s(minmn);
-    std::vector<double> superb(minmn - 1);
 
-    lapack_int info = LAPACKE_dgesvd(LAPACK_COL_MAJOR, 'S', 'S', m, n,
-                                      Acopy->data(), m,
-                                      s.data(),
-                                      U->data(), m,
-                                      Vt->data(), minmn,
-                                      superb.data());
+    bool ok = backend::mat_svd(Acopy->data(), m, n,
+                                U->data(), s.data(), Vt->data());
     delete Acopy;
 
     // Pack singular values as column vector
@@ -716,7 +690,7 @@ bool prim_mat_svd(ExecutionContext& ctx) {
     ctx.data_stack().push(Value::from(U));
     ctx.data_stack().push(Value::from(S));
     ctx.data_stack().push(Value::from(Vt));
-    ctx.data_stack().push(Value(info == 0));
+    ctx.data_stack().push(Value(ok));
     return true;
 }
 
@@ -749,9 +723,7 @@ bool prim_mat_lstsq(ExecutionContext& ctx) {
     }
     b->release();
 
-    lapack_int info = LAPACKE_dgels(LAPACK_COL_MAJOR, 'N', m, n, nrhs,
-                                     Acopy->data(), m,
-                                     x->data(), ldb);
+    bool ok = backend::mat_lstsq(Acopy->data(), m, n, x->data(), ldb, nrhs);
     delete Acopy;
 
     // Extract the n×nrhs solution from x (first n rows)
@@ -764,7 +736,7 @@ bool prim_mat_lstsq(ExecutionContext& ctx) {
     delete x;
 
     ctx.data_stack().push(Value::from(result));
-    ctx.data_stack().push(Value(info == 0));
+    ctx.data_stack().push(Value(ok));
     return true;
 }
 

@@ -324,6 +324,23 @@ if(NOT ETIL_WASM_TARGET)
             set(LAPACKE_LIBRARIES ${LAPACKE_LIBRARY})
         endif()
     endif()
+else()
+    # Eigen for WASM builds — header-only C++ linear algebra (replaces OpenBLAS/LAPACKE)
+    find_package(Eigen3 QUIET CONFIG)
+    if(NOT Eigen3_FOUND)
+        FetchContent_Declare(
+            eigen
+            URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+            URL_HASH SHA256=8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        )
+        set(EIGEN_BUILD_DOC OFF CACHE BOOL "")
+        set(BUILD_TESTING OFF CACHE BOOL "")
+        set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "")
+        FetchContent_MakeAvailable(eigen)
+    else()
+        message(STATUS "Using pre-built Eigen3")
+    endif()
 endif()
 
 # Optional: jemalloc for better memory performance

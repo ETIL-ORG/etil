@@ -2943,9 +2943,7 @@ void register_primitives(Dictionary& dict) {
     register_byte_primitives(dict);
     register_map_primitives(dict);
     register_json_primitives(dict);
-#ifndef ETIL_WASM_BUILD
     register_matrix_primitives(dict);
-#endif
     etil::lvfs::register_lvfs_primitives(dict);
 #ifndef ETIL_WASM_BUILD
     etil::fileio::register_file_io_primitives(dict);

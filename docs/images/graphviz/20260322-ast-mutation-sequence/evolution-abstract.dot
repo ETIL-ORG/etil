@@ -1,0 +1,167 @@
+// Abstract depiction of the EvolutionEngine in action
+// Mutations branch, evaluation filters, pruning culls, generations recede
+
+digraph evolution_abstract {
+    bgcolor="#0A0E1A";
+    rankdir=LR;
+    fontname="Helvetica Neue";
+    newrank=true;
+    nodesep=0.15;
+    ranksep=0.9;
+    pad=0.6;
+    splines=curved;
+
+    node [fontname="Helvetica Neue" style=filled shape=circle penwidth=0 fontsize=1 label=""];
+    edge [arrowhead=none penwidth=1.2];
+
+    // ================================================================
+    // GENERATION 0 — The Ancestor
+    // ================================================================
+
+    g0 [width=0.9 height=0.9 fillcolor="#4FC3F7" color="#4FC3F7"
+        label=<<font point-size="11" color="#0A0E1A"><b>G0</b></font>>];
+
+    // ================================================================
+    // GENERATION 1 — First Mutations (4 children)
+    // ================================================================
+
+    g1a [width=0.65 height=0.65 fillcolor="#26C6DA" color="#26C6DA"];
+    g1b [width=0.65 height=0.65 fillcolor="#4DD0E1" color="#4DD0E1"];
+    g1c [width=0.50 height=0.50 fillcolor="#37474F" color="#EF535066" penwidth=2];  // pruned - dark with red outline
+    g1d [width=0.50 height=0.50 fillcolor="#37474F" color="#EF535066" penwidth=2];  // pruned
+
+    g0 -> g1a [color="#4FC3F788" penwidth=2.5];
+    g0 -> g1b [color="#4FC3F788" penwidth=2.5];
+    g0 -> g1c [color="#4FC3F733" penwidth=1.0 style=dashed];
+    g0 -> g1d [color="#4FC3F733" penwidth=1.0 style=dashed];
+
+    // ================================================================
+    // GENERATION 2 — Survivors mutate again
+    // ================================================================
+
+    // From g1a (strong lineage)
+    g2a1 [width=0.55 height=0.55 fillcolor="#66BB6A" color="#66BB6A"];
+    g2a2 [width=0.50 height=0.50 fillcolor="#81C784" color="#81C784"];
+    g2a3 [width=0.40 height=0.40 fillcolor="#37474F" color="#EF535055" penwidth=1.5];  // pruned
+
+    g1a -> g2a1 [color="#26C6DA88" penwidth=2.0];
+    g1a -> g2a2 [color="#26C6DA88" penwidth=2.0];
+    g1a -> g2a3 [color="#26C6DA33" penwidth=0.8 style=dashed];
+
+    // From g1b (weaker lineage)
+    g2b1 [width=0.50 height=0.50 fillcolor="#4DB6AC" color="#4DB6AC"];
+    g2b2 [width=0.40 height=0.40 fillcolor="#37474F" color="#EF535055" penwidth=1.5];  // pruned
+    g2b3 [width=0.40 height=0.40 fillcolor="#37474F" color="#EF535055" penwidth=1.5];  // pruned
+
+    g1b -> g2b1 [color="#4DD0E188" penwidth=1.8];
+    g1b -> g2b2 [color="#4DD0E133" penwidth=0.8 style=dashed];
+    g1b -> g2b3 [color="#4DD0E133" penwidth=0.8 style=dashed];
+
+    // ================================================================
+    // GENERATION 3 — Convergence toward fitness
+    // ================================================================
+
+    g3a1 [width=0.50 height=0.50 fillcolor="#FFA726" color="#FFA726"];  // warming — getting fit
+    g3a2 [width=0.45 height=0.45 fillcolor="#FFB74D" color="#FFB74D"];
+    g3a3 [width=0.35 height=0.35 fillcolor="#263238" color="#EF535044" penwidth=1.5];  // pruned
+
+    g2a1 -> g3a1 [color="#66BB6A88" penwidth=1.8];
+    g2a1 -> g3a2 [color="#66BB6A88" penwidth=1.5];
+    g2a1 -> g3a3 [color="#66BB6A33" penwidth=0.6 style=dashed];
+
+    g3b1 [width=0.42 height=0.42 fillcolor="#FFB74D" color="#FFB74D"];
+    g3b2 [width=0.32 height=0.32 fillcolor="#263238" color="#EF535044" penwidth=1.0];  // pruned
+
+    g2a2 -> g3b1 [color="#81C78488" penwidth=1.5];
+    g2a2 -> g3b2 [color="#81C78433" penwidth=0.6 style=dashed];
+
+    g3c1 [width=0.38 height=0.38 fillcolor="#4DB6AC88" color="#4DB6AC88"];
+    g3c2 [width=0.30 height=0.30 fillcolor="#263238" color="#EF535044" penwidth=1.0];  // pruned
+
+    g2b1 -> g3c1 [color="#4DB6AC66" penwidth=1.2];
+    g2b1 -> g3c2 [color="#4DB6AC33" penwidth=0.5 style=dashed];
+
+    // ================================================================
+    // GENERATION 4 — Fittest emerge (golden)
+    // ================================================================
+
+    g4a1 [width=0.45 height=0.45 fillcolor="#FF8F00" color="#FFB300" penwidth=2];
+    g4a2 [width=0.38 height=0.38 fillcolor="#FFA000" color="#FFC107"];
+    g4a3 [width=0.28 height=0.28 fillcolor="#1A1A2E" color="#FFD54F44" penwidth=1.0];
+
+    g3a1 -> g4a1 [color="#FFA72688" penwidth=1.8];
+    g3a1 -> g4a2 [color="#FFA72666" penwidth=1.2];
+    g3a2 -> g4a3 [color="#FFB74D33" penwidth=0.5 style=dashed];
+
+    g4b1 [width=0.35 height=0.35 fillcolor="#FFA000" color="#FFC107"];
+    g3b1 -> g4b1 [color="#FFB74D66" penwidth=1.0];
+
+    // ================================================================
+    // GENERATION 5+ — Vanishing into the distance
+    // ================================================================
+
+    g5a [width=0.38 height=0.38 fillcolor="#FF6F00" color="#FF8F00" penwidth=2];
+    g5b [width=0.28 height=0.28 fillcolor="#FFB30088" color="#FFB30088"];
+    g5c [width=0.22 height=0.22 fillcolor="#FFD54F55" color="#FFD54F55"];
+
+    g4a1 -> g5a [color="#FF8F0088" penwidth=1.5];
+    g4a1 -> g5b [color="#FF8F0055" penwidth=0.8];
+    g4a2 -> g5c [color="#FFA00044" penwidth=0.6];
+
+    // Generation 6 — smaller
+    g6a [width=0.30 height=0.30 fillcolor="#E65100" color="#FF6D00" penwidth=1.5];
+    g6b [width=0.20 height=0.20 fillcolor="#FF8F0066" color="#FF8F0066"];
+    g6c [width=0.15 height=0.15 fillcolor="#FFB30044" color="#FFB30044"];
+
+    g5a -> g6a [color="#FF6F0088" penwidth=1.2];
+    g5a -> g6b [color="#FF6F0044" penwidth=0.6];
+    g5b -> g6c [color="#FFB30033" penwidth=0.4];
+
+    // Generation 7 — barely visible
+    g7a [width=0.24 height=0.24 fillcolor="#BF360C" color="#E65100" penwidth=1.5];
+    g7b [width=0.14 height=0.14 fillcolor="#FF6F0044" color="#FF6F0044"];
+
+    g6a -> g7a [color="#E6510088" penwidth=1.0];
+    g6a -> g7b [color="#E6510033" penwidth=0.4];
+
+    // Generation 8 — embers
+    g8a [width=0.18 height=0.18 fillcolor="#870000" color="#BF360C" penwidth=1.0];
+    g8b [width=0.10 height=0.10 fillcolor="#BF360C55" color="#BF360C55"];
+
+    g7a -> g8a [color="#BF360C66" penwidth=0.8];
+    g7a -> g8b [color="#BF360C33" penwidth=0.3];
+
+    // Generation 9 — trailing sparks
+    g9a [width=0.12 height=0.12 fillcolor="#4A0000" color="#87000088"];
+    g9b [width=0.08 height=0.08 fillcolor="#4A000066" color="#4A000066"];
+    g9c [width=0.05 height=0.05 fillcolor="#4A000044" color="#4A000044"];
+
+    g8a -> g9a [color="#87000055" penwidth=0.5];
+    g8a -> g9b [color="#87000033" penwidth=0.3];
+    g9a -> g9c [color="#4A000033" penwidth=0.2];
+
+    // ================================================================
+    // FLOATING ANNOTATIONS (ethereal, low opacity)
+    // ================================================================
+
+    ann_mutate [
+        label=<<font point-size="10" color="#4FC3F766"><i>mutate</i></font>>
+        shape=plaintext style="" fillcolor="none"
+    ];
+    ann_evaluate [
+        label=<<font point-size="10" color="#66BB6A66"><i>evaluate</i></font>>
+        shape=plaintext style="" fillcolor="none"
+    ];
+    ann_select [
+        label=<<font point-size="10" color="#FFA72666"><i>select</i></font>>
+        shape=plaintext style="" fillcolor="none"
+    ];
+    ann_converge [
+        label=<<font point-size="9" color="#FF8F0055"><i>converge</i></font>>
+        shape=plaintext style="" fillcolor="none"
+    ];
+    ann_horizon [
+        label=<<font point-size="8" color="#BF360C44"><i>. . .</i></font>>
+        shape=plaintext style="" fillcolor="none"
+    ];
+}

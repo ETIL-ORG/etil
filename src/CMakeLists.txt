@@ -117,10 +117,21 @@ if(ETIL_BUILD_MONGODB)
     target_compile_definitions(etil PUBLIC ETIL_MONGODB_ENABLED)
 endif()
 
-# Linear algebra primitives — excluded for WASM (no OpenBLAS/LAPACK)
-if(NOT ETIL_WASM_TARGET)
+# Linear algebra primitives — always compiled, backend selected by target
+target_sources(etil PRIVATE
+    core/matrix_primitives.cpp
+)
+
+if(ETIL_WASM_TARGET)
+    # Eigen backend for WASM (header-only, no FORTRAN/BLAS dependency)
     target_sources(etil PRIVATE
-        core/matrix_primitives.cpp
+        core/matrix_backend_eigen.cpp
+    )
+    target_link_libraries(etil PUBLIC Eigen3::Eigen)
+else()
+    # BLAS/LAPACKE backend for native builds (OpenBLAS)
+    target_sources(etil PRIVATE
+        core/matrix_backend_blas.cpp
     )
     target_link_libraries(etil PUBLIC ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES} ${LAPACKE_LIBRARIES})
     if(DEFINED OPENBLAS_INCLUDE_DIRS)
