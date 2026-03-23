@@ -343,4 +343,93 @@ uint64_t Lvfs::home_usage_bytes() const {
     return total;
 }
 
+bool Lvfs::write_file(const std::string& path, const std::string& content) {
+    std::string norm = normalize(path);
+    if (is_read_only(norm)) return false;
+    std::string fs_path = map_to_filesystem(norm);
+    if (fs_path.empty()) return false;
+
+    // Create parent directories
+    fs::path p(fs_path);
+    std::error_code ec;
+    if (p.has_parent_path()) {
+        fs::create_directories(p.parent_path(), ec);
+        if (ec) return false;
+    }
+
+    std::ofstream ofs(fs_path, std::ios::out | std::ios::trunc);
+    if (!ofs.is_open()) return false;
+    ofs << content;
+    ofs.close();
+
+    notify_write();
+    return true;
+}
+
+bool Lvfs::append_file(const std::string& path, const std::string& content) {
+    std::string norm = normalize(path);
+    if (is_read_only(norm)) return false;
+    std::string fs_path = map_to_filesystem(norm);
+    if (fs_path.empty()) return false;
+
+    std::ofstream ofs(fs_path, std::ios::out | std::ios::app);
+    if (!ofs.is_open()) return false;
+    ofs << content;
+    ofs.close();
+
+    notify_write();
+    return true;
+}
+
+bool Lvfs::make_dir(const std::string& path) {
+    std::string norm = normalize(path);
+    if (is_read_only(norm)) return false;
+    std::string fs_path = map_to_filesystem(norm);
+    if (fs_path.empty()) return false;
+
+    std::error_code ec;
+    fs::create_directories(fs_path, ec);
+    if (ec) return false;
+
+    notify_write();
+    return true;
+}
+
+bool Lvfs::remove_file(const std::string& path) {
+    std::string norm = normalize(path);
+    if (is_read_only(norm)) return false;
+    std::string fs_path = map_to_filesystem(norm);
+    if (fs_path.empty()) return false;
+
+    std::error_code ec;
+    if (!fs::is_regular_file(fs_path, ec)) return false;
+    if (!fs::remove(fs_path, ec)) return false;
+
+    notify_write();
+    return true;
+}
+
+bool Lvfs::remove_dir(const std::string& path) {
+    std::string norm = normalize(path);
+    if (is_read_only(norm)) return false;
+    std::string fs_path = map_to_filesystem(norm);
+    if (fs_path.empty()) return false;
+
+    std::error_code ec;
+    auto count = fs::remove_all(fs_path, ec);
+    if (ec || count == 0) return false;
+
+    notify_write();
+    return true;
+}
+
+bool Lvfs::exists(const std::string& path) const {
+    std::string norm = normalize(path);
+    std::string fs_path = map_to_filesystem(norm);
+    if (fs_path.empty()) return norm == "/" || norm == "/home" || norm == "/library";
+
+    std::error_code ec;
+    return fs::exists(fs_path, ec);
+}
+
 } // namespace etil::lvfs

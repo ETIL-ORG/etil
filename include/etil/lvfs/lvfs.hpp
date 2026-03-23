@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -60,8 +61,37 @@ public:
     /// Read entire file contents. Returns nullopt if file cannot be read.
     std::optional<std::string> read_file(const std::string& path) const;
 
+    /// Write entire file contents. Creates parent directories as needed.
+    /// Returns false if path is read-only or write fails.
+    bool write_file(const std::string& path, const std::string& content);
+
+    /// Append to file. Creates the file if it doesn't exist.
+    bool append_file(const std::string& path, const std::string& content);
+
+    /// Create a directory (and parents). Returns false if read-only or fails.
+    bool make_dir(const std::string& path);
+
+    /// Remove a file. Returns false if read-only, not found, or is a directory.
+    bool remove_file(const std::string& path);
+
+    /// Remove a directory recursively. Returns false if read-only or fails.
+    bool remove_dir(const std::string& path);
+
+    /// Check if a path exists.
+    bool exists(const std::string& path) const;
+
     /// True if the resolved path is under /library (read-only).
     bool is_read_only(const std::string& path) const;
+
+    // ---- Write callback (Separation of Concerns) ----
+    // After any filesystem mutation (write, append, mkdir, rm),
+    // the registered callback is invoked. The JS layer hooks this
+    // to trigger FS.syncfs() for IDBFS persistence.
+
+    using WriteCallback = std::function<void()>;
+
+    /// Register a callback invoked after every write operation.
+    void set_write_callback(WriteCallback cb) { write_callback_ = std::move(cb); }
 
     const std::string& home_dir() const { return home_dir_; }
     const std::string& library_dir() const { return library_dir_; }
@@ -77,6 +107,10 @@ private:
     std::string home_dir_;     // Real filesystem path (with trailing /)
     std::string library_dir_;  // Real filesystem path (with trailing /)
     std::string cwd_;          // Virtual CWD, defaults to "/home"
+    WriteCallback write_callback_;  // Called after every write operation
+
+    /// Invoke write callback if registered.
+    void notify_write() { if (write_callback_) write_callback_(); }
 
     /// Normalize a virtual path: prepend CWD if relative, process . and ..
     std::string normalize(const std::string& path) const;

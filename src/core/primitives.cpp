@@ -1208,7 +1208,12 @@ bool prim_include(ExecutionContext& ctx) {
     auto* interp = ctx.interpreter();
     if (!interp) return false;
 
-    // Resolve relative to home directory (if configured)
+    // Absolute LVFS paths (/home/..., /library/...) go through load_file
+    // which resolves via resolve_logical_path. Relative paths resolve
+    // against the home directory.
+    if (path.size() > 0 && path[0] == '/') {
+        return interp->load_file(path);
+    }
     std::string resolved = interp->resolve_home_path(path);
     if (resolved.empty()) {
         ctx.err() << "Error: include path rejected '" << path << "'\n";
