@@ -14,10 +14,8 @@
 #include "etil/core/json_primitives.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_primitives.hpp"
-#ifndef ETIL_WASM_BUILD
 #include "etil/fileio/async_file_io.hpp"
 #include "etil/fileio/file_io_primitives.hpp"
-#endif
 #include "etil/lvfs/lvfs.hpp"
 #include "etil/mcp/role_permissions.hpp"
 #include "etil/core/heap_string.hpp"
@@ -2945,10 +2943,8 @@ void register_primitives(Dictionary& dict) {
     register_json_primitives(dict);
     register_matrix_primitives(dict);
     etil::lvfs::register_lvfs_primitives(dict);
-#ifndef ETIL_WASM_BUILD
     etil::fileio::register_file_io_primitives(dict);
     etil::fileio::register_async_file_io_primitives(dict);
-#endif
     register_observable_primitives(dict);
 }
 

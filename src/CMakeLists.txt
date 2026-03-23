@@ -22,12 +22,16 @@ set(ETIL_CORE_SOURCES
     lvfs/lvfs_primitives.cpp
 )
 
-# File I/O sources — excluded for WASM (no libuv, no OS filesystem)
+# File I/O primitives — always compiled (stdlib fallback in WASM)
+list(APPEND ETIL_CORE_SOURCES
+    fileio/file_io_primitives.cpp
+    fileio/async_file_io.cpp
+)
+
+# UvSession (libuv event loop) — native only
 if(NOT ETIL_WASM_TARGET)
     list(APPEND ETIL_CORE_SOURCES
-        fileio/file_io_primitives.cpp
         fileio/uv_session.cpp
-        fileio/async_file_io.cpp
     )
 endif()
 

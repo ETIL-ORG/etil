@@ -14,7 +14,9 @@
 #include "etil/lvfs/lvfs.hpp"
 #include "etil/mcp/role_permissions.hpp"
 
+#ifndef ETIL_WASM_BUILD
 #include <uv.h>
+#endif
 
 namespace etil::fileio::helpers {
 
@@ -263,6 +265,7 @@ inline bool is_home_root(const std::string& fs_path, Lvfs* lvfs) {
     return fs_norm == home;
 }
 
+#ifndef ETIL_WASM_BUILD
 /// Build the standard lstat result array: [size, mtime_us, is_dir, is_ro].
 inline etil::core::HeapArray* make_stat_array(const uv_stat_t& st,
                                               bool is_ro) {
@@ -278,5 +281,6 @@ inline etil::core::HeapArray* make_stat_array(const uv_stat_t& st,
     arr->push_back(Value(static_cast<bool>(is_ro)));
     return arr;
 }
+#endif
 
 } // namespace etil::fileio::helpers

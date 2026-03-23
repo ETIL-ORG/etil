@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/fileio/async_file_io.hpp"
+#ifndef ETIL_WASM_BUILD
 #include "etil/fileio/uv_session.hpp"
+#endif
 #include "etil/core/execution_context.hpp"
 #include "etil/core/dictionary.hpp"
 #include "etil/core/heap_array.hpp"
@@ -21,7 +23,9 @@
 #include <string>
 #include <vector>
 
+#ifndef ETIL_WASM_BUILD
 #include <uv.h>
+#endif
 
 namespace etil::fileio {
 
@@ -49,23 +53,26 @@ bool prim_exists(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
+        // Sync / WASM path
         std::error_code ec;
         bool exists = fs::exists(fs_path, ec);
         ctx.data_stack().push(Value(static_cast<bool>(exists)));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     FsRequest req;
     uv_fs_stat(uv->loop(), &req.req, fs_path.c_str(), FsRequest::on_complete);
     if (!uv->await_completion(ctx, req)) return false;
 
-    // UV_ENOENT means file doesn't exist — not an error for exists?
     bool exists = (req.result >= 0);
     ctx.data_stack().push(Value(static_cast<bool>(exists)));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -78,9 +85,11 @@ bool prim_read_file(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
+        // Sync / WASM path
         std::error_code ec;
         if (!fs::is_regular_file(fs_path, ec)) {
             ctx.data_stack().push(Value(false));
@@ -98,6 +107,7 @@ bool prim_read_file(ExecutionContext& ctx) {
         ctx.data_stack().push(make_heap_value(result));
         ctx.data_stack().push(Value(true));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     // Step 1: stat to get file size and verify it's a regular file
@@ -172,21 +182,24 @@ bool prim_read_file(ExecutionContext& ctx) {
     ctx.data_stack().push(make_heap_value(result));
     ctx.data_stack().push(Value(true));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
 // Helper: async write/append with open flags
 // ---------------------------------------------------------------------------
-bool write_file_impl(ExecutionContext& ctx, int flags) {
+bool write_file_impl(ExecutionContext& ctx, bool append) {
     std::string content, fs_path;
     auto s = pop_write_args(ctx, content, fs_path);
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
-        std::ofstream ofs(fs_path, (flags & UV_FS_O_APPEND)
+#endif
+        // Sync / WASM path
+        std::ofstream ofs(fs_path, append
             ? (std::ios::out | std::ios::app | std::ios::binary)
             : (std::ios::out | std::ios::trunc | std::ios::binary));
         if (!ofs.is_open()) {
@@ -196,7 +209,10 @@ bool write_file_impl(ExecutionContext& ctx, int flags) {
         ofs << content;
         ctx.data_stack().push(Value(static_cast<bool>(ofs.good())));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
+
+    int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | (append ? UV_FS_O_APPEND : UV_FS_O_TRUNC);
 
     // Open
     FsRequest open_req;
@@ -217,7 +233,7 @@ bool write_file_impl(ExecutionContext& ctx, int flags) {
                                     static_cast<unsigned int>(content.size()));
         FsRequest write_req;
         uv_fs_write(uv->loop(), &write_req.req, fd, &buf, 1,
-                     (flags & UV_FS_O_APPEND) ? -1 : 0,
+                     append ? -1 : 0,
                      FsRequest::on_complete);
         if (!uv->await_completion(ctx, write_req)) {
             uv_fs_t close_req;
@@ -244,20 +260,21 @@ bool write_file_impl(ExecutionContext& ctx, int flags) {
 
     ctx.data_stack().push(Value(true));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
 // write-file ( string path -- flag )
 // ---------------------------------------------------------------------------
 bool prim_write_file(ExecutionContext& ctx) {
-    return write_file_impl(ctx, UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_TRUNC);
+    return write_file_impl(ctx, false);
 }
 
 // ---------------------------------------------------------------------------
 // append-file ( string path -- flag )
 // ---------------------------------------------------------------------------
 bool prim_append_file(ExecutionContext& ctx) {
-    return write_file_impl(ctx, UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_APPEND);
+    return write_file_impl(ctx, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,14 +286,16 @@ bool prim_copy_file(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
         std::error_code ec;
         bool ok = fs::copy_file(src_fs, dest_fs,
                                 fs::copy_options::overwrite_existing, ec);
         ctx.data_stack().push(Value(static_cast<bool>(ok && !ec)));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     FsRequest req;
@@ -286,6 +305,7 @@ bool prim_copy_file(ExecutionContext& ctx) {
 
     ctx.data_stack().push(Value(static_cast<bool>(req.result >= 0)));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -297,13 +317,15 @@ bool prim_rename_file(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
         std::error_code ec;
         fs::rename(old_fs, new_fs, ec);
         ctx.data_stack().push(Value(static_cast<bool>(!ec)));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     FsRequest req;
@@ -313,6 +335,7 @@ bool prim_rename_file(ExecutionContext& ctx) {
 
     ctx.data_stack().push(Value(static_cast<bool>(req.result >= 0)));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -326,9 +349,10 @@ bool prim_lstat(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
         std::error_code ec;
         auto status = fs::status(fs_path, ec);
         if (ec || !fs::exists(status)) {
@@ -353,6 +377,7 @@ bool prim_lstat(ExecutionContext& ctx) {
         ctx.data_stack().push(make_heap_value(arr));
         ctx.data_stack().push(Value(true));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     FsRequest req;
@@ -368,6 +393,7 @@ bool prim_lstat(ExecutionContext& ctx) {
         make_stat_array(req.req.statbuf, lvfs->is_read_only(path))));
     ctx.data_stack().push(Value(true));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -381,9 +407,10 @@ bool prim_readdir(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
         std::error_code ec;
         if (!fs::is_directory(fs_path, ec)) {
             ctx.data_stack().push(Value(false));
@@ -398,6 +425,7 @@ bool prim_readdir(ExecutionContext& ctx) {
         ctx.data_stack().push(make_heap_value(arr));
         ctx.data_stack().push(Value(true));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     FsRequest req;
@@ -421,6 +449,7 @@ bool prim_readdir(ExecutionContext& ctx) {
     ctx.data_stack().push(make_heap_value(arr));
     ctx.data_stack().push(Value(true));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -480,9 +509,10 @@ bool prim_mkdir_tmp(ExecutionContext& ctx) {
     std::vector<char> buf(tmpl.begin(), tmpl.end());
     buf.push_back('\0');
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
         char* result = mkdtemp(buf.data());
         if (!result) {
             ctx.data_stack().push(Value(false));
@@ -493,6 +523,7 @@ bool prim_mkdir_tmp(ExecutionContext& ctx) {
         ctx.data_stack().push(make_heap_value(out_str));
         ctx.data_stack().push(Value(true));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     FsRequest req;
@@ -509,6 +540,7 @@ bool prim_mkdir_tmp(ExecutionContext& ctx) {
     ctx.data_stack().push(make_heap_value(out_str));
     ctx.data_stack().push(Value(true));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -522,9 +554,10 @@ bool prim_rmdir(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
         std::error_code ec;
         if (!fs::is_directory(fs_path, ec)) {
             ctx.data_stack().push(Value(false));
@@ -533,6 +566,7 @@ bool prim_rmdir(ExecutionContext& ctx) {
         bool ok = fs::remove(fs_path, ec);
         ctx.data_stack().push(Value(static_cast<bool>(ok && !ec)));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     // Verify it's a directory first
@@ -550,6 +584,7 @@ bool prim_rmdir(ExecutionContext& ctx) {
 
     ctx.data_stack().push(Value(static_cast<bool>(req.result >= 0)));
     return true;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -587,9 +622,10 @@ bool prim_truncate(ExecutionContext& ctx) {
     if (s == Status::Underflow) return false;
     if (s == Status::PushedFalse) return true;
 
+#ifndef ETIL_WASM_BUILD
     auto* uv = ctx.uv_session();
     if (!uv) {
-        // Fallback to sync
+#endif
         std::error_code ec;
         if (!fs::is_regular_file(fs_path, ec)) {
             ctx.data_stack().push(Value(false));
@@ -598,6 +634,7 @@ bool prim_truncate(ExecutionContext& ctx) {
         fs::resize_file(fs_path, 0, ec);
         ctx.data_stack().push(Value(static_cast<bool>(!ec)));
         return true;
+#ifndef ETIL_WASM_BUILD
     }
 
     // Stat first to verify regular file
@@ -642,6 +679,7 @@ bool prim_truncate(ExecutionContext& ctx) {
 
     ctx.data_stack().push(Value(static_cast<bool>(ok)));
     return true;
+#endif
 }
 
 } // anonymous namespace
