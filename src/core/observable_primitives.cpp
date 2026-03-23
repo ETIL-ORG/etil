@@ -2678,6 +2678,8 @@ void register_observable_primitives(Dictionary& dict) {
     dict.register_word("obs-kind",    mk("prim_obs_kind", prim_obs_kind,
         {T::Unknown}, {T::Unknown}));
 
+#ifndef ETIL_WASM_BUILD
+    // Temporal operators — blocked in WASM (sleep_for freezes the browser main thread)
     // Temporal: Creation
     dict.register_word("obs-timer",   mk("prim_obs_timer", prim_obs_timer,
         {T::Integer, T::Integer}, {T::Unknown}));
@@ -2713,6 +2715,7 @@ void register_observable_primitives(Dictionary& dict) {
     // Temporal: Error Recovery
     dict.register_word("obs-retry-delay", mk("prim_obs_retry_delay", prim_obs_retry_delay,
         {T::Unknown, T::Integer, T::Integer}, {T::Unknown}));
+#endif
 
     // AVO Phase 1: Buffer + Composition
     dict.register_word("obs-buffer", mk("prim_obs_buffer", prim_obs_buffer,
