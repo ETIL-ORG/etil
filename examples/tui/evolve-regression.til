@@ -1,0 +1,78 @@
+# evolve-regression.til — Symbolic Regression via AST Evolution
+#
+# Goal: Evolve a word to match f(x) = x^2 + 3x + 5
+# Method: Built-in AST evolution (evolve-register / evolve-word)
+#
+# The initial implementation is deliberately wrong (just doubles the input).
+# The evolution engine mutates the AST (substitute words, perturb constants,
+# move code blocks) to discover the correct polynomial.
+
+# --- Initial (wrong) implementation ---
+: target-fn dup + ;
+
+# --- Test cases: f(x) = x^2 + 3*x + 5 ---
+array-new
+  map-new s" in" array-new  0 array-push map-set
+          s" out" array-new 5 array-push map-set array-push
+  map-new s" in" array-new  1 array-push map-set
+          s" out" array-new 9 array-push map-set array-push
+  map-new s" in" array-new  2 array-push map-set
+          s" out" array-new 15 array-push map-set array-push
+  map-new s" in" array-new  3 array-push map-set
+          s" out" array-new 26 array-push map-set array-push
+  map-new s" in" array-new  5 array-push map-set
+          s" out" array-new 45 array-push map-set array-push
+  map-new s" in" array-new -1 array-push map-set
+          s" out" array-new 3 array-push map-set array-push
+  map-new s" in" array-new 10 array-push map-set
+          s" out" array-new 135 array-push map-set array-push
+  map-new s" in" array-new -2 array-push map-set
+          s" out" array-new 3 array-push map-set array-push
+  map-new s" in" array-new  4 array-push map-set
+          s" out" array-new 33 array-push map-set array-push
+  map-new s" in" array-new  7 array-push map-set
+          s" out" array-new 75 array-push map-set array-push
+variable regression-tests
+regression-tests !
+
+# --- Register for evolution ---
+s" target-fn" regression-tests @ evolve-register drop
+." Registered target-fn for AST evolution" cr
+
+# --- Enable weighted selection so evolved impls compete ---
+1 select-strategy
+
+# --- Seed PRNG for reproducibility ---
+42 random-seed
+
+# --- Evolve ---
+." Starting symbolic regression..." cr
+." Target: f(x) = x^2 + 3x + 5" cr
+cr
+
+: run-regression
+  100 0 do
+    s" target-fn" evolve-word
+    i 1 + 10 mod 0 = if
+      ." Gen " i 1 + .
+      ." : " . ." children" cr
+    else
+      drop
+    then
+  loop
+;
+run-regression
+
+# --- Test the evolved word ---
+cr ." === Results ===" cr
+." f(0)  = " 0  target-fn . ."  (expected 5)" cr
+." f(1)  = " 1  target-fn . ."  (expected 9)" cr
+." f(2)  = " 2  target-fn . ."  (expected 15)" cr
+." f(5)  = " 5  target-fn . ."  (expected 45)" cr
+." f(10) = " 10 target-fn . ."  (expected 135)" cr
+." f(-1) = " -1 target-fn . ."  (expected 3)" cr
+
+." Status: " s" target-fn" evolve-status . ." generations" cr
+
+# --- Clean up ---
+select-off

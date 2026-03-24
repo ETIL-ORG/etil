@@ -1,0 +1,68 @@
+# evolve-function.til — Function Synthesis via AST Evolution
+#
+# Goal: Evolve a word that computes f(x,y) = x*y + x - y
+# given only input/output test cases.
+# Method: Built-in AST evolution (evolve-register / evolve-word)
+#
+# Initial implementation: just adds the two inputs (wrong).
+
+# --- Initial (wrong) implementation ---
+: synth-fn + ;
+
+# --- Test cases: f(x,y) = x*y + x - y ---
+# Stack convention: x is deeper, y is TOS → ( x y -- result )
+array-new
+  map-new s" in" array-new 2 array-push 3 array-push map-set
+          s" out" array-new 5 array-push map-set array-push
+  map-new s" in" array-new 3 array-push 4 array-push map-set
+          s" out" array-new 11 array-push map-set array-push
+  map-new s" in" array-new 1 array-push 1 array-push map-set
+          s" out" array-new 1 array-push map-set array-push
+  map-new s" in" array-new 0 array-push 5 array-push map-set
+          s" out" array-new -5 array-push map-set array-push
+  map-new s" in" array-new 5 array-push 0 array-push map-set
+          s" out" array-new 5 array-push map-set array-push
+  map-new s" in" array-new 4 array-push 2 array-push map-set
+          s" out" array-new 10 array-push map-set array-push
+  map-new s" in" array-new 10 array-push 3 array-push map-set
+          s" out" array-new 37 array-push map-set array-push
+  map-new s" in" array-new -1 array-push 2 array-push map-set
+          s" out" array-new -5 array-push map-set array-push
+variable synth-tests
+synth-tests !
+
+# --- Register for evolution ---
+s" synth-fn" synth-tests @ evolve-register drop
+." Registered synth-fn for AST evolution" cr
+
+1 select-strategy
+42 random-seed
+
+." Starting function synthesis..." cr
+." Target: f(x,y) = x*y + x - y" cr
+cr
+
+: run-synthesis
+  200 0 do
+    s" synth-fn" evolve-word
+    i 1 + 20 mod 0 = if
+      ." Gen " i 1 + .
+      ." : " . ." children" cr
+    else
+      drop
+    then
+  loop
+;
+run-synthesis
+
+cr ." === Results ===" cr
+." f(2,3)   = " 2 3 synth-fn . ."  (expected 5)" cr
+." f(3,4)   = " 3 4 synth-fn . ."  (expected 11)" cr
+." f(1,1)   = " 1 1 synth-fn . ."  (expected 1)" cr
+." f(0,5)   = " 0 5 synth-fn . ."  (expected -5)" cr
+." f(10,3)  = " 10 3 synth-fn . ."  (expected 37)" cr
+." f(-1,2)  = " -1 2 synth-fn . ."  (expected -5)" cr
+
+." Status: " s" synth-fn" evolve-status . ." generations" cr
+
+select-off

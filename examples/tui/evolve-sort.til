@@ -1,0 +1,263 @@
+# evolve-sort.til — Evolve a Sorting Network via (1+1) ES
+#
+# Evolves a sorting network for N=4 inputs.
+# A sorting network is a fixed sequence of compare-and-swap(i,j) operations.
+# Optimal for N=4 is 5 comparators.
+#
+# Genome: array of [i,j] pairs (comparator indices).
+# Fitness: number of correctly sorted permutations (max 24 for N=4),
+#          tiebreaker: fewer comparators is better.
+# Mutation: replace, add, or remove a comparator.
+
+4 constant NET-SIZE
+8 constant MAX-COMPS
+1000 constant MAX-GENS
+
+variable best-net
+variable best-score
+variable gen-count
+
+# Helper: array-length drops the array, keeps only the count
+: alen array-length swap drop ;
+
+# --- All 24 permutations of [1,2,3,4] ---
+variable perms
+
+: build-perms
+  array-new
+  array-new 1 array-push 2 array-push 3 array-push 4 array-push array-push
+  array-new 1 array-push 2 array-push 4 array-push 3 array-push array-push
+  array-new 1 array-push 3 array-push 2 array-push 4 array-push array-push
+  array-new 1 array-push 3 array-push 4 array-push 2 array-push array-push
+  array-new 1 array-push 4 array-push 2 array-push 3 array-push array-push
+  array-new 1 array-push 4 array-push 3 array-push 2 array-push array-push
+  array-new 2 array-push 1 array-push 3 array-push 4 array-push array-push
+  array-new 2 array-push 1 array-push 4 array-push 3 array-push array-push
+  array-new 2 array-push 3 array-push 1 array-push 4 array-push array-push
+  array-new 2 array-push 3 array-push 4 array-push 1 array-push array-push
+  array-new 2 array-push 4 array-push 1 array-push 3 array-push array-push
+  array-new 2 array-push 4 array-push 3 array-push 1 array-push array-push
+  array-new 3 array-push 1 array-push 2 array-push 4 array-push array-push
+  array-new 3 array-push 1 array-push 4 array-push 2 array-push array-push
+  array-new 3 array-push 2 array-push 1 array-push 4 array-push array-push
+  array-new 3 array-push 2 array-push 4 array-push 1 array-push array-push
+  array-new 3 array-push 4 array-push 1 array-push 2 array-push array-push
+  array-new 3 array-push 4 array-push 2 array-push 1 array-push array-push
+  array-new 4 array-push 1 array-push 2 array-push 3 array-push array-push
+  array-new 4 array-push 1 array-push 3 array-push 2 array-push array-push
+  array-new 4 array-push 2 array-push 1 array-push 3 array-push array-push
+  array-new 4 array-push 2 array-push 3 array-push 1 array-push array-push
+  array-new 4 array-push 3 array-push 1 array-push 2 array-push array-push
+  array-new 4 array-push 3 array-push 2 array-push 1 array-push array-push
+  perms !
+;
+
+# --- Clone an array element by element ---
+variable _cl-src
+variable _cl-n
+
+: clone-array
+  _cl-src !
+  _cl-src @ alen _cl-n !
+  array-new
+  _cl-n @ 0 do
+    _cl-src @ i array-get array-push
+  loop
+;
+
+# --- Compare-and-swap using variables ---
+variable _cas-arr
+variable _cas-vi
+variable _cas-vj
+
+# cas ( arr i j -- arr )
+: cas
+  >r >r _cas-arr !
+  _cas-arr @ r> array-get _cas-vi !
+  _cas-arr @ r> array-get _cas-vj !
+  _cas-vi @ _cas-vj @ > if
+    # Swap: store vj at position i, vi at position j
+    # But we used r> already... we need the indices.
+    # Let me redo with all variables.
+  then
+  _cas-arr @
+;
+
+# Cleaner version with all variables
+variable _c-i
+variable _c-j
+
+: cas
+  _c-j ! _c-i ! _cas-arr !
+  _cas-arr @ _c-i @ array-get _cas-vi !
+  _cas-arr @ _c-j @ array-get _cas-vj !
+  _cas-vi @ _cas-vj @ > if
+    _cas-arr @ _c-i @ _cas-vj @ array-set _cas-arr !
+    _cas-arr @ _c-j @ _cas-vi @ array-set _cas-arr !
+  then
+  _cas-arr @
+;
+
+# --- Apply a sorting network to a copy of an array ---
+variable _an-net
+variable _an-n
+
+: apply-net
+  _an-net !
+  clone-array
+  _an-net @ alen _an-n !
+  _an-n @ 0 do
+    _an-net @ i array-get
+    dup 0 array-get swap 1 array-get
+    cas
+  loop
+;
+
+# --- Check if sorted ascending ---
+variable _is-ok
+
+: sorted?
+  true _is-ok !
+  dup alen 1 - 0 do
+    dup i array-get
+    over i 1 + array-get
+    > if false _is-ok ! then
+  loop
+  drop
+  _is-ok @
+;
+
+# --- Count correctly sorted permutations ---
+variable _co-net
+variable _co-cnt
+
+: count-ok
+  _co-net !
+  0 _co-cnt !
+  perms @ alen 0 do
+    perms @ i array-get
+    _co-net @ apply-net
+    sorted? if 1 _co-cnt @ + _co-cnt ! then
+  loop
+  _co-cnt @
+;
+
+# --- Fitness ---
+: net-fitness
+  dup count-ok
+  swap alen
+  swap 100 * swap -
+;
+
+# --- Random comparator [i,j] where i != j ---
+variable _rc-i
+variable _rc-j
+
+: rand-comp
+  0 NET-SIZE random-range _rc-i !
+  0 NET-SIZE random-range _rc-j !
+  _rc-i @ _rc-j @ = if
+    _rc-j @ 1 + NET-SIZE mod _rc-j !
+  then
+  array-new _rc-i @ array-push _rc-j @ array-push
+;
+
+# --- Random network ---
+: rand-net
+  array-new
+  3 MAX-COMPS random-range 0 do
+    rand-comp array-push
+  loop
+;
+
+# --- Mutate ---
+variable _m-net
+
+: mutate
+  clone-array _m-net !
+  0 100 random-range
+  dup 50 < if
+    drop
+    _m-net @ alen 0 swap random-range
+    rand-comp
+    _m-net @ rot rot array-set _m-net !
+  else
+    70 < if
+      _m-net @ alen MAX-COMPS < if
+        _m-net @ rand-comp array-push _m-net !
+      then
+    else
+      _m-net @ alen 2 > if
+        _m-net @ array-pop drop _m-net !
+      then
+    then
+  then
+  _m-net @
+;
+
+# --- Evolution ---
+
+: show-status
+  ." Gen " gen-count @ .
+  ." | Score " best-score @ .
+  ." | Sorted " best-net @ count-ok . ." /24"
+  ." | Comps " best-net @ alen .
+  cr
+;
+
+: evolve-step
+  best-net @ mutate
+  dup net-fitness
+  dup best-score @ > if
+    best-score !
+    best-net !
+  else
+    drop drop
+  then
+  1 gen-count @ + gen-count !
+;
+
+: run-sort
+  build-perms
+  42 random-seed
+
+  rand-net
+  dup net-fitness
+  best-score !
+  best-net !
+  0 gen-count !
+
+  ." Evolving sorting network (N=4)..." cr
+  ." Optimal: 5 comparators" cr
+  cr
+  show-status
+
+  begin
+    evolve-step
+    gen-count @ 100 mod 0 = if show-status then
+    best-net @ count-ok 24 =
+    gen-count @ MAX-GENS >= or
+  until
+
+  cr show-status cr
+
+  best-net @ count-ok 24 = if
+    ." SUCCESS: Valid sorting network found!" cr
+    ." Comparators: " best-net @ alen . cr
+    best-net @ alen 0 do
+      ."   swap-if(" best-net @ i array-get
+      dup 0 array-get . ." ," 1 array-get . ." )" cr
+    loop
+    best-net @ alen 5 = if
+      ." OPTIMAL! (5 is proven minimum for N=4)" cr
+    then
+    best-net @ alen 5 > if
+      ." Not optimal: got " best-net @ alen . ." (optimal is 5)" cr
+    then
+  else
+    ." Did not converge in " MAX-GENS . ." generations" cr
+    ." Best: " best-net @ count-ok . ." /24 sorted" cr
+  then
+;
+
+run-sort
