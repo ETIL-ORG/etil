@@ -1784,6 +1784,32 @@ bool prim_evolve_bridge(ExecutionContext& ctx) {
 // --- Evolution logging primitives ---
 
 // evolve-log-start ( level mask -- )
+// evolve-fitness-mode ( n -- )   0=binary, 1=distance
+bool prim_evolve_fitness_mode(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    int64_t mode = (opt->type == Value::Type::Integer) ? opt->as_int : 0;
+    engine->config().fitness_mode = (mode == 1)
+        ? etil::evolution::FitnessMode::Distance
+        : etil::evolution::FitnessMode::Binary;
+    return true;
+}
+
+// evolve-fitness-alpha ( f -- )
+bool prim_evolve_fitness_alpha(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    double alpha = 1.0;
+    if (opt->type == Value::Type::Float) alpha = opt->as_float;
+    else if (opt->type == Value::Type::Integer) alpha = static_cast<double>(opt->as_int);
+    engine->config().distance_alpha = alpha;
+    return true;
+}
+
 bool prim_evolve_log_start(ExecutionContext& ctx) {
     auto opt_mask = ctx.data_stack().pop();
     if (!opt_mask) return false;
@@ -3069,6 +3095,8 @@ static const PrimEntry prim_table[] = {
     {"evolve-tag",       prim_evolve_tag,       2, 0, {T::String, T::String}, {}},
     {"evolve-untag",     prim_evolve_untag,     1, 0, {T::String}, {}},
     {"evolve-bridge",    prim_evolve_bridge,    3, 0, {T::String, T::String, T::String}, {}},
+    {"evolve-fitness-mode",  prim_evolve_fitness_mode,  1, 0, {T::Integer}, {}},
+    {"evolve-fitness-alpha", prim_evolve_fitness_alpha, 1, 0, {T::Unknown}, {}},
     {"evolve-log-start", prim_evolve_log_start, 2, 0, {T::Integer, T::Integer}, {}},
     {"evolve-log-stop",  prim_evolve_log_stop,  0, 0, {},                    {}},
     {"evolve-log-dir",   prim_evolve_log_dir,   1, 0, {T::String},           {}},

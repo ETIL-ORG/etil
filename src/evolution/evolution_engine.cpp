@@ -90,7 +90,7 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
     // Evaluate existing implementations to set baseline weights
     std::vector<std::pair<WordImplPtr, FitnessResult>> results;
     for (auto& impl : evolvable) {
-        auto fr = fitness_.evaluate(*impl, tests, dict_);
+        auto fr = fitness_.evaluate(*impl, tests, dict_, 100000, config_.fitness_mode, config_.distance_alpha);
         impl->set_weight(std::max(fr.fitness, config_.prune_threshold));
         results.push_back({impl, fr});
         if (logger_.granular(EvolveLogCategory::Fitness)) {

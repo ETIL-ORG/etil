@@ -35,6 +35,8 @@ struct EvolutionConfig {
     MutationConfig mutation_config;
     MutationWeights mutation_weights;
     size_t max_ast_nodes = 30;    // bloat control for grow mutation
+    FitnessMode fitness_mode = FitnessMode::Binary;
+    double distance_alpha = 1.0;  // scaling for distance fitness
 
     // Logging — controlled via TIL words (evolve-log-start, etc.)
     EvolveLogLevel log_level = EvolveLogLevel::Off;
