@@ -64,6 +64,9 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
     }
     if (evolvable.empty()) return 0;
 
+    // Rebuild signature index if dictionary changed (tags added after construction)
+    ast_genetic_ops_.rebuild_index();
+
     if (logger_.enabled(EvolveLogCategory::Engine)) {
         logger_.log(EvolveLogCategory::Engine,
             "Gen " + std::to_string(state.generations) + ": evolving '" + word
