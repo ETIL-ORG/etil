@@ -19,6 +19,7 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
     , parent_selector_(etil::selection::Strategy::WeightedRandom)
 {
     ast_genetic_ops_.set_logger(&logger_);
+    ast_genetic_ops_.set_config(&config_);
 }
 
 void EvolutionEngine::register_tests(

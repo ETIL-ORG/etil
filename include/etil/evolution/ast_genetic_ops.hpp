@@ -17,6 +17,7 @@
 namespace etil::evolution {
 
 class EvolveLogger;
+struct EvolutionConfig;
 
 /// AST-level genetic operators: structural mutations that produce
 /// type-valid bytecode via the decompile → mutate → repair → compile pipeline.
@@ -26,6 +27,9 @@ public:
 
     /// Set the logger for mutation/crossover diagnostics.
     void set_logger(EvolveLogger* logger) { logger_ = logger; }
+
+    /// Set config for max_ast_nodes and mutation weights.
+    void set_config(const EvolutionConfig* config) { config_ = config; }
 
     /// Mutate a WordImpl using AST-level operators.
     /// Returns a new WordImpl with mutated bytecode, or null if mutation failed.
@@ -49,12 +53,15 @@ private:
     TypeRepair repair_;
     std::mt19937_64 rng_;
     EvolveLogger* logger_ = nullptr;
+    const EvolutionConfig* config_ = nullptr;
 
     // Mutation operators (each returns true if applied)
     bool substitute_call(ASTNode& ast);
     bool perturb_constant(ASTNode& ast);
     bool move_block(ASTNode& ast);
     bool mutate_control_flow(ASTNode& ast);
+    bool grow_node(ASTNode& ast);
+    bool shrink_node(ASTNode& ast);
     bool block_crossover(ASTNode& ast_a, const ASTNode& ast_b);
 };
 

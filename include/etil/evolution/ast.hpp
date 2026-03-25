@@ -80,6 +80,9 @@ struct ASTNode {
     static ASTNode make_sequence(std::vector<ASTNode> children);
 };
 
+/// Recursively count all nodes in an AST.
+size_t count_nodes(const ASTNode& node);
+
 /// Format an AST as indented text for debugging.
 std::string ast_to_string(const ASTNode& node, int indent = 0);
 

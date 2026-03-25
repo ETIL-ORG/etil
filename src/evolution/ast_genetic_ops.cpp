@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/evolution/ast_genetic_ops.hpp"
+#include "etil/evolution/evolution_engine.hpp"
 #include "etil/evolution/evolve_logger.hpp"
 #include "etil/evolution/mutation_helpers.hpp"
 
@@ -289,6 +290,128 @@ bool ASTGeneticOps::mutate_control_flow(ASTNode& ast) {
     }
 }
 
+// --- Grow: insert a new node into a Sequence ---
+
+bool ASTGeneticOps::grow_node(ASTNode& ast) {
+    // Bloat control
+    size_t max_nodes = config_ ? config_->max_ast_nodes : 30;
+    if (count_nodes(ast) >= max_nodes) {
+        if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
+            logger_->log(EvolveLogCategory::Grow,
+                "Rejected: AST has " + std::to_string(count_nodes(ast))
+                + " nodes (max " + std::to_string(max_nodes) + ")");
+        }
+        return false;
+    }
+
+    // Find all Sequence nodes
+    std::vector<ASTNode*> sequences;
+    collect_nodes(ast, [](const ASTNode& n) { return n.kind == ASTNodeKind::Sequence; }, sequences);
+    if (sequences.empty()) return false;
+
+    // Pick a random Sequence
+    std::uniform_int_distribution<size_t> seq_dist(0, sequences.size() - 1);
+    ASTNode* target_seq = sequences[seq_dist(rng_)];
+
+    // Pick a random insertion position (0 to children.size() inclusive)
+    std::uniform_int_distribution<size_t> pos_dist(0, target_seq->children.size());
+    size_t insert_pos = pos_dist(rng_);
+
+    // 70% grow-word, 30% grow-literal
+    std::uniform_int_distribution<int> choice(0, 9);
+    ASTNode new_node;
+
+    if (choice(rng_) < 7) {
+        // Grow-word: prefer (1,1) stack-neutral words from the index
+        auto candidates = index_.find_compatible(1, 1);
+        if (candidates.empty()) {
+            // Fall back to any (0,1) word (literal-like)
+            candidates = index_.find_compatible(0, 1);
+        }
+        if (candidates.empty()) return false;
+
+        std::uniform_int_distribution<size_t> word_dist(0, candidates.size() - 1);
+        new_node = ASTNode::make_word_call(candidates[word_dist(rng_)]);
+
+        if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
+            logger_->log(EvolveLogCategory::Grow,
+                "Inserted word '" + new_node.word_name
+                + "' at position " + std::to_string(insert_pos)
+                + " (" + std::to_string(count_nodes(ast)) + " nodes)");
+        }
+    } else {
+        // Grow-literal: random int [-10, 10] or float [-1.0, 1.0]
+        std::uniform_int_distribution<int> type_choice(0, 1);
+        if (type_choice(rng_) == 0) {
+            std::uniform_int_distribution<int64_t> int_dist(-10, 10);
+            int64_t val = int_dist(rng_);
+            new_node = ASTNode::make_literal_int(val);
+            if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
+                logger_->log(EvolveLogCategory::Grow,
+                    "Inserted literal " + std::to_string(val)
+                    + " at position " + std::to_string(insert_pos));
+            }
+        } else {
+            std::uniform_real_distribution<double> float_dist(-1.0, 1.0);
+            double val = float_dist(rng_);
+            new_node = ASTNode::make_literal_float(val);
+            if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
+                logger_->log(EvolveLogCategory::Grow,
+                    "Inserted literal " + std::to_string(val)
+                    + " at position " + std::to_string(insert_pos));
+            }
+        }
+    }
+
+    target_seq->children.insert(
+        target_seq->children.begin() + static_cast<long>(insert_pos),
+        std::move(new_node));
+    return true;
+}
+
+// --- Shrink: remove a node from a Sequence ---
+
+bool ASTGeneticOps::shrink_node(ASTNode& ast) {
+    // Find all Sequence nodes with ≥2 children
+    std::vector<ASTNode*> sequences;
+    collect_nodes(ast, [](const ASTNode& n) {
+        return n.kind == ASTNodeKind::Sequence && n.children.size() >= 2;
+    }, sequences);
+    if (sequences.empty()) return false;
+
+    // Pick a random Sequence
+    std::uniform_int_distribution<size_t> seq_dist(0, sequences.size() - 1);
+    ASTNode* target_seq = sequences[seq_dist(rng_)];
+
+    // Find removable children (WordCall or Literal only — never control flow)
+    std::vector<size_t> removable;
+    for (size_t i = 0; i < target_seq->children.size(); ++i) {
+        auto kind = target_seq->children[i].kind;
+        if (kind == ASTNodeKind::WordCall || kind == ASTNodeKind::Literal) {
+            removable.push_back(i);
+        }
+    }
+    if (removable.empty()) return false;
+
+    // Pick a random removable child
+    std::uniform_int_distribution<size_t> rem_dist(0, removable.size() - 1);
+    size_t remove_idx = removable[rem_dist(rng_)];
+
+    if (logger_ && logger_->enabled(EvolveLogCategory::Shrink)) {
+        auto& child = target_seq->children[remove_idx];
+        std::string desc = (child.kind == ASTNodeKind::WordCall)
+            ? "word '" + child.word_name + "'"
+            : "literal";
+        logger_->log(EvolveLogCategory::Shrink,
+            "Removed " + desc + " at position " + std::to_string(remove_idx)
+            + " (" + std::to_string(count_nodes(ast)) + " nodes)");
+    }
+
+    target_seq->children.erase(
+        target_seq->children.begin() + static_cast<long>(remove_idx));
+    return true;
+}
+
 // --- Public API ---
 
 WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
@@ -298,42 +421,53 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     // Decompile
     auto ast = decompiler_.decompile(*bc);
 
-    // Apply one random mutation from 4 operators
-    static const char* op_names[] = {"substitute", "perturb", "move", "control-flow"};
-    std::uniform_int_distribution<int> choice(0, 3);
-    bool mutated = false;
-    int first = choice(rng_);
+    // Weighted selection from 6 operators
+    static const char* op_names[] = {
+        "substitute", "perturb", "move", "control-flow", "grow", "shrink"
+    };
 
+    // Build weights vector from config (or defaults)
+    MutationWeights w;
+    if (config_) w = config_->mutation_weights;
+    std::vector<double> weights = {
+        w.substitute, w.perturb, w.move, w.control, w.grow, w.shrink
+    };
+    std::discrete_distribution<int> choice(weights.begin(), weights.end());
+
+    auto try_operator = [&](int op, ASTNode& a) -> bool {
+        switch (op) {
+            case 0: return substitute_call(a);
+            case 1: return perturb_constant(a);
+            case 2: return move_block(a);
+            case 3: return mutate_control_flow(a);
+            case 4: return grow_node(a);
+            case 5: return shrink_node(a);
+            default: return false;
+        }
+    };
+
+    int first = choice(rng_);
     if (logger_ && logger_->enabled(EvolveLogCategory::Engine)) {
         logger_->log(EvolveLogCategory::Engine,
             "Selected operator: " + std::string(op_names[first]));
     }
 
-    switch (first) {
-        case 0: mutated = substitute_call(ast); break;
-        case 1: mutated = perturb_constant(ast); break;
-        case 2: mutated = move_block(ast); break;
-        case 3: mutated = mutate_control_flow(ast); break;
-    }
-    // If first choice failed, try the others
+    bool mutated = try_operator(first, ast);
+
+    // If first choice failed, try the others in order
     if (!mutated) {
-        for (int i = 0; i < 4 && !mutated; ++i) {
+        for (int i = 0; i < 6 && !mutated; ++i) {
             if (i == first) continue;
             if (logger_ && logger_->granular(EvolveLogCategory::Engine)) {
                 logger_->detail(EvolveLogCategory::Engine,
                     std::string(op_names[first]) + " failed, trying " + op_names[i]);
             }
-            switch (i) {
-                case 0: mutated = substitute_call(ast); break;
-                case 1: mutated = perturb_constant(ast); break;
-                case 2: mutated = move_block(ast); break;
-                case 3: mutated = mutate_control_flow(ast); break;
-            }
+            mutated = try_operator(i, ast);
         }
     }
     if (!mutated) {
         if (logger_ && logger_->enabled(EvolveLogCategory::Engine)) {
-            logger_->log(EvolveLogCategory::Engine, "All 4 operators failed");
+            logger_->log(EvolveLogCategory::Engine, "All 6 operators failed");
         }
         return WordImplPtr();
     }

@@ -16,6 +16,16 @@
 
 namespace etil::evolution {
 
+/// Weights for the 6 AST mutation operators.
+struct MutationWeights {
+    double substitute = 0.30;
+    double perturb    = 0.15;
+    double move       = 0.10;
+    double control    = 0.10;
+    double grow       = 0.20;
+    double shrink     = 0.15;
+};
+
 struct EvolutionConfig {
     size_t population_limit = 10;
     size_t generation_size = 5;
@@ -23,6 +33,8 @@ struct EvolutionConfig {
     double prune_threshold = 0.01;
     bool use_ast_ops = true;      // use AST-level operators (default)
     MutationConfig mutation_config;
+    MutationWeights mutation_weights;
+    size_t max_ast_nodes = 30;    // bloat control for grow mutation
 
     // Logging — controlled via TIL words (evolve-log-start, etc.)
     EvolveLogLevel log_level = EvolveLogLevel::Off;
