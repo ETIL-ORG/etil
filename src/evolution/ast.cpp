@@ -3,6 +3,7 @@
 
 #include "etil/evolution/ast.hpp"
 
+#include <set>
 #include <sstream>
 
 namespace etil::evolution {
@@ -257,56 +258,71 @@ std::string format_mutation_diff(
     };
 
     std::ostringstream out;
+    constexpr size_t LINE_W = COL * 2 + 10;
 
     // Header
     out << "+-  MUTATION: " << mutation_desc << "  ";
     size_t header_len = 14 + mutation_desc.size() + 2;
-    if (header_len < COL * 3 + 6) out << std::string(COL * 3 + 6 - header_len, '-');
+    if (header_len < LINE_W) out << std::string(LINE_W - header_len, '-');
     out << "\n";
 
-    out << "| " << pad_to("BEFORE", COL) << "| " << pad_to("AFTER", COL) << "| ANNOTATION\n";
+    // Column headers: BEFORE | AFTER | R | ANNOTATION
+    out << "| " << pad_to("BEFORE", COL) << "| " << pad_to("AFTER", COL)
+        << "| R | ANNOTATION\n";
 
-    // Diff lines
-    size_t max_lines = std::max(before.size(), after.size());
+    // Build repair marker set: which lines in after_repair differ from after
+    // (these are the lines inserted/modified by type repair)
+    std::set<size_t> repair_lines;
+    if (!after_repair.empty()) {
+        // Simple diff: find lines in after_repair that don't match after at same position
+        size_t rmax = after_repair.size();
+        size_t amax = after.size();
+        // If repair added lines, everything from amax onward is repair
+        for (size_t i = 0; i < rmax; ++i) {
+            if (i >= amax || after_repair[i] != after[i]) {
+                repair_lines.insert(i);
+            }
+        }
+    }
+
+    // Use after_repair as the "final" column if repair changed something
+    const auto& final_code = after_repair.empty() ? after : after_repair;
+
+    // Diff lines: BEFORE vs FINAL (with repair markers)
+    size_t max_lines = std::max(before.size(), final_code.size());
     for (size_t i = 0; i < max_lines; ++i) {
         std::string b = (i < before.size()) ? before[i] : "";
-        std::string a = (i < after.size()) ? after[i] : "";
+        std::string f = (i < final_code.size()) ? final_code[i] : "";
+        std::string r = repair_lines.count(i) ? "*" : " ";
         std::string annot;
 
         if (i >= before.size()) {
             annot = "<- inserted";
-        } else if (i >= after.size()) {
+            if (repair_lines.count(i)) annot += " (repair)";
+        } else if (i >= final_code.size()) {
             annot = "<- removed";
-        } else if (b != a) {
+        } else if (b != f) {
             annot = "<- changed";
+            if (repair_lines.count(i)) annot += " (repair)";
         }
 
-        out << "| " << pad_to(b, COL) << "| " << pad_to(a, COL) << "| " << annot << "\n";
+        out << "| " << pad_to(b, COL) << "| " << pad_to(f, COL)
+            << "| " << r << " | " << annot << "\n";
     }
 
-    // Repair section
-    if (!after_repair.empty()) {
-        out << "+- TYPE REPAIR ";
-        out << std::string(COL * 3 - 10, '-') << "\n";
-        out << "| " << pad_to("AFTER REPAIR", COL) << "| " << pad_to("", COL) << "| ANNOTATION\n";
-        for (size_t i = 0; i < after_repair.size(); ++i) {
-            std::string annot;
-            // Check if this line was added by repair (not in after)
-            if (i >= after.size() || (i < after.size() && after_repair[i] != after[i])) {
-                annot = "<- repair";
-            }
-            out << "| " << pad_to(after_repair[i], COL) << "| " << pad_to("", COL) << "| " << annot << "\n";
-        }
-        if (!repair_desc.empty()) {
-            out << "| " << repair_desc << "\n";
-        }
+    // Repair summary
+    if (!repair_lines.empty()) {
+        out << "+- TYPE REPAIR: " << repair_lines.size() << " line(s) modified";
+        if (!repair_desc.empty()) out << " — " << repair_desc;
+        out << "\n";
     } else if (!repair_desc.empty()) {
         out << "+- TYPE REPAIR: " << repair_desc << "\n";
     }
 
     // Result
     out << "+- RESULT: " << (success ? "success" : "rejected") << " ";
-    out << std::string(COL * 3 - 5, '-') << "\n";
+    if (LINE_W > 12) out << std::string(LINE_W - 12, '-');
+    out << "\n";
 
     return out.str();
 }

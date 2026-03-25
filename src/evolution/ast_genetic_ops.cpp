@@ -430,6 +430,14 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     auto bc = parent.bytecode();
     if (!bc) return WordImplPtr();
 
+    if (logger_ && (logger_->enabled(EvolveLogCategory::Diff) ||
+                     logger_->enabled(EvolveLogCategory::ASTDump))) {
+        logger_->log(EvolveLogCategory::Engine,
+            "===== MUTATE impl#" + std::to_string(parent.id())
+            + " (gen " + std::to_string(parent.generation())
+            + ", '" + parent.name() + "') BEGIN =====");
+    }
+
     // Decompile
     auto ast = decompiler_.decompile(*bc);
 
@@ -492,6 +500,8 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     if (!mutated) {
         if (logger_ && logger_->enabled(EvolveLogCategory::Engine)) {
             logger_->log(EvolveLogCategory::Engine, "All 6 operators failed");
+            logger_->log(EvolveLogCategory::Engine,
+                "===== MUTATE impl#" + std::to_string(parent.id()) + " END (all failed) =====");
         }
         return WordImplPtr();
     }
@@ -545,7 +555,14 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
             "AST AFTER REPAIR:\n" + ast_to_string(ast));
     }
 
-    if (!repaired) return WordImplPtr();
+    if (!repaired) {
+        if (logger_ && (logger_->enabled(EvolveLogCategory::Diff) ||
+                         logger_->enabled(EvolveLogCategory::ASTDump))) {
+            logger_->log(EvolveLogCategory::Engine,
+                "===== MUTATE impl#" + std::to_string(parent.id()) + " END (rejected) =====");
+        }
+        return WordImplPtr();
+    }
 
     // Compile back to bytecode
     auto new_bc = compiler_.compile(ast);
@@ -559,6 +576,13 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     child->set_signature(parent.signature());
     child->set_bytecode(new_bc);
     child->add_mutation(MutationHistory::MutationType::Inline, "ast-mutation");
+
+    if (logger_ && (logger_->enabled(EvolveLogCategory::Diff) ||
+                     logger_->enabled(EvolveLogCategory::ASTDump))) {
+        logger_->log(EvolveLogCategory::Engine,
+            "===== MUTATE impl#" + std::to_string(parent.id())
+            + " → impl#" + std::to_string(id) + " END (success) =====");
+    }
     return child;
 }
 
