@@ -1593,6 +1593,82 @@ bool prim_evolve_register(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-register-pool ( word-str tests-array pool-array -- flag )
+// Register test cases with a restricted word pool.
+bool prim_evolve_register_pool(ExecutionContext& ctx) {
+    auto* pool_arr = pop_array(ctx);
+    if (!pool_arr) return false;
+    auto* test_arr = pop_array(ctx);
+    if (!test_arr) { ctx.data_stack().push(Value::from(pool_arr)); return false; }
+    auto* word_str = pop_string(ctx);
+    if (!word_str) {
+        ctx.data_stack().push(Value::from(test_arr));
+        ctx.data_stack().push(Value::from(pool_arr));
+        return false;
+    }
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        word_str->release(); test_arr->release(); pool_arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    std::string word(word_str->c_str(), word_str->length());
+    word_str->release();
+
+    if (test_arr->length() > 1000) {
+        ctx.err() << "Error: evolve-register-pool max 1000 test cases\n";
+        test_arr->release(); pool_arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Parse test cases (same as evolve-register)
+    std::vector<etil::evolution::TestCase> tests;
+    for (size_t i = 0; i < test_arr->length(); ++i) {
+        Value map_val;
+        test_arr->get(i, map_val);
+        if (map_val.type != Value::Type::Map) continue;
+        auto* m = map_val.as_map();
+        etil::evolution::TestCase tc;
+        auto in_it = m->entries().find("in");
+        if (in_it != m->entries().end() && in_it->second.type == Value::Type::Array) {
+            auto* in_arr = in_it->second.as_array();
+            for (size_t j = 0; j < in_arr->length(); ++j) {
+                Value v; in_arr->get(j, v); tc.inputs.push_back(v);
+            }
+        }
+        auto out_it = m->entries().find("out");
+        if (out_it != m->entries().end() && out_it->second.type == Value::Type::Array) {
+            auto* out_arr = out_it->second.as_array();
+            for (size_t j = 0; j < out_arr->length(); ++j) {
+                Value v; out_arr->get(j, v); tc.expected.push_back(v);
+            }
+        }
+        tests.push_back(std::move(tc));
+    }
+    test_arr->release();
+
+    // Parse pool array (array of word name strings)
+    std::vector<std::string> pool;
+    for (size_t i = 0; i < pool_arr->length(); ++i) {
+        Value v;
+        pool_arr->get(i, v);
+        if (v.type == Value::Type::String) {
+            auto* s = v.as_string();
+            pool.emplace_back(s->c_str(), s->length());
+        }
+        value_release(v);
+    }
+    pool_arr->release();
+
+    engine->register_tests_with_pool(word, std::move(tests), std::move(pool));
+    ctx.data_stack().push(Value(true));
+    return true;
+}
+
 // evolve-word ( word-str -- n )
 // Run one generation of evolution for a word. Returns number of children created.
 bool prim_evolve_word(ExecutionContext& ctx) {
@@ -1646,6 +1722,120 @@ bool prim_evolve_status(ExecutionContext& ctx) {
 
     size_t gens = engine->generations_run(word);
     ctx.data_stack().push(Value(static_cast<int64_t>(gens)));
+    return true;
+}
+
+// --- Evolution tagging primitives ---
+
+// evolve-tag ( word-str tags-str -- )
+bool prim_evolve_tag(ExecutionContext& ctx) {
+    auto* tags_str = pop_string(ctx);
+    if (!tags_str) return false;
+    auto* word_str = pop_string(ctx);
+    if (!word_str) { tags_str->release(); return false; }
+
+    std::string word(word_str->c_str(), word_str->length());
+    std::string tags(tags_str->c_str(), tags_str->length());
+    word_str->release();
+    tags_str->release();
+
+    auto* dict = ctx.dictionary();
+    if (!dict) return false;
+    dict->set_concept_metadata(word, "semantic-tags", MetadataFormat::Text, std::move(tags));
+    return true;
+}
+
+// evolve-untag ( word-str -- )
+bool prim_evolve_untag(ExecutionContext& ctx) {
+    auto* word_str = pop_string(ctx);
+    if (!word_str) return false;
+    std::string word(word_str->c_str(), word_str->length());
+    word_str->release();
+
+    auto* dict = ctx.dictionary();
+    if (!dict) return false;
+    dict->remove_concept_metadata(word, "semantic-tags");
+    return true;
+}
+
+// evolve-bridge ( word-str from-type to-type -- )
+bool prim_evolve_bridge(ExecutionContext& ctx) {
+    auto* to_str = pop_string(ctx);
+    if (!to_str) return false;
+    auto* from_str = pop_string(ctx);
+    if (!from_str) { to_str->release(); return false; }
+    auto* word_str = pop_string(ctx);
+    if (!word_str) { from_str->release(); to_str->release(); return false; }
+
+    std::string word(word_str->c_str(), word_str->length());
+    std::string from_type(from_str->c_str(), from_str->length());
+    std::string to_type(to_str->c_str(), to_str->length());
+    word_str->release();
+    from_str->release();
+    to_str->release();
+
+    auto* dict = ctx.dictionary();
+    if (!dict) return false;
+    dict->set_concept_metadata(word, "bridge-from", MetadataFormat::Text, std::move(from_type));
+    dict->set_concept_metadata(word, "bridge-to", MetadataFormat::Text, std::move(to_type));
+    return true;
+}
+
+// --- Evolution logging primitives ---
+
+// evolve-log-start ( level mask -- )
+bool prim_evolve_log_start(ExecutionContext& ctx) {
+    auto opt_mask = ctx.data_stack().pop();
+    if (!opt_mask) return false;
+    auto opt_level = ctx.data_stack().pop();
+    if (!opt_level) {
+        ctx.data_stack().push(*opt_mask);
+        return false;
+    }
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        return true;
+    }
+
+    int64_t level = opt_level->type == Value::Type::Integer ? opt_level->as_int : 0;
+    int64_t mask = opt_mask->type == Value::Type::Integer ? opt_mask->as_int : 0;
+
+    auto log_level = etil::evolution::EvolveLogLevel::Off;
+    if (level == 1) log_level = etil::evolution::EvolveLogLevel::Logical;
+    else if (level >= 2) log_level = etil::evolution::EvolveLogLevel::Granular;
+
+    engine->logger().start(log_level, static_cast<uint32_t>(mask));
+    return true;
+}
+
+// evolve-log-stop ( -- )
+bool prim_evolve_log_stop(ExecutionContext& ctx) {
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        return true;
+    }
+    engine->logger().stop();
+    return true;
+}
+
+// evolve-log-dir ( path -- )
+bool prim_evolve_log_dir(ExecutionContext& ctx) {
+    auto* path_str = pop_string(ctx);
+    if (!path_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        path_str->release();
+        return true;
+    }
+
+    std::string dir(path_str->c_str(), path_str->length());
+    path_str->release();
+    engine->logger().set_directory(dir);
     return true;
 }
 
@@ -2872,9 +3062,16 @@ static const PrimEntry prim_table[] = {
     {"select-off",       prim_select_off,       0, 0, {},                {}},
     // Evolution
     {"evolve-register",  prim_evolve_register,  2, 1, {T::String, T::Array}, {T::Unknown}},
+    {"evolve-register-pool", prim_evolve_register_pool, 3, 1, {T::String, T::Array, T::Array}, {T::Unknown}},
     {"evolve-word",      prim_evolve_word,      1, 1, {T::String},           {T::Integer}},
     {"evolve-all",       prim_evolve_all,       0, 0, {},                    {}},
     {"evolve-status",    prim_evolve_status,    1, 1, {T::String},           {T::Integer}},
+    {"evolve-tag",       prim_evolve_tag,       2, 0, {T::String, T::String}, {}},
+    {"evolve-untag",     prim_evolve_untag,     1, 0, {T::String}, {}},
+    {"evolve-bridge",    prim_evolve_bridge,    3, 0, {T::String, T::String, T::String}, {}},
+    {"evolve-log-start", prim_evolve_log_start, 2, 0, {T::Integer, T::Integer}, {}},
+    {"evolve-log-stop",  prim_evolve_log_stop,  0, 0, {},                    {}},
+    {"evolve-log-dir",   prim_evolve_log_dir,   1, 0, {T::String},           {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::Unknown}},

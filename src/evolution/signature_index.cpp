@@ -24,8 +24,11 @@ void SignatureIndex::rebuild(const Dictionary& dict) {
         int produced = static_cast<int>(sig.outputs.size());
         by_effect_[{consumed, produced}].push_back(name);
 
-        // Cache semantic tags from metadata
+        // Cache semantic tags: manual first, fall back to inferred
         auto tag_meta = dict.get_concept_metadata(name, "semantic-tags");
+        if (!tag_meta) {
+            tag_meta = dict.get_concept_metadata(name, "semantic-tags-inferred");
+        }
         if (tag_meta) {
             std::vector<std::string> word_tags;
             std::istringstream iss(tag_meta->content);
@@ -50,6 +53,21 @@ std::vector<std::string> SignatureIndex::find_exact(
     return find_compatible(
         static_cast<int>(sig.inputs.size()),
         static_cast<int>(sig.outputs.size()));
+}
+
+std::vector<std::string> SignatureIndex::find_restricted(
+    int consumed, int produced,
+    const std::vector<std::string>& pool) const {
+    if (pool.empty()) return find_compatible(consumed, produced);
+
+    auto all = find_compatible(consumed, produced);
+    std::vector<std::string> filtered;
+    for (const auto& name : all) {
+        for (const auto& p : pool) {
+            if (name == p) { filtered.push_back(name); break; }
+        }
+    }
+    return filtered;
 }
 
 std::vector<std::string> SignatureIndex::get_tags(const std::string& word) const {

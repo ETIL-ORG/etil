@@ -112,6 +112,14 @@ static const char* kind_name(ASTNodeKind k) {
     return "Unknown";
 }
 
+size_t count_nodes(const ASTNode& node) {
+    size_t count = 1;
+    for (const auto& child : node.children) {
+        count += count_nodes(child);
+    }
+    return count;
+}
+
 std::string ast_to_string(const ASTNode& node, int indent) {
     std::ostringstream os;
     std::string pad(static_cast<size_t>(indent * 2), ' ');

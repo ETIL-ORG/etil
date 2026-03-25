@@ -1976,3 +1976,156 @@ s" obs-switch-map" s" category" s" text" s" observable" meta! drop
 s" obs-catch" s" description" s" text" s" On pipeline error, call recovery xt which must return a fallback observable" meta! drop
 s" obs-catch" s" stack-effect" s" text" s" ( obs xt -- obs' )" meta! drop
 s" obs-catch" s" category" s" text" s" observable" meta! drop
+
+# ===================================================================
+# Semantic tags for AST evolution tiered substitution
+# ===================================================================
+
+# --- Arithmetic ---
+s" +" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" -" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" *" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" /" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" mod" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" /mod" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" negate" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" abs" s" semantic-tags" s" text" s" arithmetic math" meta! drop
+s" max" s" semantic-tags" s" text" s" arithmetic" meta! drop
+s" min" s" semantic-tags" s" text" s" arithmetic" meta! drop
+
+# --- Stack ---
+s" dup" s" semantic-tags" s" text" s" stack" meta! drop
+s" drop" s" semantic-tags" s" text" s" stack" meta! drop
+s" swap" s" semantic-tags" s" text" s" stack" meta! drop
+s" over" s" semantic-tags" s" text" s" stack" meta! drop
+s" rot" s" semantic-tags" s" text" s" stack" meta! drop
+s" nip" s" semantic-tags" s" text" s" stack" meta! drop
+s" tuck" s" semantic-tags" s" text" s" stack" meta! drop
+s" pick" s" semantic-tags" s" text" s" stack" meta! drop
+s" roll" s" semantic-tags" s" text" s" stack" meta! drop
+s" ?dup" s" semantic-tags" s" text" s" stack" meta! drop
+s" depth" s" semantic-tags" s" text" s" stack" meta! drop
+
+# --- Comparison ---
+s" =" s" semantic-tags" s" text" s" comparison" meta! drop
+s" <>" s" semantic-tags" s" text" s" comparison" meta! drop
+s" <" s" semantic-tags" s" text" s" comparison" meta! drop
+s" >" s" semantic-tags" s" text" s" comparison" meta! drop
+s" <=" s" semantic-tags" s" text" s" comparison" meta! drop
+s" >=" s" semantic-tags" s" text" s" comparison" meta! drop
+s" 0=" s" semantic-tags" s" text" s" comparison" meta! drop
+s" 0<" s" semantic-tags" s" text" s" comparison" meta! drop
+s" 0>" s" semantic-tags" s" text" s" comparison" meta! drop
+
+# --- Logic ---
+s" and" s" semantic-tags" s" text" s" logic" meta! drop
+s" or" s" semantic-tags" s" text" s" logic" meta! drop
+s" xor" s" semantic-tags" s" text" s" logic" meta! drop
+s" not" s" semantic-tags" s" text" s" logic" meta! drop
+s" invert" s" semantic-tags" s" text" s" logic" meta! drop
+s" lshift" s" semantic-tags" s" text" s" logic" meta! drop
+s" rshift" s" semantic-tags" s" text" s" logic" meta! drop
+
+# --- Math ---
+s" sqrt" s" semantic-tags" s" text" s" math" meta! drop
+s" sin" s" semantic-tags" s" text" s" math" meta! drop
+s" cos" s" semantic-tags" s" text" s" math" meta! drop
+s" tan" s" semantic-tags" s" text" s" math" meta! drop
+s" tanh" s" semantic-tags" s" text" s" math" meta! drop
+s" asin" s" semantic-tags" s" text" s" math" meta! drop
+s" acos" s" semantic-tags" s" text" s" math" meta! drop
+s" atan" s" semantic-tags" s" text" s" math" meta! drop
+s" atan2" s" semantic-tags" s" text" s" math" meta! drop
+s" log" s" semantic-tags" s" text" s" math" meta! drop
+s" log2" s" semantic-tags" s" text" s" math" meta! drop
+s" log10" s" semantic-tags" s" text" s" math" meta! drop
+s" exp" s" semantic-tags" s" text" s" math" meta! drop
+s" pow" s" semantic-tags" s" text" s" math" meta! drop
+s" ceil" s" semantic-tags" s" text" s" math" meta! drop
+s" floor" s" semantic-tags" s" text" s" math" meta! drop
+s" round" s" semantic-tags" s" text" s" math" meta! drop
+s" trunc" s" semantic-tags" s" text" s" math" meta! drop
+s" fmin" s" semantic-tags" s" text" s" math" meta! drop
+s" fmax" s" semantic-tags" s" text" s" math" meta! drop
+s" pi" s" semantic-tags" s" text" s" math" meta! drop
+
+# --- String ---
+s" s+" s" semantic-tags" s" text" s" string" meta! drop
+s" s=" s" semantic-tags" s" text" s" string comparison" meta! drop
+s" s<>" s" semantic-tags" s" text" s" string comparison" meta! drop
+s" slength" s" semantic-tags" s" text" s" string" meta! drop
+s" substr" s" semantic-tags" s" text" s" string" meta! drop
+s" strim" s" semantic-tags" s" text" s" string" meta! drop
+s" sfind" s" semantic-tags" s" text" s" string" meta! drop
+s" sreplace" s" semantic-tags" s" text" s" string" meta! drop
+s" ssplit" s" semantic-tags" s" text" s" string" meta! drop
+s" sjoin" s" semantic-tags" s" text" s" string" meta! drop
+s" sregex-find" s" semantic-tags" s" text" s" string" meta! drop
+s" sregex-replace" s" semantic-tags" s" text" s" string" meta! drop
+s" sregex-search" s" semantic-tags" s" text" s" string" meta! drop
+s" sregex-match" s" semantic-tags" s" text" s" string" meta! drop
+
+# --- Array ---
+s" array-new" s" semantic-tags" s" text" s" array" meta! drop
+s" array-push" s" semantic-tags" s" text" s" array" meta! drop
+s" array-pop" s" semantic-tags" s" text" s" array" meta! drop
+s" array-get" s" semantic-tags" s" text" s" array" meta! drop
+s" array-set" s" semantic-tags" s" text" s" array" meta! drop
+s" array-length" s" semantic-tags" s" text" s" array" meta! drop
+s" array-shift" s" semantic-tags" s" text" s" array" meta! drop
+s" array-unshift" s" semantic-tags" s" text" s" array" meta! drop
+s" array-compact" s" semantic-tags" s" text" s" array" meta! drop
+s" array-reverse" s" semantic-tags" s" text" s" array" meta! drop
+s" array-each" s" semantic-tags" s" text" s" array" meta! drop
+s" array-map" s" semantic-tags" s" text" s" array" meta! drop
+s" array-filter" s" semantic-tags" s" text" s" array" meta! drop
+s" array-reduce" s" semantic-tags" s" text" s" array" meta! drop
+
+# --- Map ---
+s" map-new" s" semantic-tags" s" text" s" map" meta! drop
+s" map-set" s" semantic-tags" s" text" s" map" meta! drop
+s" map-get" s" semantic-tags" s" text" s" map" meta! drop
+s" map-remove" s" semantic-tags" s" text" s" map" meta! drop
+s" map-length" s" semantic-tags" s" text" s" map" meta! drop
+s" map-keys" s" semantic-tags" s" text" s" map" meta! drop
+s" map-values" s" semantic-tags" s" text" s" map" meta! drop
+s" map-has?" s" semantic-tags" s" text" s" map" meta! drop
+
+# --- JSON ---
+s" json-parse" s" semantic-tags" s" text" s" json" meta! drop
+s" json-dump" s" semantic-tags" s" text" s" json" meta! drop
+s" json-pretty" s" semantic-tags" s" text" s" json" meta! drop
+s" json-get" s" semantic-tags" s" text" s" json" meta! drop
+s" json-length" s" semantic-tags" s" text" s" json" meta! drop
+s" json-type" s" semantic-tags" s" text" s" json" meta! drop
+s" json-keys" s" semantic-tags" s" text" s" json" meta! drop
+s" json->map" s" semantic-tags" s" text" s" json conversion" meta! drop
+s" json->array" s" semantic-tags" s" text" s" json conversion" meta! drop
+s" map->json" s" semantic-tags" s" text" s" json conversion" meta! drop
+s" array->json" s" semantic-tags" s" text" s" json conversion" meta! drop
+s" json->value" s" semantic-tags" s" text" s" json conversion" meta! drop
+
+# --- Conversion ---
+s" int->float" s" semantic-tags" s" text" s" conversion" meta! drop
+s" float->int" s" semantic-tags" s" text" s" conversion" meta! drop
+s" number->string" s" semantic-tags" s" text" s" conversion" meta! drop
+s" string->number" s" semantic-tags" s" text" s" conversion" meta! drop
+s" bool" s" semantic-tags" s" text" s" conversion" meta! drop
+
+# --- I/O ---
+s" ." s" semantic-tags" s" text" s" io" meta! drop
+s" cr" s" semantic-tags" s" text" s" io" meta! drop
+s" emit" s" semantic-tags" s" text" s" io" meta! drop
+s" space" s" semantic-tags" s" text" s" io" meta! drop
+s" spaces" s" semantic-tags" s" text" s" io" meta! drop
+s" type" s" semantic-tags" s" text" s" io" meta! drop
+s" s." s" semantic-tags" s" text" s" io" meta! drop
+
+# --- ByteArray ---
+s" bytes-new" s" semantic-tags" s" text" s" bytearray" meta! drop
+s" bytes-get" s" semantic-tags" s" text" s" bytearray" meta! drop
+s" bytes-set" s" semantic-tags" s" text" s" bytearray" meta! drop
+s" bytes-length" s" semantic-tags" s" text" s" bytearray" meta! drop
+s" bytes-resize" s" semantic-tags" s" text" s" bytearray" meta! drop
+s" bytes->string" s" semantic-tags" s" text" s" bytearray conversion" meta! drop
+s" string->bytes" s" semantic-tags" s" text" s" bytearray conversion" meta! drop

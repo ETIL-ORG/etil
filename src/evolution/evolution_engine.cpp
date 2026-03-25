@@ -17,11 +17,22 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
     , genetic_ops_(config.mutation_config)
     , ast_genetic_ops_(dict)
     , parent_selector_(etil::selection::Strategy::WeightedRandom)
-{}
+{
+    ast_genetic_ops_.set_logger(&logger_);
+    ast_genetic_ops_.set_config(&config_);
+}
 
 void EvolutionEngine::register_tests(
     const std::string& word, std::vector<TestCase> tests) {
     word_state_[word].tests = std::move(tests);
+}
+
+void EvolutionEngine::register_tests_with_pool(
+    const std::string& word, std::vector<TestCase> tests,
+    std::vector<std::string> pool) {
+    auto& state = word_state_[word];
+    state.tests = std::move(tests);
+    state.word_pool = std::move(pool);
 }
 
 bool EvolutionEngine::has_tests(const std::string& word) const {
@@ -62,12 +73,32 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
     }
     if (evolvable.empty()) return 0;
 
+    // Rebuild signature index if dictionary changed (tags added after construction)
+    ast_genetic_ops_.rebuild_index();
+
+    // Set per-word pool (empty = full dictionary)
+    ast_genetic_ops_.set_word_pool(
+        state.word_pool.empty() ? nullptr : &state.word_pool);
+
+    if (logger_.enabled(EvolveLogCategory::Engine)) {
+        logger_.log(EvolveLogCategory::Engine,
+            "Gen " + std::to_string(state.generations) + ": evolving '" + word
+            + "' (" + std::to_string(evolvable.size()) + " evolvable impls, "
+            + std::to_string(tests.size()) + " test cases)");
+    }
+
     // Evaluate existing implementations to set baseline weights
     std::vector<std::pair<WordImplPtr, FitnessResult>> results;
     for (auto& impl : evolvable) {
         auto fr = fitness_.evaluate(*impl, tests, dict_);
         impl->set_weight(std::max(fr.fitness, config_.prune_threshold));
         results.push_back({impl, fr});
+        if (logger_.granular(EvolveLogCategory::Fitness)) {
+            logger_.detail(EvolveLogCategory::Fitness,
+                "Baseline impl#" + std::to_string(impl->id())
+                + ": " + std::to_string(fr.tests_passed) + "/" + std::to_string(fr.tests_total)
+                + " pass, fitness=" + std::to_string(fr.fitness));
+        }
     }
 
     // Generate children
@@ -84,11 +115,17 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
             auto* parent = parent_selector_.select(evolvable);
             if (!parent) continue;
 
+            if (logger_.enabled(EvolveLogCategory::Engine)) {
+                logger_.log(EvolveLogCategory::Engine,
+                    "Child " + std::to_string(i) + ": mutating impl#"
+                    + std::to_string(parent->id())
+                    + " (gen " + std::to_string(parent->generation())
+                    + ", weight " + std::to_string(parent->weight()) + ")");
+            }
+
             if (config_.use_ast_ops) {
-                // AST-level: decompile → mutate → repair → compile
                 child = ast_genetic_ops_.mutate(*parent);
             } else {
-                // Bytecode-level fallback
                 child = genetic_ops_.clone(*parent, dict_);
                 if (child && child->bytecode()) {
                     genetic_ops_.mutate(*child->bytecode());
@@ -96,7 +133,13 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
                         MutationHistory::MutationType::Inline, "bytecode-mutation");
                 }
             }
-            if (!child) continue;
+            if (!child) {
+                if (logger_.enabled(EvolveLogCategory::Engine)) {
+                    logger_.log(EvolveLogCategory::Engine,
+                        "Child " + std::to_string(i) + ": mutation failed");
+                }
+                continue;
+            }
         } else {
             // Crossover
             auto* p1 = parent_selector_.select(evolvable);
@@ -106,18 +149,37 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
                 p2 = parent_selector_.select(evolvable);
             }
 
+            if (logger_.enabled(EvolveLogCategory::Crossover)) {
+                logger_.log(EvolveLogCategory::Crossover,
+                    "Child " + std::to_string(i) + ": crossover impl#"
+                    + std::to_string(p1->id()) + " x impl#" + std::to_string(p2->id()));
+            }
+
             if (config_.use_ast_ops) {
                 child = ast_genetic_ops_.crossover(*p1, *p2);
             } else {
                 child = genetic_ops_.crossover(*p1, *p2, dict_);
             }
-            if (!child) continue;
+            if (!child) {
+                if (logger_.enabled(EvolveLogCategory::Crossover)) {
+                    logger_.log(EvolveLogCategory::Crossover,
+                        "Child " + std::to_string(i) + ": crossover failed");
+                }
+                continue;
+            }
         }
 
         // Evaluate child
         auto fr = fitness_.evaluate(*child, tests, dict_);
         child->set_weight(std::max(fr.fitness, config_.prune_threshold));
         results.push_back({child, fr});
+
+        if (logger_.enabled(EvolveLogCategory::Fitness)) {
+            logger_.log(EvolveLogCategory::Fitness,
+                "Child impl#" + std::to_string(child->id())
+                + ": " + std::to_string(fr.tests_passed) + "/" + std::to_string(fr.tests_total)
+                + " pass, fitness=" + std::to_string(fr.fitness));
+        }
 
         // Register child in dictionary
         dict_.register_word(word, std::move(child));
@@ -129,6 +191,12 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
 
     // Prune if over population limit
     prune(word);
+
+    if (logger_.enabled(EvolveLogCategory::Engine)) {
+        logger_.log(EvolveLogCategory::Engine,
+            "Gen " + std::to_string(state.generations) + ": "
+            + std::to_string(children_created) + " children created");
+    }
 
     state.generations++;
     return children_created;
@@ -166,7 +234,6 @@ void EvolutionEngine::prune(const std::string& word) {
     if (!impls_opt) return;
 
     while (impls_opt->size() > config_.population_limit) {
-        // Find the weakest implementation by weight
         double min_weight = 1e300;
         size_t min_idx = 0;
         for (size_t i = 0; i < impls_opt->size(); ++i) {
@@ -175,6 +242,12 @@ void EvolutionEngine::prune(const std::string& word) {
                 min_weight = w;
                 min_idx = i;
             }
+        }
+        if (logger_.enabled(EvolveLogCategory::Selection)) {
+            logger_.log(EvolveLogCategory::Selection,
+                "Pruned impl#" + std::to_string((*impls_opt)[min_idx]->id())
+                + " (weight " + std::to_string(min_weight)
+                + ", below threshold " + std::to_string(config_.prune_threshold) + ")");
         }
         dict_.remove_implementation_at(word, min_idx);
         impls_opt = dict_.get_implementations(word);

@@ -50,6 +50,7 @@ set(ETIL_EVOLUTION_SOURCES
     evolution/genetic_ops.cpp
     evolution/fitness.cpp
     evolution/evolution_engine.cpp
+    evolution/evolve_logger.cpp
 )
 
 set(ETIL_JIT_SOURCES
