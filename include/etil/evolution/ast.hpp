@@ -83,6 +83,18 @@ struct ASTNode {
 /// Recursively count all nodes in an AST.
 size_t count_nodes(const ASTNode& node);
 
+/// Render an AST as a flat list of TIL code lines (one per node).
+std::vector<std::string> format_ast_as_code(const ASTNode& node, int indent = 0);
+
+/// Produce a columnar diff of before/after code with annotation.
+std::string format_mutation_diff(
+    const std::vector<std::string>& before,
+    const std::vector<std::string>& after,
+    const std::string& mutation_desc,
+    const std::vector<std::string>& after_repair,
+    const std::string& repair_desc,
+    bool success);
+
 /// Format an AST as indented text for debugging.
 std::string ast_to_string(const ASTNode& node, int indent = 0);
 

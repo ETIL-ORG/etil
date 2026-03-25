@@ -104,6 +104,8 @@ const char* EvolveLogger::category_tag(EvolveLogCategory cat) {
         case EvolveLogCategory::Fitness:     return "fitness";
         case EvolveLogCategory::Selection:   return "selection";
         case EvolveLogCategory::Bridge:      return "bridge";
+        case EvolveLogCategory::Diff:        return "diff";
+        case EvolveLogCategory::ASTDump:     return "ast-dump";
         default:                             return "unknown";
     }
 }
