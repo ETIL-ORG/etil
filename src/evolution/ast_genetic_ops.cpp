@@ -433,6 +433,18 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     // Decompile
     auto ast = decompiler_.decompile(*bc);
 
+    // Capture before-state for diff
+    std::vector<std::string> before_code;
+    if (logger_ && logger_->enabled(EvolveLogCategory::Diff)) {
+        before_code = format_ast_as_code(ast);
+    }
+
+    // AST dump after decompilation
+    if (logger_ && logger_->enabled(EvolveLogCategory::ASTDump)) {
+        logger_->log(EvolveLogCategory::ASTDump,
+            "AST DECOMPILED:\n" + ast_to_string(ast));
+    }
+
     // Weighted selection from 6 operators
     static const char* op_names[] = {
         "substitute", "perturb", "move", "control-flow", "grow", "shrink"
@@ -484,12 +496,55 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
         return WordImplPtr();
     }
 
+    // Capture after-mutation state for diff
+    std::vector<std::string> after_code;
+    std::string mutation_desc = op_names[first];
+    if (logger_ && logger_->enabled(EvolveLogCategory::Diff)) {
+        after_code = format_ast_as_code(ast);
+    }
+
+    // AST dump after mutation
+    if (logger_ && logger_->enabled(EvolveLogCategory::ASTDump)) {
+        logger_->log(EvolveLogCategory::ASTDump,
+            "AST AFTER MUTATION (" + mutation_desc + "):\n" + ast_to_string(ast));
+    }
+
     // Repair type mismatches
     bool repaired = repair_.repair(ast, dict_);
     if (logger_ && logger_->enabled(EvolveLogCategory::Repair)) {
         logger_->log(EvolveLogCategory::Repair,
             repaired ? "Type repair succeeded" : "Type repair failed (unrepairable)");
     }
+
+    // Capture after-repair state and emit diff
+    if (logger_ && logger_->enabled(EvolveLogCategory::Diff)) {
+        std::vector<std::string> repair_code;
+        std::string repair_desc;
+        if (repaired) {
+            repair_code = format_ast_as_code(ast);
+            if (repair_code != after_code) {
+                repair_desc = "shuffles inserted for type balance";
+            }
+        } else {
+            repair_desc = "unrepairable";
+        }
+
+        bool show = repaired || (logger_->show_failed());
+        if (show) {
+            logger_->log(EvolveLogCategory::Diff,
+                "\n" + format_mutation_diff(
+                    before_code, after_code, mutation_desc,
+                    (repair_code != after_code) ? repair_code : std::vector<std::string>{},
+                    repair_desc, repaired));
+        }
+    }
+
+    // AST dump after repair
+    if (repaired && logger_ && logger_->enabled(EvolveLogCategory::ASTDump)) {
+        logger_->log(EvolveLogCategory::ASTDump,
+            "AST AFTER REPAIR:\n" + ast_to_string(ast));
+    }
+
     if (!repaired) return WordImplPtr();
 
     // Compile back to bytecode

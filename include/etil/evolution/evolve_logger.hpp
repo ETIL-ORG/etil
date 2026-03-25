@@ -35,6 +35,8 @@ enum class EvolveLogCategory : uint32_t {
     Fitness     = 1 << 11,  // Test case evaluation
     Selection   = 1 << 12,  // Parent selection, weight update, pruning
     Bridge      = 1 << 13,  // Bridge word insertion (future)
+    Diff        = 1 << 14,  // Side-by-side before/after code diff
+    ASTDump     = 1 << 15,  // Tree-format AST dumps
     All         = 0xFFFFFFFF,
 };
 
@@ -89,6 +91,10 @@ public:
     /// Current category mask.
     uint32_t categories() const { return categories_; }
 
+    /// Show failed mutations in diff view (default: false, show only successful).
+    void set_show_failed(bool show) { show_failed_ = show; }
+    bool show_failed() const { return show_failed_; }
+
     /// Whether the log file is currently open.
     bool is_open() const { return file_.is_open(); }
 
@@ -97,6 +103,7 @@ private:
     uint32_t categories_ = static_cast<uint32_t>(EvolveLogCategory::All);
     std::string directory_;
     std::ofstream file_;
+    bool show_failed_ = false;
 
     std::string timestamp() const;
     std::string make_filename() const;
