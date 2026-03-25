@@ -51,58 +51,64 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
     int consumed = static_cast<int>(sig.inputs.size());
     int produced = static_cast<int>(sig.outputs.size());
 
-    // Find compatible alternatives with tiered matching
-    auto target_tags = index_.get_tags(target->word_name);
-    auto candidates = index_.find_tiered(consumed, produced, target_tags);
-
-    // Remove the current word from candidates
-    candidates.erase(
-        std::remove_if(candidates.begin(), candidates.end(),
-            [&](const auto& p) { return p.first == target->word_name; }),
-        candidates.end());
-
-    if (candidates.empty()) return false;
-
-    // Weighted selection: Level 1 (60%), Level 2 (25%), Level 3 (15%)
-    std::vector<double> weights;
-    for (const auto& [name, level] : candidates) {
-        switch (level) {
-            case 1: weights.push_back(6.0); break;
-            case 2: weights.push_back(2.5); break;
-            case 3: weights.push_back(1.5); break;
-            default: weights.push_back(1.0); break;
-        }
-    }
-    std::discrete_distribution<size_t> wdist(weights.begin(), weights.end());
-    size_t chosen = wdist(rng_);
-
+    // Find compatible alternatives — pool-restricted or tiered
     std::string old_name = target->word_name;
-    target->word_name = candidates[chosen].first;
+    std::string chosen_name;
+    int chosen_level = 3;
+    size_t l1 = 0, l2 = 0, l3 = 0;
 
-    if (logger_ && logger_->enabled(EvolveLogCategory::Substitute)) {
-        // Count candidates per level
-        size_t l1 = 0, l2 = 0, l3 = 0;
+    if (word_pool_ && !word_pool_->empty()) {
+        // Pool-restricted: only words in the pool
+        auto restricted = index_.find_restricted(consumed, produced, *word_pool_);
+        restricted.erase(
+            std::remove(restricted.begin(), restricted.end(), target->word_name),
+            restricted.end());
+        if (restricted.empty()) return false;
+        std::uniform_int_distribution<size_t> rdist(0, restricted.size() - 1);
+        chosen_name = restricted[rdist(rng_)];
+        l1 = restricted.size();  // all pool words are "Level 1" conceptually
+        chosen_level = 1;
+    } else {
+        // Tiered matching from full dictionary
+        auto target_tags = index_.get_tags(target->word_name);
+        auto candidates = index_.find_tiered(consumed, produced, target_tags);
+        candidates.erase(
+            std::remove_if(candidates.begin(), candidates.end(),
+                [&](const auto& p) { return p.first == target->word_name; }),
+            candidates.end());
+        if (candidates.empty()) return false;
+
+        // Count per level
         for (const auto& [n, lev] : candidates) {
             if (lev == 1) l1++; else if (lev == 2) l2++; else l3++;
         }
+
+        // Weighted selection
+        std::vector<double> weights;
+        for (const auto& [name, level] : candidates) {
+            switch (level) {
+                case 1: weights.push_back(6.0); break;
+                case 2: weights.push_back(2.5); break;
+                case 3: weights.push_back(1.5); break;
+                default: weights.push_back(1.0); break;
+            }
+        }
+        std::discrete_distribution<size_t> wdist(weights.begin(), weights.end());
+        size_t chosen_idx = wdist(rng_);
+        chosen_name = candidates[chosen_idx].first;
+        chosen_level = candidates[chosen_idx].second;
+    }
+
+    target->word_name = chosen_name;
+
+    if (logger_ && logger_->enabled(EvolveLogCategory::Substitute)) {
+        std::string pool_tag = (word_pool_ && !word_pool_->empty()) ? " [pool]" : "";
         logger_->log(EvolveLogCategory::Substitute,
-            "'" + old_name + "' → '" + candidates[chosen].first
-            + "' (Level " + std::to_string(candidates[chosen].second)
+            "'" + old_name + "' → '" + chosen_name
+            + "' (Level " + std::to_string(chosen_level)
             + ", candidates: L1=" + std::to_string(l1)
             + " L2=" + std::to_string(l2)
-            + " L3=" + std::to_string(l3) + ")");
-    }
-    if (logger_ && logger_->granular(EvolveLogCategory::Substitute)) {
-        std::string clist;
-        for (size_t i = 0; i < candidates.size() && i < 20; ++i) {
-            if (i > 0) clist += ", ";
-            clist += candidates[i].first + "(L" + std::to_string(candidates[i].second) + ")";
-        }
-        if (candidates.size() > 20) clist += ", ...(" + std::to_string(candidates.size()) + " total)";
-        logger_->detail(EvolveLogCategory::Substitute,
-            "find_tiered(consumed=" + std::to_string(consumed)
-            + ", produced=" + std::to_string(produced)
-            + "): [" + clist + "]");
+            + " L3=" + std::to_string(l3) + ")" + pool_tag);
     }
     return true;
 }
@@ -322,11 +328,17 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
     ASTNode new_node;
 
     if (choice(rng_) < 7) {
-        // Grow-word: prefer (1,1) stack-neutral words from the index
-        auto candidates = index_.find_compatible(1, 1);
-        if (candidates.empty()) {
-            // Fall back to any (0,1) word (literal-like)
-            candidates = index_.find_compatible(0, 1);
+        // Grow-word: prefer (1,1) stack-neutral words
+        // Use pool if configured, otherwise full dictionary
+        std::vector<std::string> candidates;
+        if (word_pool_ && !word_pool_->empty()) {
+            candidates = index_.find_restricted(1, 1, *word_pool_);
+            if (candidates.empty())
+                candidates = index_.find_restricted(0, 1, *word_pool_);
+        } else {
+            candidates = index_.find_compatible(1, 1);
+            if (candidates.empty())
+                candidates = index_.find_compatible(0, 1);
         }
         if (candidates.empty()) return false;
 

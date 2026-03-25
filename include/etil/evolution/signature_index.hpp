@@ -32,6 +32,11 @@ public:
         int consumed, int produced,
         const std::vector<std::string>& tags) const;
 
+    /// Find words restricted to a given pool (empty pool = full dictionary).
+    std::vector<std::string> find_restricted(
+        int consumed, int produced,
+        const std::vector<std::string>& pool) const;
+
     /// Get semantic tags for a word (cached from dictionary metadata).
     std::vector<std::string> get_tags(const std::string& word) const;
 

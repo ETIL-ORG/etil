@@ -31,6 +31,9 @@ public:
     /// Set config for max_ast_nodes and mutation weights.
     void set_config(const EvolutionConfig* config) { config_ = config; }
 
+    /// Set word pool for the current evolution run (empty = full dictionary).
+    void set_word_pool(const std::vector<std::string>* pool) { word_pool_ = pool; }
+
     /// Mutate a WordImpl using AST-level operators.
     /// Returns a new WordImpl with mutated bytecode, or null if mutation failed.
     etil::core::WordImplPtr mutate(const etil::core::WordImpl& parent);
@@ -54,6 +57,7 @@ private:
     std::mt19937_64 rng_;
     EvolveLogger* logger_ = nullptr;
     const EvolutionConfig* config_ = nullptr;
+    const std::vector<std::string>* word_pool_ = nullptr;
 
     // Mutation operators (each returns true if applied)
     bool substitute_call(ASTNode& ast);

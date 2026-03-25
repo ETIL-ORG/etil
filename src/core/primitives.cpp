@@ -1593,6 +1593,82 @@ bool prim_evolve_register(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-register-pool ( word-str tests-array pool-array -- flag )
+// Register test cases with a restricted word pool.
+bool prim_evolve_register_pool(ExecutionContext& ctx) {
+    auto* pool_arr = pop_array(ctx);
+    if (!pool_arr) return false;
+    auto* test_arr = pop_array(ctx);
+    if (!test_arr) { ctx.data_stack().push(Value::from(pool_arr)); return false; }
+    auto* word_str = pop_string(ctx);
+    if (!word_str) {
+        ctx.data_stack().push(Value::from(test_arr));
+        ctx.data_stack().push(Value::from(pool_arr));
+        return false;
+    }
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        word_str->release(); test_arr->release(); pool_arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    std::string word(word_str->c_str(), word_str->length());
+    word_str->release();
+
+    if (test_arr->length() > 1000) {
+        ctx.err() << "Error: evolve-register-pool max 1000 test cases\n";
+        test_arr->release(); pool_arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Parse test cases (same as evolve-register)
+    std::vector<etil::evolution::TestCase> tests;
+    for (size_t i = 0; i < test_arr->length(); ++i) {
+        Value map_val;
+        test_arr->get(i, map_val);
+        if (map_val.type != Value::Type::Map) continue;
+        auto* m = map_val.as_map();
+        etil::evolution::TestCase tc;
+        auto in_it = m->entries().find("in");
+        if (in_it != m->entries().end() && in_it->second.type == Value::Type::Array) {
+            auto* in_arr = in_it->second.as_array();
+            for (size_t j = 0; j < in_arr->length(); ++j) {
+                Value v; in_arr->get(j, v); tc.inputs.push_back(v);
+            }
+        }
+        auto out_it = m->entries().find("out");
+        if (out_it != m->entries().end() && out_it->second.type == Value::Type::Array) {
+            auto* out_arr = out_it->second.as_array();
+            for (size_t j = 0; j < out_arr->length(); ++j) {
+                Value v; out_arr->get(j, v); tc.expected.push_back(v);
+            }
+        }
+        tests.push_back(std::move(tc));
+    }
+    test_arr->release();
+
+    // Parse pool array (array of word name strings)
+    std::vector<std::string> pool;
+    for (size_t i = 0; i < pool_arr->length(); ++i) {
+        Value v;
+        pool_arr->get(i, v);
+        if (v.type == Value::Type::String) {
+            auto* s = v.as_string();
+            pool.emplace_back(s->c_str(), s->length());
+        }
+        value_release(v);
+    }
+    pool_arr->release();
+
+    engine->register_tests_with_pool(word, std::move(tests), std::move(pool));
+    ctx.data_stack().push(Value(true));
+    return true;
+}
+
 // evolve-word ( word-str -- n )
 // Run one generation of evolution for a word. Returns number of children created.
 bool prim_evolve_word(ExecutionContext& ctx) {
@@ -2930,6 +3006,7 @@ static const PrimEntry prim_table[] = {
     {"select-off",       prim_select_off,       0, 0, {},                {}},
     // Evolution
     {"evolve-register",  prim_evolve_register,  2, 1, {T::String, T::Array}, {T::Unknown}},
+    {"evolve-register-pool", prim_evolve_register_pool, 3, 1, {T::String, T::Array, T::Array}, {T::Unknown}},
     {"evolve-word",      prim_evolve_word,      1, 1, {T::String},           {T::Integer}},
     {"evolve-all",       prim_evolve_all,       0, 0, {},                    {}},
     {"evolve-status",    prim_evolve_status,    1, 1, {T::String},           {T::Integer}},

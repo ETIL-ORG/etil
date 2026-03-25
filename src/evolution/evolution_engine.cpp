@@ -27,6 +27,14 @@ void EvolutionEngine::register_tests(
     word_state_[word].tests = std::move(tests);
 }
 
+void EvolutionEngine::register_tests_with_pool(
+    const std::string& word, std::vector<TestCase> tests,
+    std::vector<std::string> pool) {
+    auto& state = word_state_[word];
+    state.tests = std::move(tests);
+    state.word_pool = std::move(pool);
+}
+
 bool EvolutionEngine::has_tests(const std::string& word) const {
     auto it = word_state_.find(word);
     return it != word_state_.end() && !it->second.tests.empty();
@@ -67,6 +75,10 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
 
     // Rebuild signature index if dictionary changed (tags added after construction)
     ast_genetic_ops_.rebuild_index();
+
+    // Set per-word pool (empty = full dictionary)
+    ast_genetic_ops_.set_word_pool(
+        state.word_pool.empty() ? nullptr : &state.word_pool);
 
     if (logger_.enabled(EvolveLogCategory::Engine)) {
         logger_.log(EvolveLogCategory::Engine,

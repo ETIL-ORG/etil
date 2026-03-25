@@ -52,6 +52,21 @@ std::vector<std::string> SignatureIndex::find_exact(
         static_cast<int>(sig.outputs.size()));
 }
 
+std::vector<std::string> SignatureIndex::find_restricted(
+    int consumed, int produced,
+    const std::vector<std::string>& pool) const {
+    if (pool.empty()) return find_compatible(consumed, produced);
+
+    auto all = find_compatible(consumed, produced);
+    std::vector<std::string> filtered;
+    for (const auto& name : all) {
+        for (const auto& p : pool) {
+            if (name == p) { filtered.push_back(name); break; }
+        }
+    }
+    return filtered;
+}
+
 std::vector<std::string> SignatureIndex::get_tags(const std::string& word) const {
     auto it = tags_.find(word);
     if (it == tags_.end()) return {};

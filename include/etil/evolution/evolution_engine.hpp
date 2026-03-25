@@ -58,6 +58,11 @@ public:
     /// Register test cases for a word.
     void register_tests(const std::string& word, std::vector<TestCase> tests);
 
+    /// Register test cases with a restricted word pool for mutations.
+    void register_tests_with_pool(const std::string& word,
+                                   std::vector<TestCase> tests,
+                                   std::vector<std::string> pool);
+
     /// Check if a word has registered test cases.
     bool has_tests(const std::string& word) const;
 
@@ -83,6 +88,7 @@ private:
 
     struct WordEvolution {
         std::vector<TestCase> tests;
+        std::vector<std::string> word_pool;  // empty = full dictionary
         size_t generations = 0;
     };
     std::unordered_map<std::string, WordEvolution> word_state_;

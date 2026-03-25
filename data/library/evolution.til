@@ -1,0 +1,119 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# evolution.til — Predefined sibling pools and bridge map for AST evolution
+#
+# Usage:
+#   include /library/evolution.til
+#   : target-fn dup + ;
+#   s" target-fn" my-tests @ math-pool evolve-register-pool drop
+
+# ===================================================================
+# Sibling Pools
+# ===================================================================
+
+# Arithmetic domain: basic integer/float operations + stack manipulation
+: math-pool
+  array-new
+  s" +" array-push s" -" array-push s" *" array-push
+  s" /" array-push s" mod" array-push s" negate" array-push
+  s" abs" array-push s" max" array-push s" min" array-push
+  s" dup" array-push s" swap" array-push s" over" array-push
+  s" rot" array-push s" drop" array-push s" nip" array-push
+  s" tuck" array-push
+  s" 1+" array-push s" 1-" array-push
+;
+
+# Extended math: trig, transcendental, rounding
+: math-ext-pool
+  array-new
+  s" sqrt" array-push s" sin" array-push s" cos" array-push
+  s" tan" array-push s" tanh" array-push s" exp" array-push
+  s" log" array-push s" pow" array-push
+  s" ceil" array-push s" floor" array-push s" round" array-push
+  s" abs" array-push s" negate" array-push s" pi" array-push
+  s" dup" array-push s" swap" array-push s" over" array-push
+  s" rot" array-push s" drop" array-push
+  s" int->float" array-push s" float->int" array-push
+;
+
+# Matrix domain: linear algebra operations
+: matrix-pool
+  array-new
+  s" mat*" array-push s" mat+" array-push s" mat-" array-push
+  s" mat-scale" array-push s" mat-transpose" array-push
+  s" mat-hadamard" array-push s" mat-add-col" array-push
+  s" mat-relu" array-push s" mat-sigmoid" array-push s" mat-tanh" array-push
+  s" mat-relu'" array-push s" mat-sigmoid'" array-push s" mat-tanh'" array-push
+  s" mat-norm" array-push s" mat-trace" array-push
+  s" mat-sum" array-push s" mat-col-sum" array-push s" mat-mean" array-push
+;
+
+# String domain
+: string-pool
+  array-new
+  s" s+" array-push s" slength" array-push s" substr" array-push
+  s" strim" array-push s" sfind" array-push s" sreplace" array-push
+  s" ssplit" array-push s" sjoin" array-push
+  s" dup" array-push s" swap" array-push s" drop" array-push
+;
+
+# Array domain
+: array-pool
+  array-new
+  s" array-new" array-push s" array-push" array-push s" array-pop" array-push
+  s" array-get" array-push s" array-set" array-push s" array-length" array-push
+  s" array-reverse" array-push s" array-compact" array-push
+  s" array-each" array-push s" array-map" array-push
+  s" array-filter" array-push s" array-reduce" array-push
+  s" dup" array-push s" swap" array-push s" drop" array-push
+;
+
+# Comparison + logic (useful as secondary pool)
+: comparison-pool
+  array-new
+  s" =" array-push s" <>" array-push s" <" array-push s" >" array-push
+  s" <=" array-push s" >=" array-push s" 0=" array-push
+  s" and" array-push s" or" array-push s" not" array-push
+;
+
+# ===================================================================
+# Bridge Map
+# ===================================================================
+# Type conversion words organized by (from-type -> to-type).
+# Single source of truth for the evolution engine.
+
+variable _bridge-map
+
+: build-bridge-map
+  map-new
+  s" array->integer"   array-new s" array-length" array-push map-set
+  s" array->string"    array-new s" sjoin" array-push map-set
+  s" array->matrix"    array-new s" array->mat" array-push map-set
+  s" string->integer"  array-new s" slength" array-push s" string->number" array-push map-set
+  s" string->array"    array-new s" ssplit" array-push map-set
+  s" string->bytes"    array-new s" string->bytes" array-push map-set
+  s" integer->float"   array-new s" int->float" array-push map-set
+  s" integer->string"  array-new s" number->string" array-push map-set
+  s" float->integer"   array-new s" float->int" array-push map-set
+  s" float->string"    array-new s" number->string" array-push map-set
+  s" matrix->float"    array-new s" mat-norm" array-push s" mat-trace" array-push s" mat-mean" array-push s" mat-sum" array-push map-set
+  s" matrix->integer"  array-new s" mat-rows" array-push s" mat-cols" array-push map-set
+  s" matrix->array"    array-new s" mat->array" array-push map-set
+  s" matrix->json"     array-new s" mat->json" array-push map-set
+  s" bytes->string"    array-new s" bytes->string" array-push map-set
+  s" bytes->integer"   array-new s" bytes-length" array-push map-set
+  s" json->string"     array-new s" json-dump" array-push map-set
+  s" json->array"      array-new s" json->array" array-push map-set
+  s" json->map"        array-new s" json->map" array-push map-set
+  s" map->json"        array-new s" map->json" array-push map-set
+  s" map->array"       array-new s" map-keys" array-push s" map-values" array-push map-set
+  s" map->integer"     array-new s" map-length" array-push map-set
+  _bridge-map !
+;
+
+# Access the bridge map (builds on first call)
+: bridge-map
+  _bridge-map @ 0= if build-bridge-map then
+  _bridge-map @
+;
