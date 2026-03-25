@@ -24,8 +24,11 @@ void SignatureIndex::rebuild(const Dictionary& dict) {
         int produced = static_cast<int>(sig.outputs.size());
         by_effect_[{consumed, produced}].push_back(name);
 
-        // Cache semantic tags from metadata
+        // Cache semantic tags: manual first, fall back to inferred
         auto tag_meta = dict.get_concept_metadata(name, "semantic-tags");
+        if (!tag_meta) {
+            tag_meta = dict.get_concept_metadata(name, "semantic-tags-inferred");
+        }
         if (tag_meta) {
             std::vector<std::string> word_tags;
             std::istringstream iss(tag_meta->content);

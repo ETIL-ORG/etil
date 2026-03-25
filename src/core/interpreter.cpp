@@ -15,7 +15,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
+#include <map>
 #include <ranges>
+#include <sstream>
 
 namespace etil::core {
 
@@ -478,6 +480,44 @@ void Interpreter::finalize_definition() {
 
     dict_.register_word(compiling_word_name_, WordImplPtr(impl));
     ctx_.set_last_created(impl);  // for immediate, does>, etc.
+
+    // Infer semantic tags from bytecode body (after register, so concept exists for metadata).
+    // Walk all Call instructions, collect tags from called words.
+    // If >75% of tagged calls share a common tag, infer that tag.
+    // Only set inferred if no manual tag already exists on the concept.
+    {
+        auto existing = dict_.get_concept_metadata(compiling_word_name_, "semantic-tags");
+        if (!existing) {
+            std::map<std::string, size_t> tag_counts;
+            size_t tagged_calls = 0;
+            for (const auto& instr : impl->bytecode()->instructions()) {
+                if (instr.op != Instruction::Op::Call) continue;
+                auto tag_meta = dict_.get_concept_metadata(instr.word_name, "semantic-tags");
+                if (!tag_meta) {
+                    // Fall back to inferred tags
+                    tag_meta = dict_.get_concept_metadata(instr.word_name, "semantic-tags-inferred");
+                }
+                if (!tag_meta) continue;
+                tagged_calls++;
+                std::istringstream iss(tag_meta->content);
+                std::string tag;
+                while (iss >> tag) tag_counts[tag]++;
+            }
+            if (tagged_calls > 0) {
+                std::string inferred;
+                for (const auto& [tag, count] : tag_counts) {
+                    if (count * 4 >= tagged_calls * 3) {  // count/tagged >= 0.75
+                        if (!inferred.empty()) inferred += ' ';
+                        inferred += tag;
+                    }
+                }
+                if (!inferred.empty()) {
+                    dict_.set_concept_metadata(compiling_word_name_, "semantic-tags-inferred",
+                                                MetadataFormat::Text, std::move(inferred));
+                }
+            }
+        }
+    }
 
     // Store definition source metadata on the implementation (not concept)
     // so different impls of the same word track their own source locations.

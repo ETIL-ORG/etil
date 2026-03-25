@@ -1725,6 +1725,62 @@ bool prim_evolve_status(ExecutionContext& ctx) {
     return true;
 }
 
+// --- Evolution tagging primitives ---
+
+// evolve-tag ( word-str tags-str -- )
+bool prim_evolve_tag(ExecutionContext& ctx) {
+    auto* tags_str = pop_string(ctx);
+    if (!tags_str) return false;
+    auto* word_str = pop_string(ctx);
+    if (!word_str) { tags_str->release(); return false; }
+
+    std::string word(word_str->c_str(), word_str->length());
+    std::string tags(tags_str->c_str(), tags_str->length());
+    word_str->release();
+    tags_str->release();
+
+    auto* dict = ctx.dictionary();
+    if (!dict) return false;
+    dict->set_concept_metadata(word, "semantic-tags", MetadataFormat::Text, std::move(tags));
+    return true;
+}
+
+// evolve-untag ( word-str -- )
+bool prim_evolve_untag(ExecutionContext& ctx) {
+    auto* word_str = pop_string(ctx);
+    if (!word_str) return false;
+    std::string word(word_str->c_str(), word_str->length());
+    word_str->release();
+
+    auto* dict = ctx.dictionary();
+    if (!dict) return false;
+    dict->remove_concept_metadata(word, "semantic-tags");
+    return true;
+}
+
+// evolve-bridge ( word-str from-type to-type -- )
+bool prim_evolve_bridge(ExecutionContext& ctx) {
+    auto* to_str = pop_string(ctx);
+    if (!to_str) return false;
+    auto* from_str = pop_string(ctx);
+    if (!from_str) { to_str->release(); return false; }
+    auto* word_str = pop_string(ctx);
+    if (!word_str) { from_str->release(); to_str->release(); return false; }
+
+    std::string word(word_str->c_str(), word_str->length());
+    std::string from_type(from_str->c_str(), from_str->length());
+    std::string to_type(to_str->c_str(), to_str->length());
+    word_str->release();
+    from_str->release();
+    to_str->release();
+
+    auto* dict = ctx.dictionary();
+    if (!dict) return false;
+    dict->set_concept_metadata(word, "bridge-from", MetadataFormat::Text, std::move(from_type));
+    dict->set_concept_metadata(word, "bridge-to", MetadataFormat::Text, std::move(to_type));
+    return true;
+}
+
 // --- Evolution logging primitives ---
 
 // evolve-log-start ( level mask -- )
@@ -3010,6 +3066,9 @@ static const PrimEntry prim_table[] = {
     {"evolve-word",      prim_evolve_word,      1, 1, {T::String},           {T::Integer}},
     {"evolve-all",       prim_evolve_all,       0, 0, {},                    {}},
     {"evolve-status",    prim_evolve_status,    1, 1, {T::String},           {T::Integer}},
+    {"evolve-tag",       prim_evolve_tag,       2, 0, {T::String, T::String}, {}},
+    {"evolve-untag",     prim_evolve_untag,     1, 0, {T::String}, {}},
+    {"evolve-bridge",    prim_evolve_bridge,    3, 0, {T::String, T::String, T::String}, {}},
     {"evolve-log-start", prim_evolve_log_start, 2, 0, {T::Integer, T::Integer}, {}},
     {"evolve-log-stop",  prim_evolve_log_stop,  0, 0, {},                    {}},
     {"evolve-log-dir",   prim_evolve_log_dir,   1, 0, {T::String},           {}},
