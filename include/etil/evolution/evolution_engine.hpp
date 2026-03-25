@@ -6,6 +6,7 @@
 #include "etil/evolution/genetic_ops.hpp"
 #include "etil/evolution/ast_genetic_ops.hpp"
 #include "etil/evolution/fitness.hpp"
+#include "etil/evolution/evolve_logger.hpp"
 #include "etil/selection/selection_engine.hpp"
 #include "etil/core/dictionary.hpp"
 
@@ -22,6 +23,11 @@ struct EvolutionConfig {
     double prune_threshold = 0.01;
     bool use_ast_ops = true;      // use AST-level operators (default)
     MutationConfig mutation_config;
+
+    // Logging — controlled via TIL words (evolve-log-start, etc.)
+    EvolveLogLevel log_level = EvolveLogLevel::Off;
+    uint32_t log_categories = static_cast<uint32_t>(EvolveLogCategory::All);
+    std::string log_directory;
 };
 
 /// Drives evolution of word implementations via genetic operators
@@ -50,7 +56,9 @@ public:
     std::vector<std::string> registered_words() const;
 
     const EvolutionConfig& config() const { return config_; }
+    EvolutionConfig& config() { return config_; }
     Fitness& fitness() { return fitness_; }
+    EvolveLogger& logger() { return logger_; }
 
 private:
     EvolutionConfig config_;
@@ -58,6 +66,7 @@ private:
     GeneticOps genetic_ops_;           // bytecode-level (fallback + constant perturbation)
     ASTGeneticOps ast_genetic_ops_;    // AST-level (structural mutations)
     Fitness fitness_;
+    EvolveLogger logger_;
     etil::selection::SelectionEngine parent_selector_;
 
     struct WordEvolution {

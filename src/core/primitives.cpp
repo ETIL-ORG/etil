@@ -1649,6 +1649,64 @@ bool prim_evolve_status(ExecutionContext& ctx) {
     return true;
 }
 
+// --- Evolution logging primitives ---
+
+// evolve-log-start ( level mask -- )
+bool prim_evolve_log_start(ExecutionContext& ctx) {
+    auto opt_mask = ctx.data_stack().pop();
+    if (!opt_mask) return false;
+    auto opt_level = ctx.data_stack().pop();
+    if (!opt_level) {
+        ctx.data_stack().push(*opt_mask);
+        return false;
+    }
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        return true;
+    }
+
+    int64_t level = opt_level->type == Value::Type::Integer ? opt_level->as_int : 0;
+    int64_t mask = opt_mask->type == Value::Type::Integer ? opt_mask->as_int : 0;
+
+    auto log_level = etil::evolution::EvolveLogLevel::Off;
+    if (level == 1) log_level = etil::evolution::EvolveLogLevel::Logical;
+    else if (level >= 2) log_level = etil::evolution::EvolveLogLevel::Granular;
+
+    engine->logger().start(log_level, static_cast<uint32_t>(mask));
+    return true;
+}
+
+// evolve-log-stop ( -- )
+bool prim_evolve_log_stop(ExecutionContext& ctx) {
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        return true;
+    }
+    engine->logger().stop();
+    return true;
+}
+
+// evolve-log-dir ( path -- )
+bool prim_evolve_log_dir(ExecutionContext& ctx) {
+    auto* path_str = pop_string(ctx);
+    if (!path_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        path_str->release();
+        return true;
+    }
+
+    std::string dir(path_str->c_str(), path_str->length());
+    path_str->release();
+    engine->logger().set_directory(dir);
+    return true;
+}
+
 // --- Help primitive ---
 
 namespace {
@@ -2875,6 +2933,9 @@ static const PrimEntry prim_table[] = {
     {"evolve-word",      prim_evolve_word,      1, 1, {T::String},           {T::Integer}},
     {"evolve-all",       prim_evolve_all,       0, 0, {},                    {}},
     {"evolve-status",    prim_evolve_status,    1, 1, {T::String},           {T::Integer}},
+    {"evolve-log-start", prim_evolve_log_start, 2, 0, {T::Integer, T::Integer}, {}},
+    {"evolve-log-stop",  prim_evolve_log_stop,  0, 0, {},                    {}},
+    {"evolve-log-dir",   prim_evolve_log_dir,   1, 0, {T::String},           {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::Unknown}},

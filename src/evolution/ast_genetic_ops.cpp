@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/evolution/ast_genetic_ops.hpp"
+#include "etil/evolution/evolve_logger.hpp"
 #include "etil/evolution/mutation_helpers.hpp"
 
 #include <algorithm>
@@ -74,7 +75,34 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
     std::discrete_distribution<size_t> wdist(weights.begin(), weights.end());
     size_t chosen = wdist(rng_);
 
+    std::string old_name = target->word_name;
     target->word_name = candidates[chosen].first;
+
+    if (logger_ && logger_->enabled(EvolveLogCategory::Substitute)) {
+        // Count candidates per level
+        size_t l1 = 0, l2 = 0, l3 = 0;
+        for (const auto& [n, lev] : candidates) {
+            if (lev == 1) l1++; else if (lev == 2) l2++; else l3++;
+        }
+        logger_->log(EvolveLogCategory::Substitute,
+            "'" + old_name + "' → '" + candidates[chosen].first
+            + "' (Level " + std::to_string(candidates[chosen].second)
+            + ", candidates: L1=" + std::to_string(l1)
+            + " L2=" + std::to_string(l2)
+            + " L3=" + std::to_string(l3) + ")");
+    }
+    if (logger_ && logger_->granular(EvolveLogCategory::Substitute)) {
+        std::string clist;
+        for (size_t i = 0; i < candidates.size() && i < 20; ++i) {
+            if (i > 0) clist += ", ";
+            clist += candidates[i].first + "(L" + std::to_string(candidates[i].second) + ")";
+        }
+        if (candidates.size() > 20) clist += ", ...(" + std::to_string(candidates.size()) + " total)";
+        logger_->detail(EvolveLogCategory::Substitute,
+            "find_tiered(consumed=" + std::to_string(consumed)
+            + ", produced=" + std::to_string(produced)
+            + "): [" + clist + "]");
+    }
     return true;
 }
 
@@ -91,7 +119,19 @@ bool ASTGeneticOps::perturb_constant(ASTNode& ast) {
 
     std::uniform_int_distribution<size_t> dist(0, literals.size() - 1);
     ASTNode* target = literals[dist(rng_)];
+    auto old_int = target->int_val;
+    auto old_float = target->float_val;
     perturb_numeric(target->literal_op, target->int_val, target->float_val, 0.1, rng_);
+
+    if (logger_ && logger_->enabled(EvolveLogCategory::Perturb)) {
+        if (target->literal_op == Instruction::Op::PushInt) {
+            logger_->log(EvolveLogCategory::Perturb,
+                "int " + std::to_string(old_int) + " → " + std::to_string(target->int_val));
+        } else {
+            logger_->log(EvolveLogCategory::Perturb,
+                "float " + std::to_string(old_float) + " → " + std::to_string(target->float_val));
+        }
+    }
     return true;
 }
 
@@ -168,11 +208,17 @@ bool ASTGeneticOps::move_block(ASTNode& ast) {
     size_t dst_idx = moveable[dst_slot];
 
     // Extract and reinsert
+    std::string moved_name = ast.children[src_idx].word_name;
     auto node = std::move(ast.children[src_idx]);
     ast.children.erase(ast.children.begin() + static_cast<long>(src_idx));
-    // Adjust dst_idx if it was after src_idx
     if (dst_idx > src_idx) dst_idx--;
     ast.children.insert(ast.children.begin() + static_cast<long>(dst_idx), std::move(node));
+
+    if (logger_ && logger_->enabled(EvolveLogCategory::Move)) {
+        logger_->log(EvolveLogCategory::Move,
+            "'" + moved_name + "' position " + std::to_string(src_idx)
+            + " → " + std::to_string(dst_idx));
+    }
     return true;
 }
 
@@ -205,10 +251,14 @@ bool ASTGeneticOps::mutate_control_flow(ASTNode& ast) {
 
         // The condition (boolean true) needs to be before the IfThen in the sequence
         // since BranchIfFalse pops the boolean from the stack
+        std::string wrapped_name = ast.children[idx].word_name;
         ast.children[idx] = std::move(if_node);
-        // Insert "true" before the IfThen
         ast.children.insert(ast.children.begin() + static_cast<long>(idx),
                             ASTNode::make_word_call("true"));
+        if (logger_ && logger_->enabled(EvolveLogCategory::ControlFlow)) {
+            logger_->log(EvolveLogCategory::ControlFlow,
+                "Wrapped '" + wrapped_name + "' at position " + std::to_string(idx) + " in if/then");
+        }
         return true;
     } else {
         // Unwrap: find an IfThen and replace it with its body
@@ -227,6 +277,11 @@ bool ASTGeneticOps::mutate_control_flow(ASTNode& ast) {
                         ast.children.begin() + static_cast<long>(i + j),
                         std::move(body_children[j]));
                 }
+                if (logger_ && logger_->enabled(EvolveLogCategory::ControlFlow)) {
+                    logger_->log(EvolveLogCategory::ControlFlow,
+                        "Unwrapped if/then at position " + std::to_string(i)
+                        + " (" + std::to_string(body_children.size()) + " body nodes)");
+                }
                 return true;
             }
         }
@@ -244,9 +299,16 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     auto ast = decompiler_.decompile(*bc);
 
     // Apply one random mutation from 4 operators
+    static const char* op_names[] = {"substitute", "perturb", "move", "control-flow"};
     std::uniform_int_distribution<int> choice(0, 3);
     bool mutated = false;
     int first = choice(rng_);
+
+    if (logger_ && logger_->enabled(EvolveLogCategory::Engine)) {
+        logger_->log(EvolveLogCategory::Engine,
+            "Selected operator: " + std::string(op_names[first]));
+    }
+
     switch (first) {
         case 0: mutated = substitute_call(ast); break;
         case 1: mutated = perturb_constant(ast); break;
@@ -257,6 +319,10 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
     if (!mutated) {
         for (int i = 0; i < 4 && !mutated; ++i) {
             if (i == first) continue;
+            if (logger_ && logger_->granular(EvolveLogCategory::Engine)) {
+                logger_->detail(EvolveLogCategory::Engine,
+                    std::string(op_names[first]) + " failed, trying " + op_names[i]);
+            }
             switch (i) {
                 case 0: mutated = substitute_call(ast); break;
                 case 1: mutated = perturb_constant(ast); break;
@@ -265,10 +331,20 @@ WordImplPtr ASTGeneticOps::mutate(const WordImpl& parent) {
             }
         }
     }
-    if (!mutated) return WordImplPtr();
+    if (!mutated) {
+        if (logger_ && logger_->enabled(EvolveLogCategory::Engine)) {
+            logger_->log(EvolveLogCategory::Engine, "All 4 operators failed");
+        }
+        return WordImplPtr();
+    }
 
     // Repair type mismatches
-    if (!repair_.repair(ast, dict_)) return WordImplPtr();
+    bool repaired = repair_.repair(ast, dict_);
+    if (logger_ && logger_->enabled(EvolveLogCategory::Repair)) {
+        logger_->log(EvolveLogCategory::Repair,
+            repaired ? "Type repair succeeded" : "Type repair failed (unrepairable)");
+    }
+    if (!repaired) return WordImplPtr();
 
     // Compile back to bytecode
     auto new_bc = compiler_.compile(ast);
