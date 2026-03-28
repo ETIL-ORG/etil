@@ -2566,18 +2566,6 @@ pipelines:
 
 ---
 
-## References
-
-- **FORTH 2012 Standard**: http://www.forth200x.org/documents/forth-2012.pdf
-- **Threaded Interpretive Languages**: R.G. Loeliger, 1981
-- **Genetic Programming**: Koza, "Genetic Programming", 1992
-- **MCP Specification**: https://modelcontextprotocol.io/specification/2024-11-05
-- **JSON-RPC Specification**: https://www.jsonrpc.org/specification
-
-## License
-
-BSD-3-Clause
-
 ## Appendix T: Evolution and Selection
 
 ETIL's core innovation: multiple implementations per word with runtime selection and evolutionary optimization. The selection engine chooses which implementation to execute; the evolution engine creates new implementations via AST-level genetic operators.
@@ -2842,3 +2830,15 @@ TIL == **T**hreaded **I**nterpretive **L**anguage
 The FORTH programming language was invented by Charles H. Moore in the late 1960s, with its
 first widely recognized version created in 1970. It was developed to control telescopes and
 for other real-time applications.
+
+## References
+
+- **FORTH 2012 Standard**: http://www.forth200x.org/documents/forth-2012.pdf
+- **Threaded Interpretive Languages**: R.G. Loeliger, 1981
+- **Genetic Programming**: Koza, "Genetic Programming", 1992
+- **MCP Specification**: https://modelcontextprotocol.io/specification/2024-11-05
+- **JSON-RPC Specification**: https://www.jsonrpc.org/specification
+
+## License
+
+BSD-3-Clause
