@@ -312,3 +312,24 @@ This is the **highest-impact remaining change** for the evolution engine. It tra
 - Isolated sibling pools → Connected type graph with natural cross-domain exploration
 
 The logging infrastructure (Phases 0, diff, AST dump) is ready to validate every step of the implementation.
+
+---
+
+## Confirmed: Type Repair Never Fires (v1.9.3, 2026-03-28)
+
+The diff logging R column (repair marker) has been blank across all experiments — 500 generations of neutral padding, 100 generations of no-pool full-dictionary evolution, and every test run since v1.9.0. Investigation confirmed this is not a logging bug. The logging and the `format_mutation_diff()` R-column logic are correct. Type repair genuinely never inserts shuffles.
+
+**Root cause**: `TypeRepair::repair_sequence()` walks the AST simulating a type stack and checks each `WordCall`'s input signature against what's on the stack. When it finds a mismatch, it searches deeper in the stack for the needed type and inserts a `swap`/`rot`/`roll` to bring it to TOS. However:
+
+1. **Math pool**: All words consume and produce `Integer`. No type mismatches are possible within the pool.
+
+2. **Full dictionary without pool**: Substitute picks words by stack depth `(consumed, produced)`, not by type. A word like `copy-file` `(String, String → Integer)` replaces `+` `(Integer, Integer → Integer)`. The types are incompatible, but most words have `Unknown` in their `TypeSignature` (only ~120 primitives have concrete tags; user-defined words infer signatures at `;` time but many resolve to `Unknown`). At line 99 of `type_repair.cpp`, `actual == T::Unknown` → `continue` — the mismatch is invisible.
+
+3. **The stack simulator starts empty**: The simulated `type_stack` begins with no entries. The first word's inputs are checked against an empty stack, which hits `stack_pos >= type_stack.size()` → `continue` (underflow, can't repair). So the first N words in any program are never type-checked.
+
+**Conclusion**: The R column will populate when:
+- Signatures have concrete types (not `Unknown`) — requires the type-directed bridge system to enforce type-aware mutation
+- Cross-domain mutations create real type mismatches (e.g., `Integer` on stack but word needs `String`)
+- The stack simulator has initial type context (e.g., from the word's own input signature)
+
+The R column is infrastructure waiting for the bridge system. It is not broken.
