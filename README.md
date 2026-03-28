@@ -2607,9 +2607,47 @@ These words drive the evolutionary pipeline. Available in both the REPL and MCP 
 | Word | Stack Effect | Description |
 |------|-------------|-------------|
 | `evolve-register` | `( word-str tests-array -- flag )` | Register test cases for fitness evaluation |
+| `evolve-register-pool` | `( word-str tests-array pool-array -- flag )` | Register test cases with a restricted word pool |
 | `evolve-word` | `( word-str -- n )` | Run one generation of evolution, return children created |
 | `evolve-all` | `( -- )` | Evolve all words with registered test cases |
 | `evolve-status` | `( word-str -- n )` | Return number of generations evolved |
+
+### Semantic Tags and Bridges
+
+Tags enable tiered substitution — mutations prefer words with matching tags before falling back to signature-compatible alternatives.
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `evolve-tag` | `( word-str tag-str -- )` | Add a semantic tag to a word (e.g., `"+" "arithmetic"`) |
+| `evolve-untag` | `( word-str -- )` | Remove all semantic tags from a word |
+| `evolve-bridge` | `( from-type to-type bridge-word -- )` | Register a type conversion bridge word |
+
+### Fitness Configuration
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `evolve-fitness-mode` | `( n -- )` | 0=binary pass/fail (default), 1=distance-based scoring |
+| `evolve-fitness-alpha` | `( x -- )` | Distance scaling factor alpha (default 1.0) |
+| `evolve-instruction-budget` | `( n -- )` | Max instructions per fitness evaluation (default 100000) |
+
+Distance mode computes `1/(1 + alpha * |actual - expected|)` per test case, providing a smooth gradient instead of a binary cliff.
+
+### Mutation Weights
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `evolve-mutation-weights` | `( sub per mov ctl grw shr -- )` | Set weights for the 6 mutation operators |
+
+The six operators and their default weights:
+
+| Operator | Default | Description |
+|----------|---------|-------------|
+| Substitute | 0.30 | Replace a word call with a semantically compatible alternative |
+| Perturb | 0.15 | Add noise to a numeric literal (±1..3 for small integers, Gaussian for floats) |
+| Move | 0.10 | Relocate a word call to a different position |
+| Control flow | 0.10 | Wrap/unwrap a word in `if/then` |
+| Grow | 0.20 | Insert a new word or literal into the AST |
+| Shrink | 0.15 | Remove a node from the AST |
 
 ### The Evolution Pipeline
 
@@ -2617,16 +2655,78 @@ When `evolve-word` is called, the engine:
 
 1. **Selects parents** from existing implementations (weighted by fitness)
 2. **Decompiles** the parent's bytecode to an AST (Abstract Syntax Tree)
-3. **Mutates** the AST using one of 4 operators:
-   - **Substitute:** Replace a word call with a semantically compatible alternative (e.g., `mat-relu` to `mat-sigmoid`). Uses tiered tag matching for meaningful substitutions.
-   - **Perturb:** Add Gaussian noise to a numeric literal (e.g., `42` becomes `43`).
-   - **Move:** Relocate a word call to a different position in the sequence.
-   - **Control flow:** Wrap a word in `if/then` or unwrap an existing conditional.
+3. **Mutates** the AST using one of 6 weighted operators (substitute, perturb, move, control flow, grow, shrink)
 4. **Repairs** type mismatches by inserting stack shuffling (`swap`, `rot`, `roll`)
 5. **Compiles** the mutated AST back to bytecode with structure markers
 6. **Evaluates** the child against registered test cases (fitness = correctness + speed)
 7. **Updates weights** on all implementations based on fitness scores
 8. **Prunes** the weakest implementations if the population exceeds the limit
+
+## Appendix U: Evolution Logging
+
+The evolution engine writes detailed diagnostic logs to timestamped files (`YYYYMMDDThhmmss-evolve.log`).
+
+### Logging Control Words
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `evolve-log-dir` | `( dir-str -- )` | Set output directory for log files |
+| `evolve-log-start` | `( level mask -- )` | Start logging at level (1=logical, 2=granular) with category bitmask |
+| `evolve-log-stop` | `( -- )` | Stop logging and close the log file |
+| `evolve-log-show-failed` | `( flag -- )` | Show rejected mutations in diff view (default: off) |
+
+### Log Levels
+
+| Level | Name | Description |
+|-------|------|-------------|
+| 1 | Logical | Per-generation summaries, child fitness, operator selection |
+| 2 | Granular | All of logical plus baseline fitness, operator fallback chains, detail tags |
+
+### Log Category Bitmask
+
+Categories are independently enabled via the bitmask parameter to `evolve-log-start`. Use `-1` (all bits set) to enable everything.
+
+| Bit | Value | Category | Description |
+|-----|-------|----------|-------------|
+| 0 | 0x0001 | Engine | Generation start/end, operator selection, impl boundaries |
+| 1 | 0x0002 | Fitness | Child fitness scores |
+| 2 | 0x0004 | Selection | Parent selection, pruning decisions |
+| 3 | 0x0008 | Crossover | Crossover attempts and results |
+| 4 | 0x0010 | Substitute | Word substitution with tier info (L1/L2/L3) |
+| 5 | 0x0020 | Perturb | Constant perturbation (old → new) |
+| 6 | 0x0040 | Move | Block move operations |
+| 7 | 0x0080 | Control | Control flow wrap/unwrap |
+| 8 | 0x0100 | Grow | Node insertion |
+| 9 | 0x0200 | Shrink | Node removal |
+| 10 | 0x0400 | Repair | Type repair success/failure |
+| 11 | 0x0800 | Tag | Tag inference at `;` time |
+| 12 | 0x1000 | Pool | Pool-restricted candidate selection |
+| 14 | 0x4000 | Diff | Side-by-side before/after mutation diff |
+| 15 | 0x8000 | ASTDump | Tree-format AST dumps |
+
+### Diff View Format
+
+When the Diff category is enabled, each mutation is displayed as a four-column table:
+
+```
++-  MUTATION: substitute  ----------------------------------------
+| BEFORE                      | AFTER                       | R | ANNOTATION
+| dup                         | dup                         |   |
+| +                           | *                           |   | <- changed
++- RESULT: success ------------------------------------------------------
+```
+
+The `R` column shows `*` for lines inserted or modified by type repair. The `ANNOTATION` column marks `<- changed`, `<- inserted`, or `<- removed` lines, with `(repair)` suffix when type repair was responsible.
+
+### Impl Boundary Markers
+
+When Diff or ASTDump is enabled, each mutation attempt is bracketed by:
+
+```
+===== MUTATE impl#351 (gen 0, 'target-fn') BEGIN =====
+... mutation details ...
+===== MUTATE impl#351 → impl#353 END (success) =====
+```
 
 ### MLP Library Words (data/library/mlp.til)
 

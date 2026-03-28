@@ -615,6 +615,58 @@ s" evolve-status" s" description" s" text" s" Return number of generations evolv
 s" evolve-status" s" stack-effect" s" text" s" ( word-str -- n )" meta! drop
 s" evolve-status" s" category" s" text" s" system" meta! drop
 
+s" evolve-register-pool" s" description" s" text" s" Register test cases with a restricted word pool for evolution" meta! drop
+s" evolve-register-pool" s" stack-effect" s" text" s" ( word-str tests-array pool-array -- flag )" meta! drop
+s" evolve-register-pool" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-tag" s" description" s" text" s" Add a semantic tag to a word for tiered mutation substitution" meta! drop
+s" evolve-tag" s" stack-effect" s" text" s" ( word-str tag-str -- )" meta! drop
+s" evolve-tag" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-untag" s" description" s" text" s" Remove all semantic tags from a word" meta! drop
+s" evolve-untag" s" stack-effect" s" text" s" ( word-str -- )" meta! drop
+s" evolve-untag" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-bridge" s" description" s" text" s" Register a bridge word that converts between two type domains" meta! drop
+s" evolve-bridge" s" stack-effect" s" text" s" ( from-type-str to-type-str bridge-word-str -- )" meta! drop
+s" evolve-bridge" s" category" s" text" s" evolution" meta! drop
+
+# --- Evolution Fitness ---
+
+s" evolve-fitness-mode" s" description" s" text" s" Set fitness scoring mode: 0=binary pass/fail, 1=distance-based" meta! drop
+s" evolve-fitness-mode" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" evolve-fitness-mode" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-fitness-alpha" s" description" s" text" s" Set distance fitness scaling factor alpha (default 1.0)" meta! drop
+s" evolve-fitness-alpha" s" stack-effect" s" text" s" ( x -- )" meta! drop
+s" evolve-fitness-alpha" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-instruction-budget" s" description" s" text" s" Set max instructions per fitness evaluation (default 100000)" meta! drop
+s" evolve-instruction-budget" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" evolve-instruction-budget" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-mutation-weights" s" description" s" text" s" Set weights for the 6 AST mutation operators: substitute perturb move control grow shrink" meta! drop
+s" evolve-mutation-weights" s" stack-effect" s" text" s" ( sub per mov ctl grw shr -- )" meta! drop
+s" evolve-mutation-weights" s" category" s" text" s" evolution" meta! drop
+
+# --- Evolution Logging ---
+
+s" evolve-log-start" s" description" s" text" s" Start evolution logging at level (1=logical, 2=granular) with category bitmask" meta! drop
+s" evolve-log-start" s" stack-effect" s" text" s" ( level mask -- )" meta! drop
+s" evolve-log-start" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-log-stop" s" description" s" text" s" Stop evolution logging and close the log file" meta! drop
+s" evolve-log-stop" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" evolve-log-stop" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-log-dir" s" description" s" text" s" Set the directory for evolution log files" meta! drop
+s" evolve-log-dir" s" stack-effect" s" text" s" ( dir-str -- )" meta! drop
+s" evolve-log-dir" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-log-show-failed" s" description" s" text" s" Enable/disable showing failed mutations in diff view" meta! drop
+s" evolve-log-show-failed" s" stack-effect" s" text" s" ( flag -- )" meta! drop
+s" evolve-log-show-failed" s" category" s" text" s" evolution" meta! drop
+
 # --- System ---
 
 s" sys-semver" s" description" s" text" s" Print project semantic version" meta! drop
