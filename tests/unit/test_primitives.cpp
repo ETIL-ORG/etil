@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 329u);  // +1: evolve-log-show-failed
+    EXPECT_EQ(dict.concept_count(), 330u);  // +1: evolve-instruction-budget
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

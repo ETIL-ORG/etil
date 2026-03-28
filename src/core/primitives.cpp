@@ -1810,6 +1810,18 @@ bool prim_evolve_fitness_alpha(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-instruction-budget ( n -- )
+bool prim_evolve_instruction_budget(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    if (opt->type == Value::Type::Integer && opt->as_int > 0) {
+        engine->config().instruction_budget = static_cast<size_t>(opt->as_int);
+    }
+    return true;
+}
+
 // evolve-log-show-failed ( flag -- )
 bool prim_evolve_log_show_failed(ExecutionContext& ctx) {
     auto opt = ctx.data_stack().pop();
@@ -3109,7 +3121,8 @@ static const PrimEntry prim_table[] = {
     {"evolve-untag",     prim_evolve_untag,     1, 0, {T::String}, {}},
     {"evolve-bridge",    prim_evolve_bridge,    3, 0, {T::String, T::String, T::String}, {}},
     {"evolve-fitness-mode",  prim_evolve_fitness_mode,  1, 0, {T::Integer}, {}},
-    {"evolve-fitness-alpha", prim_evolve_fitness_alpha, 1, 0, {T::Unknown}, {}},
+    {"evolve-fitness-alpha",       prim_evolve_fitness_alpha,       1, 0, {T::Unknown}, {}},
+    {"evolve-instruction-budget",  prim_evolve_instruction_budget, 1, 0, {T::Integer}, {}},
     {"evolve-log-start",       prim_evolve_log_start,       2, 0, {T::Integer, T::Integer}, {}},
     {"evolve-log-stop",        prim_evolve_log_stop,        0, 0, {},                    {}},
     {"evolve-log-dir",         prim_evolve_log_dir,         1, 0, {T::String},           {}},
