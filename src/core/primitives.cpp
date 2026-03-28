@@ -1822,6 +1822,29 @@ bool prim_evolve_instruction_budget(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-mutation-weights ( sub per mov ctl grw shr -- )
+bool prim_evolve_mutation_weights(ExecutionContext& ctx) {
+    // Pop 6 floats: shrink, grow, control, move, perturb, substitute (reverse order)
+    double vals[6];
+    for (int i = 5; i >= 0; --i) {
+        auto opt = ctx.data_stack().pop();
+        if (!opt) return false;
+        if (opt->type == Value::Type::Float) vals[i] = opt->as_float;
+        else if (opt->type == Value::Type::Integer) vals[i] = static_cast<double>(opt->as_int);
+        else vals[i] = 0.0;
+    }
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    auto& w = engine->config().mutation_weights;
+    w.substitute = vals[0];
+    w.perturb    = vals[1];
+    w.move       = vals[2];
+    w.control    = vals[3];
+    w.grow       = vals[4];
+    w.shrink     = vals[5];
+    return true;
+}
+
 // evolve-log-show-failed ( flag -- )
 bool prim_evolve_log_show_failed(ExecutionContext& ctx) {
     auto opt = ctx.data_stack().pop();
@@ -3003,7 +3026,7 @@ struct PrimEntry {
     WordImpl::FunctionPtr fn;
     uint8_t n_in;
     uint8_t n_out;
-    T in[4];
+    T in[6];
     T out[3];
 };
 
@@ -3123,6 +3146,7 @@ static const PrimEntry prim_table[] = {
     {"evolve-fitness-mode",  prim_evolve_fitness_mode,  1, 0, {T::Integer}, {}},
     {"evolve-fitness-alpha",       prim_evolve_fitness_alpha,       1, 0, {T::Unknown}, {}},
     {"evolve-instruction-budget",  prim_evolve_instruction_budget, 1, 0, {T::Integer}, {}},
+    {"evolve-mutation-weights",    prim_evolve_mutation_weights,  6, 0, {T::Unknown, T::Unknown, T::Unknown, T::Unknown, T::Unknown, T::Unknown}, {}},
     {"evolve-log-start",       prim_evolve_log_start,       2, 0, {T::Integer, T::Integer}, {}},
     {"evolve-log-stop",        prim_evolve_log_stop,        0, 0, {},                    {}},
     {"evolve-log-dir",         prim_evolve_log_dir,         1, 0, {T::String},           {}},
