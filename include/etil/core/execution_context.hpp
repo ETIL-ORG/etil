@@ -15,7 +15,7 @@
 #include <vector>
 
 namespace etil::lvfs { class Lvfs; }
-namespace etil::fileio { class UvSession; }
+#include "etil/fileio/uv_session.hpp"
 namespace etil::net { struct HttpClientState; }
 namespace etil::db { struct MongoClientState; }
 namespace etil::mcp { struct RolePermissions; }
@@ -289,9 +289,10 @@ namespace etil::core {
         etil::lvfs::Lvfs* lvfs() const { return lvfs_; }
         void set_lvfs(etil::lvfs::Lvfs* l) { lvfs_ = l; }
 
-        // UvSession access (non-owning, for async file I/O primitives)
-        etil::fileio::UvSession* uv_session() const { return uv_session_; }
-        void set_uv_session(etil::fileio::UvSession* s) { uv_session_ = s; }
+        // UvSession access — lazy-initialized, always available.
+        // External code may override with set_uv_session() for shared loops.
+        etil::fileio::UvSession* uv_session();
+        void set_uv_session(etil::fileio::UvSession* s) { uv_session_external_ = s; }
 
         // SelectionEngine access (non-owning, for evolutionary word selection)
         etil::selection::SelectionEngine* selection_engine() const { return selection_engine_; }
@@ -472,8 +473,9 @@ namespace etil::core {
         // LVFS (for cwd/cd/ls/ll/lr/cat primitives)
         etil::lvfs::Lvfs* lvfs_ = nullptr;
 
-        // UvSession (for async file I/O primitives)
-        etil::fileio::UvSession* uv_session_ = nullptr;
+        // UvSession — external override or lazily-owned
+        etil::fileio::UvSession* uv_session_external_ = nullptr;
+        std::unique_ptr<etil::fileio::UvSession> uv_session_owned_;
 
         // SelectionEngine (for evolutionary word selection)
         etil::selection::SelectionEngine* selection_engine_ = nullptr;

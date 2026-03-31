@@ -717,18 +717,242 @@ static bool run_async_pipeline(ExecutionContext& ctx, AsyncPipeline& pipeline) {
     return ok;
 }
 
+/// Recursively build an async pipeline from the observable tree.
+///
+/// For source nodes (Timer): creates TimerNode on the pipeline.
+/// For sync subtrees: collects values into IdleNode.
+/// For transforms between async nodes: wraps observer and recurses.
+/// For Merge: recurses into both sources with the same observer.
+static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
+                                  const Observer& observer, AsyncPipeline& pipeline) {
+    using K = HeapObservable::Kind;
+
+    switch (obs->obs_kind()) {
+
+    // --- Source: Timer ---
+    case K::Timer: {
+        auto node = std::make_unique<TimerNode>();
+        int64_t delay_us = obs->state().as_int;
+        int64_t period_us = obs->param();
+        node->delay_ms = (delay_us > 0) ? static_cast<uint64_t>((delay_us + 999) / 1000) : 0;
+        node->period_ms = (period_us > 0) ? static_cast<uint64_t>((period_us + 999) / 1000) : 0;
+        node->observer = observer;
+        node->ctx = &ctx;
+        pipeline.add_node(std::move(node));
+        return;
+    }
+
+    // --- Combination: Merge ---
+    case K::Merge: {
+        // Both sources register on the event loop concurrently.
+        // max_concurrent < 2 degrades to sequential (source B after A completes).
+        // Phase 2: always concurrent for simplicity. max_concurrent=1 deferred.
+        build_async_pipeline(obs->source(), ctx, observer, pipeline);
+        build_async_pipeline(obs->source_b(), ctx, observer, pipeline);
+        return;
+    }
+
+    // --- Transforms: wrap observer if subtree needs async, else fall through ---
+
+    case K::Map: {
+        if (needs_async(obs->source())) {
+            auto* xt = obs->operator_xt();
+            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) return false;
+                auto res = c.data_stack().pop();
+                if (!res) return false;
+                return observer(*res, c);
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;  // fall through to sync collection
+    }
+
+    case K::MapWith: {
+        if (needs_async(obs->source())) {
+            auto* xt = obs->operator_xt();
+            Value context = obs->state();
+            Observer wrapped = [xt, context, observer](Value v, ExecutionContext& c) -> bool {
+                value_addref(context);
+                c.data_stack().push(context);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) return false;
+                auto res = c.data_stack().pop();
+                if (!res) return false;
+                return observer(*res, c);
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    case K::Filter: {
+        if (needs_async(obs->source())) {
+            auto* xt = obs->operator_xt();
+            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+                value_addref(v);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) { value_release(v); return false; }
+                auto pred = c.data_stack().pop();
+                if (!pred) { value_release(v); return false; }
+                if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                    return observer(v, c);
+                }
+                value_release(v);
+                return true;
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    case K::FilterWith: {
+        if (needs_async(obs->source())) {
+            auto* xt = obs->operator_xt();
+            Value context = obs->state();
+            Observer wrapped = [xt, context, observer](Value v, ExecutionContext& c) -> bool {
+                value_addref(v);
+                value_addref(context);
+                c.data_stack().push(context);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) { value_release(v); return false; }
+                auto pred = c.data_stack().pop();
+                if (!pred) { value_release(v); return false; }
+                if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                    return observer(v, c);
+                }
+                value_release(v);
+                return true;
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    case K::Take: {
+        if (needs_async(obs->source())) {
+            auto remaining = std::make_shared<int64_t>(obs->param());
+            Observer wrapped = [remaining, observer](Value v, ExecutionContext& c) -> bool {
+                if (*remaining <= 0) { value_release(v); return false; }
+                --(*remaining);
+                return observer(v, c);
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    case K::Skip: {
+        if (needs_async(obs->source())) {
+            auto to_skip = std::make_shared<int64_t>(obs->param());
+            Observer wrapped = [to_skip, observer](Value v, ExecutionContext& c) -> bool {
+                if (*to_skip > 0) { --(*to_skip); value_release(v); return true; }
+                return observer(v, c);
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    case K::Tap: {
+        if (needs_async(obs->source())) {
+            auto* xt = obs->operator_xt();
+            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+                value_addref(v);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) { value_release(v); return false; }
+                auto discard = c.data_stack().pop();
+                if (discard) discard->release();
+                return observer(v, c);
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    case K::Scan: {
+        if (needs_async(obs->source())) {
+            auto* xt = obs->operator_xt();
+            auto accum = std::make_shared<Value>(obs->state());
+            value_addref(*accum);
+            Observer wrapped = [xt, accum, observer](Value v, ExecutionContext& c) -> bool {
+                value_addref(*accum);
+                c.data_stack().push(*accum);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) return false;
+                auto res = c.data_stack().pop();
+                if (!res) return false;
+                value_release(*accum);
+                *accum = *res;
+                value_addref(*accum);
+                return observer(*res, c);
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    case K::StartWith: {
+        if (needs_async(obs->source())) {
+            Value prepend = obs->state();
+            value_addref(prepend);
+            auto emitted = std::make_shared<bool>(false);
+            Observer wrapped = [prepend, emitted, observer](Value v, ExecutionContext& c) -> bool {
+                if (!*emitted) {
+                    *emitted = true;
+                    value_addref(prepend);
+                    if (!observer(prepend, c)) { value_release(v); return false; }
+                }
+                return observer(v, c);
+            };
+            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            return;
+        }
+        break;
+    }
+
+    // Concat in async context: source A then source B.
+    // For now, collect both synchronously into a single IdleNode.
+    // Phase 4 will handle deferred registration.
+    case K::Concat:
+        break;  // fall through to sync collection
+
+    default:
+        break;
+    }
+
+    // --- Default: synchronous subtree → collect into IdleNode ---
+    auto node = std::make_unique<IdleNode>();
+    node->observer = observer;
+    node->ctx = &ctx;
+    execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+        node->values.push_back(v);
+        return true;
+    });
+    if (!node->values.empty()) {
+        pipeline.add_node(std::move(node));
+    }
+}
+
 /// Build and run an async observable pipeline.
-/// Phase 1: stub that falls back to synchronous execution.
-/// Phase 2 will populate this with real async node construction.
 static bool execute_observable_async(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
-    // Phase 1 stub: fall back to synchronous execution.
-    // Phase 2 will build AsyncPipeline from the observable tree.
-    return execute_observable(obs, ctx, observer);
+    AsyncPipeline pipeline;
+    build_async_pipeline(obs, ctx, observer, pipeline);
+    return run_async_pipeline(ctx, pipeline);
 }
 
 /// Dispatch to sync or async execution based on pipeline analysis.
 static bool run_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
-    if (needs_async(obs) && ctx.uv_session()) {
+    if (needs_async(obs)) {
         return execute_observable_async(obs, ctx, observer);
     }
     return execute_observable(obs, ctx, observer);
