@@ -2,12 +2,21 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/core/execution_context.hpp"
+#include "etil/fileio/uv_session.hpp"
 
 #ifdef __x86_64__
 #include <cpuid.h>
 #endif
 
 namespace etil::core {
+
+etil::fileio::UvSession* ExecutionContext::uv_session() {
+    if (uv_session_external_) return uv_session_external_;
+    if (!uv_session_owned_) {
+        uv_session_owned_ = std::make_unique<etil::fileio::UvSession>();
+    }
+    return uv_session_owned_.get();
+}
 
 SIMDContext::SIMDContext() {
 #ifdef __x86_64__
