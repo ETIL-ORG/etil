@@ -34,6 +34,7 @@
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <queue>
 #include <string>
 #include <thread>
 #include <vector>
@@ -563,7 +564,9 @@ struct TimerNode : AsyncNode {
         if (self->stopped) return;
         if (!self->observer(Value(self->counter++), *self->ctx)) {
             self->stopped = true;
+            self->done = true;
             uv_timer_stop(h);
+            return;
         }
         if (self->period_ms == 0) {
             self->done = true;
@@ -674,10 +677,46 @@ public:
         nodes_.push_back(std::move(node));
     }
 
-    /// Register all nodes on the event loop.
+    /// Current number of nodes.
+    size_t node_count() const { return nodes_.size(); }
+
+    /// Extract all nodes (moves ownership out).
+    std::vector<std::unique_ptr<AsyncNode>> extract_nodes() {
+        return std::move(nodes_);
+    }
+
+    /// Access a node by index (non-owning).
+    AsyncNode* node_at(size_t i) const { return nodes_[i].get(); }
+
+    /// Add a deferred group — nodes that activate when condition() returns true.
+    /// The condition checks source nodes added before this group.
+    void add_deferred(std::vector<std::unique_ptr<AsyncNode>> nodes,
+                      std::function<bool()> condition) {
+        deferred_.push_back({std::move(nodes), std::move(condition)});
+    }
+
+    /// Register all active nodes on the event loop.
     void register_handles(uv_loop_t* loop) {
+        loop_ = loop;
         for (auto& node : nodes_) {
             node->register_on(loop);
+        }
+    }
+
+    /// Check deferred groups — activate any whose conditions are met.
+    void check_deferred() {
+        if (!loop_ || deferred_.empty()) return;
+        for (auto& group : deferred_) {
+            if (group.activated || group.nodes.empty()) continue;
+            bool cond = group.condition();
+            if (cond) {
+                group.activated = true;
+                for (auto& node : group.nodes) {
+                    node->register_on(loop_);
+                    nodes_.push_back(std::move(node));
+                }
+                group.nodes.clear();
+            }
         }
     }
 
@@ -686,6 +725,10 @@ public:
         for (auto& node : nodes_) {
             if (!node->done) node->stop();
         }
+        // Deferred nodes that were never activated have no handles — just clear.
+        for (auto& group : deferred_) {
+            group.nodes.clear();
+        }
     }
 
     /// Close all handles (must be called before loop destruction).
@@ -693,12 +736,20 @@ public:
         for (auto& node : nodes_) {
             node->close();
         }
+        // Deferred nodes that were never activated were never registered,
+        // so they have no libuv handles to close. Just delete them.
+        for (auto& group : deferred_) {
+            group.nodes.clear();
+        }
     }
 
-    /// True when all source nodes have completed.
+    /// True when all source nodes have completed and no deferred groups pending.
     bool complete() const {
         for (const auto& node : nodes_) {
             if (node->is_source && !node->done) return false;
+        }
+        for (const auto& group : deferred_) {
+            if (!group.activated) return false;
         }
         return true;
     }
@@ -711,8 +762,32 @@ public:
         return false;
     }
 
+    /// True if any deferred groups haven't been activated yet.
+    bool has_pending_deferred() const {
+        for (const auto& group : deferred_) {
+            if (!group.activated && !group.nodes.empty()) return true;
+        }
+        return false;
+    }
+
+    /// Check if all source nodes in a range [start, end) are done.
+    bool sources_done_in_range(size_t start, size_t end) const {
+        for (size_t i = start; i < end && i < nodes_.size(); ++i) {
+            if (nodes_[i]->is_source && !nodes_[i]->done) return false;
+        }
+        return true;
+    }
+
 private:
+    struct DeferredGroup {
+        std::vector<std::unique_ptr<AsyncNode>> nodes;
+        std::function<bool()> condition;
+        bool activated = false;
+    };
+
     std::vector<std::unique_ptr<AsyncNode>> nodes_;
+    std::vector<DeferredGroup> deferred_;
+    uv_loop_t* loop_ = nullptr;
 };
 
 /// Run an async pipeline on the libuv event loop.
@@ -725,14 +800,17 @@ static bool run_async_pipeline(ExecutionContext& ctx, AsyncPipeline& pipeline) {
     pipeline.register_handles(loop);
 
     bool ok = true;
-    while (!pipeline.complete() && !pipeline.stopped()) {
+    while (!pipeline.complete()) {
         uv_run(loop, UV_RUN_NOWAIT);
+        pipeline.check_deferred();
         if (!ctx.tick()) {
             ok = false;
             pipeline.stop_all();
             break;
         }
-        if (pipeline.complete() || pipeline.stopped()) break;
+        if (pipeline.complete()) break;
+        // Check stopped only if no deferred groups are pending
+        if (pipeline.stopped() && !pipeline.has_pending_deferred()) break;
         std::this_thread::sleep_for(std::chrono::microseconds(50));
     }
 
@@ -1314,10 +1392,69 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
         // True async retry would need to re-register source handles on the loop.
         break;
 
-    // Concat in async context: source A then source B.
-    // For now, collect both synchronously into a single IdleNode.
-    // Phase 4 will handle deferred registration.
+    // --- Combination operators ---
+
+    // Concat: sequential by definition — run A to completion, then B.
+    // Collected synchronously via IdleNode (falls through to default).
     case K::Concat:
+        break;
+
+    case K::Zip: {
+        if (needs_async(obs->source()) || needs_async(obs->source_b())) {
+            struct ZipState {
+                std::queue<Value> queue_a, queue_b;
+                bool a_done = false, b_done = false;
+                Observer downstream;
+                ExecutionContext* ctx = nullptr;
+                bool stopped = false;
+
+                void try_emit() {
+                    while (!stopped && !queue_a.empty() && !queue_b.empty()) {
+                        auto* pair = new HeapArray();
+                        pair->push_back(queue_a.front());
+                        queue_a.pop();
+                        pair->push_back(queue_b.front());
+                        queue_b.pop();
+                        if (!downstream(Value::from(pair), *ctx)) {
+                            stopped = true;
+                        }
+                    }
+                }
+
+                ~ZipState() {
+                    while (!queue_a.empty()) { value_release(queue_a.front()); queue_a.pop(); }
+                    while (!queue_b.empty()) { value_release(queue_b.front()); queue_b.pop(); }
+                }
+            };
+
+            auto state = std::make_shared<ZipState>();
+            state->downstream = observer;
+            state->ctx = &ctx;
+
+            Observer obs_a = [state](Value v, ExecutionContext&) -> bool {
+                if (state->stopped) { value_release(v); return false; }
+                state->queue_a.push(v);
+                state->try_emit();
+                return !state->stopped;
+            };
+
+            Observer obs_b = [state](Value v, ExecutionContext&) -> bool {
+                if (state->stopped) { value_release(v); return false; }
+                state->queue_b.push(v);
+                state->try_emit();
+                return !state->stopped;
+            };
+
+            build_async_pipeline(obs->source(), ctx, obs_a, pipeline);
+            build_async_pipeline(obs->source_b(), ctx, obs_b, pipeline);
+            return;
+        }
+        break;
+    }
+
+    // FlatMap and SwitchMap require dynamic node creation — deferred to future.
+    case K::FlatMap:
+    case K::SwitchMap:
         break;  // fall through to sync collection
 
     default:
