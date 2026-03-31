@@ -26,14 +26,19 @@
 
 #include <nlohmann/json.hpp>
 
+#include "etil/fileio/uv_session.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <uv.h>
 
 namespace etil::core {
 
@@ -499,6 +504,239 @@ static bool sleep_until_or_tick(ExecutionContext& ctx,
     }
     return true;
 }
+
+// ---------------------------------------------------------------------------
+// Async infrastructure (Phase 1)
+// ---------------------------------------------------------------------------
+
+/// Check if an observable pipeline requires async (event-loop) execution.
+/// Returns true if any node in the tree is a temporal source, temporal
+/// transform, or concurrent combination operator.
+static bool needs_async(const HeapObservable* obs) {
+    if (!obs) return false;
+    using K = HeapObservable::Kind;
+    switch (obs->obs_kind()) {
+        case K::Merge:
+        case K::Timer:
+        case K::Delay:
+        case K::DelayEach:
+        case K::DebounceTime:
+        case K::ThrottleTime:
+        case K::SampleTime:
+        case K::AuditTime:
+        case K::BufferTime:
+        case K::TakeUntilTime:
+        case K::RetryDelay:
+        case K::Timeout:
+            return true;
+        default:
+            break;
+    }
+    return needs_async(obs->source()) || needs_async(obs->source_b());
+}
+
+/// Forward declaration — synchronous execution (existing).
+static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer);
+
+/// Base class for async handle nodes in the pipeline.
+struct AsyncNode {
+    bool done = false;
+    bool stopped = false;
+    virtual ~AsyncNode() = default;
+    virtual void register_on(uv_loop_t* loop) = 0;
+    virtual void stop() = 0;
+    virtual void close() = 0;
+};
+
+/// Timer source node: wraps a uv_timer_t.
+struct TimerNode : AsyncNode {
+    uv_timer_t handle{};
+    int64_t counter = 0;
+    uint64_t delay_ms = 0;
+    uint64_t period_ms = 0;
+    Observer observer;
+    ExecutionContext* ctx = nullptr;
+
+    static void on_timer(uv_timer_t* h) {
+        auto* self = static_cast<TimerNode*>(h->data);
+        if (self->stopped) return;
+        if (!self->observer(Value(self->counter++), *self->ctx)) {
+            self->stopped = true;
+            uv_timer_stop(h);
+        }
+        if (self->period_ms == 0) {
+            self->done = true;
+            uv_timer_stop(h);
+        }
+    }
+
+    void register_on(uv_loop_t* loop) override {
+        handle.data = this;
+        uv_timer_init(loop, &handle);
+        uv_timer_start(&handle, on_timer, delay_ms, period_ms);
+    }
+
+    void stop() override {
+        stopped = true;
+        uv_timer_stop(&handle);
+        done = true;
+    }
+
+    static void on_close(uv_handle_t*) {}
+    void close() override {
+        uv_close(reinterpret_cast<uv_handle_t*>(&handle), on_close);
+    }
+};
+
+/// Idle source node: emits pre-collected values one per loop iteration.
+struct IdleNode : AsyncNode {
+    uv_idle_t handle{};
+    std::vector<Value> values;
+    size_t index = 0;
+    Observer observer;
+    ExecutionContext* ctx = nullptr;
+
+    static void on_idle(uv_idle_t* h) {
+        auto* self = static_cast<IdleNode*>(h->data);
+        if (self->stopped || self->index >= self->values.size()) {
+            self->done = true;
+            uv_idle_stop(h);
+            return;
+        }
+        if (!self->observer(self->values[self->index++], *self->ctx)) {
+            self->stopped = true;
+            uv_idle_stop(h);
+            // Release unconsumed values
+            for (size_t i = self->index; i < self->values.size(); ++i) {
+                value_release(self->values[i]);
+            }
+            self->values.clear();
+            self->done = true;
+        }
+        if (self->index >= self->values.size()) {
+            self->done = true;
+            uv_idle_stop(h);
+        }
+    }
+
+    void register_on(uv_loop_t* loop) override {
+        handle.data = this;
+        uv_idle_init(loop, &handle);
+        uv_idle_start(&handle, on_idle);
+    }
+
+    void stop() override {
+        stopped = true;
+        uv_idle_stop(&handle);
+        for (size_t i = index; i < values.size(); ++i) {
+            value_release(values[i]);
+        }
+        values.clear();
+        done = true;
+    }
+
+    static void on_close(uv_handle_t*) {}
+    void close() override {
+        uv_close(reinterpret_cast<uv_handle_t*>(&handle), on_close);
+    }
+};
+
+/// Manages all async nodes for a pipeline execution.
+class AsyncPipeline {
+public:
+    /// Add a node to the pipeline.
+    void add_node(std::unique_ptr<AsyncNode> node) {
+        nodes_.push_back(std::move(node));
+    }
+
+    /// Register all nodes on the event loop.
+    void register_handles(uv_loop_t* loop) {
+        for (auto& node : nodes_) {
+            node->register_on(loop);
+        }
+    }
+
+    /// Stop all active nodes (early termination).
+    void stop_all() {
+        for (auto& node : nodes_) {
+            if (!node->done) node->stop();
+        }
+    }
+
+    /// Close all handles (must be called before loop destruction).
+    void close_all() {
+        for (auto& node : nodes_) {
+            node->close();
+        }
+    }
+
+    /// True when all source nodes have completed.
+    bool complete() const {
+        for (const auto& node : nodes_) {
+            if (!node->done) return false;
+        }
+        return true;
+    }
+
+    /// True when any node signaled stop (subscriber returned false).
+    bool stopped() const {
+        for (const auto& node : nodes_) {
+            if (node->stopped) return true;
+        }
+        return false;
+    }
+
+private:
+    std::vector<std::unique_ptr<AsyncNode>> nodes_;
+};
+
+/// Run an async pipeline on the libuv event loop.
+/// Polls UV_RUN_NOWAIT cooperatively with ctx.tick().
+static bool run_async_pipeline(ExecutionContext& ctx, AsyncPipeline& pipeline) {
+    auto* uv = ctx.uv_session();
+    if (!uv) return false;
+    auto* loop = uv->loop();
+
+    pipeline.register_handles(loop);
+
+    bool ok = true;
+    while (!pipeline.complete() && !pipeline.stopped()) {
+        uv_run(loop, UV_RUN_NOWAIT);
+        if (!ctx.tick()) {
+            ok = false;
+            pipeline.stop_all();
+            break;
+        }
+        if (pipeline.complete() || pipeline.stopped()) break;
+        std::this_thread::sleep_for(std::chrono::microseconds(50));
+    }
+
+    pipeline.close_all();
+    // Drain pending close callbacks
+    uv_run(loop, UV_RUN_NOWAIT);
+    return ok;
+}
+
+/// Build and run an async observable pipeline.
+/// Phase 1: stub that falls back to synchronous execution.
+/// Phase 2 will populate this with real async node construction.
+static bool execute_observable_async(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
+    // Phase 1 stub: fall back to synchronous execution.
+    // Phase 2 will build AsyncPipeline from the observable tree.
+    return execute_observable(obs, ctx, observer);
+}
+
+/// Dispatch to sync or async execution based on pipeline analysis.
+static bool run_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
+    if (needs_async(obs) && ctx.uv_session()) {
+        return execute_observable_async(obs, ctx, observer);
+    }
+    return execute_observable(obs, ctx, observer);
+}
+
+// ---------------------------------------------------------------------------
+// Synchronous execution engine
+// ---------------------------------------------------------------------------
 
 /// Execute an observable pipeline, delivering each emission to the observer.
 /// Returns true if completed normally, false on error/cancel/stop.
@@ -1722,7 +1960,7 @@ bool prim_obs_reduce(ExecutionContext& ctx) {
     }
     auto* xt = xt_val->as_xt_impl();
     Value accum = *opt_init;
-    bool ok = execute_observable(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
+    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
         c.data_stack().push(accum);
         c.data_stack().push(v);
         if (!execute_xt(xt, c)) return false;
@@ -1827,7 +2065,7 @@ bool prim_obs_subscribe(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) { ctx.data_stack().push(*xt_val); return false; }
     auto* xt = xt_val->as_xt_impl();
-    bool ok = execute_observable(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
+    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
         c.data_stack().push(v);
         return execute_xt(xt, c);
     });
@@ -1841,7 +2079,7 @@ bool prim_obs_to_array(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) return false;
     auto* result = new HeapArray();
-    bool ok = execute_observable(src, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext&) -> bool {
         result->push_back(v);
         return true;
     });
@@ -1856,7 +2094,7 @@ bool prim_obs_count(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) return false;
     int64_t count = 0;
-    bool ok = execute_observable(src, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext&) -> bool {
         value_release(v);
         ++count;
         return true;
@@ -2243,7 +2481,7 @@ bool prim_obs_write_file(ExecutionContext& ctx) {
         return false;
     }
 
-    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = run_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
         if (v.type == Value::Type::String && v.as_ptr) {
             auto sv = v.as_string()->view();
             file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
@@ -2296,7 +2534,7 @@ bool prim_obs_append_file(ExecutionContext& ctx) {
         return false;
     }
 
-    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = run_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
         if (v.type == Value::Type::String && v.as_ptr) {
             auto sv = v.as_string()->view();
             file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
@@ -2595,7 +2833,7 @@ bool prim_obs_to_string(ExecutionContext& ctx) {
     auto* obs = pop_observable(ctx);
     if (!obs) return false;
     std::string result;
-    bool ok = execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = run_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
         if (v.type == Value::Type::String && v.as_ptr) {
             result += v.as_string()->view();
         }
