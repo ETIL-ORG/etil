@@ -510,33 +510,7 @@ static bool sleep_until_or_tick(ExecutionContext& ctx,
 // Async infrastructure (Phase 1)
 // ---------------------------------------------------------------------------
 
-/// Check if an observable pipeline requires async (event-loop) execution.
-/// Returns true if any node in the tree is a temporal source, temporal
-/// transform, or concurrent combination operator.
-static bool needs_async(const HeapObservable* obs) {
-    if (!obs) return false;
-    using K = HeapObservable::Kind;
-    switch (obs->obs_kind()) {
-        case K::Merge:
-        case K::Timer:
-        case K::Delay:
-        case K::DelayEach:
-        case K::DebounceTime:
-        case K::ThrottleTime:
-        case K::SampleTime:
-        case K::AuditTime:
-        case K::BufferTime:
-        case K::TakeUntilTime:
-        case K::RetryDelay:
-        case K::Timeout:
-            return true;
-        default:
-            break;
-    }
-    return needs_async(obs->source()) || needs_async(obs->source_b());
-}
-
-/// Forward declaration — synchronous execution (existing).
+/// Forward declaration — legacy sync execution for non-migrated operators.
 static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer);
 class AsyncPipeline;  // forward declaration for execute_pipeline
 static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
@@ -1772,10 +1746,9 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
         break;
     }
 
-    // Fall through: non-migrated operators (Last, Buffer, BufferWhen,
-    // Window, Finalize, Catch, FlatMap, SwitchMap, File I/O, HTTP).
-    // These run synchronously via execute_observable.
-    // In async context (pipeline != null), collect into IdleNode.
+    // Fall through: remaining operators (Last, Buffer, BufferWhen, Window,
+    // Finalize, Catch, File I/O, HTTP). These run synchronously via
+    // execute_observable. In async context, collect into IdleNode.
     if (pipeline) {
         auto node = std::make_unique<IdleNode>();
         node->observer = observer;
@@ -2218,51 +2191,10 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return result;
     }
 
-    // Migrated operators — redirect to execute_pipeline (sync mode)
-    case K::Concat:
-    case K::Merge:
-    case K::Zip:
-    case K::Delay:
-    case K::DelayEach:
-    case K::DebounceTime:
-    case K::ThrottleTime:
-    case K::SampleTime:
-    case K::Timeout:
-    case K::AuditTime:
-    case K::BufferTime:
-    case K::TakeUntilTime:
-    case K::RetryDelay:
-    case K::FlatMap:
-    case K::SwitchMap:
-    case K::FromArray:
-    case K::Of:
-    case K::Empty:
-    case K::Range:
-    case K::Timer:
-    case K::Map:
-    case K::MapWith:
-    case K::Filter:
-    case K::FilterWith:
-    case K::Scan:
-    case K::Reduce:
-    case K::Take:
-    case K::Skip:
-    case K::Distinct:
-    case K::Tap:
-    case K::Pairwise:
-    case K::First:
-    case K::TakeWhile:
-    case K::DistinctUntil:
-    case K::StartWith:
-    case K::Timestamp:
-    case K::TimeInterval:
-        return execute_pipeline(obs, ctx, observer);
-
     default:
         return false;
 
     } // switch
-    return false;
 }
 
 // ---------------------------------------------------------------------------
