@@ -538,6 +538,10 @@ static bool needs_async(const HeapObservable* obs) {
 
 /// Forward declaration — synchronous execution (existing).
 static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer);
+class AsyncPipeline;  // forward declaration for execute_pipeline
+static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
+                              const Observer& observer,
+                              AsyncPipeline* pipeline = nullptr);
 
 /// Base class for async handle nodes in the pipeline.
 struct AsyncNode {
@@ -860,174 +864,6 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
         return;
     }
 
-    // --- Transforms: wrap observer if subtree needs async, else fall through ---
-
-    case K::Map: {
-        if (needs_async(obs->source())) {
-            auto* xt = obs->operator_xt();
-            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) return false;
-                auto res = c.data_stack().pop();
-                if (!res) return false;
-                return observer(*res, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;  // fall through to sync collection
-    }
-
-    case K::MapWith: {
-        if (needs_async(obs->source())) {
-            auto* xt = obs->operator_xt();
-            Value context = obs->state();
-            Observer wrapped = [xt, context, observer](Value v, ExecutionContext& c) -> bool {
-                value_addref(context);
-                c.data_stack().push(context);
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) return false;
-                auto res = c.data_stack().pop();
-                if (!res) return false;
-                return observer(*res, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::Filter: {
-        if (needs_async(obs->source())) {
-            auto* xt = obs->operator_xt();
-            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
-                value_addref(v);
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) { value_release(v); return false; }
-                auto pred = c.data_stack().pop();
-                if (!pred) { value_release(v); return false; }
-                if (pred->type == Value::Type::Boolean && pred->as_bool()) {
-                    return observer(v, c);
-                }
-                value_release(v);
-                return true;
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::FilterWith: {
-        if (needs_async(obs->source())) {
-            auto* xt = obs->operator_xt();
-            Value context = obs->state();
-            Observer wrapped = [xt, context, observer](Value v, ExecutionContext& c) -> bool {
-                value_addref(v);
-                value_addref(context);
-                c.data_stack().push(context);
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) { value_release(v); return false; }
-                auto pred = c.data_stack().pop();
-                if (!pred) { value_release(v); return false; }
-                if (pred->type == Value::Type::Boolean && pred->as_bool()) {
-                    return observer(v, c);
-                }
-                value_release(v);
-                return true;
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::Take: {
-        if (needs_async(obs->source())) {
-            auto remaining = std::make_shared<int64_t>(obs->param());
-            Observer wrapped = [remaining, observer](Value v, ExecutionContext& c) -> bool {
-                if (*remaining <= 0) { value_release(v); return false; }
-                --(*remaining);
-                return observer(v, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::Skip: {
-        if (needs_async(obs->source())) {
-            auto to_skip = std::make_shared<int64_t>(obs->param());
-            Observer wrapped = [to_skip, observer](Value v, ExecutionContext& c) -> bool {
-                if (*to_skip > 0) { --(*to_skip); value_release(v); return true; }
-                return observer(v, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::Tap: {
-        if (needs_async(obs->source())) {
-            auto* xt = obs->operator_xt();
-            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
-                value_addref(v);
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) { value_release(v); return false; }
-                auto discard = c.data_stack().pop();
-                if (discard) discard->release();
-                return observer(v, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::Scan: {
-        if (needs_async(obs->source())) {
-            auto* xt = obs->operator_xt();
-            auto accum = std::make_shared<Value>(obs->state());
-            value_addref(*accum);
-            Observer wrapped = [xt, accum, observer](Value v, ExecutionContext& c) -> bool {
-                value_addref(*accum);
-                c.data_stack().push(*accum);
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) return false;
-                auto res = c.data_stack().pop();
-                if (!res) return false;
-                value_release(*accum);
-                *accum = *res;
-                value_addref(*accum);
-                return observer(*res, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::StartWith: {
-        if (needs_async(obs->source())) {
-            Value prepend = obs->state();
-            value_addref(prepend);
-            auto emitted = std::make_shared<bool>(false);
-            Observer wrapped = [prepend, emitted, observer](Value v, ExecutionContext& c) -> bool {
-                if (!*emitted) {
-                    *emitted = true;
-                    value_addref(prepend);
-                    if (!observer(prepend, c)) { value_release(v); return false; }
-                }
-                return observer(v, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
     // --- Temporal transforms: wrap observer with timer-driven logic ---
 
     case K::Delay: {
@@ -1041,42 +877,6 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             Observer wrapped = [delay_ms, observer](Value v, ExecutionContext& c) -> bool {
                 std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
                 return observer(v, c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::Timestamp: {
-        if (needs_async(obs->source())) {
-            Observer wrapped = [observer](Value v, ExecutionContext& c) -> bool {
-                auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::system_clock::now().time_since_epoch()).count();
-                auto* pair = new HeapArray();
-                pair->push_back(Value(int64_t(now_us)));
-                pair->push_back(v);
-                return observer(Value::from(pair), c);
-            };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::TimeInterval: {
-        if (needs_async(obs->source())) {
-            auto last_time = std::make_shared<std::chrono::steady_clock::time_point>(
-                std::chrono::steady_clock::now());
-            Observer wrapped = [last_time, observer](Value v, ExecutionContext& c) -> bool {
-                auto now = std::chrono::steady_clock::now();
-                auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    now - *last_time).count();
-                *last_time = now;
-                auto* pair = new HeapArray();
-                pair->push_back(Value(int64_t(elapsed_us)));
-                pair->push_back(v);
-                return observer(Value::from(pair), c);
             };
             build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
             return;
@@ -1486,16 +1286,284 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
 /// When null, auto-detects: if the pipeline needs async, creates one
 /// internally and runs it. Otherwise executes synchronously.
 ///
-/// Phase 1: delegates to the existing functions.
+/// Phase 2: transforms unified with shared_ptr state.
 static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                               const Observer& observer,
-                              AsyncPipeline* pipeline = nullptr) {
+                              AsyncPipeline* pipeline) {
+    using K = HeapObservable::Kind;
+
+    switch (obs->obs_kind()) {
+
+    // =====================================================================
+    // Unified transforms — shared_ptr state, mode-independent.
+    // These recurse via execute_pipeline(), which handles sync/async routing.
+    // =====================================================================
+
+    case K::Map: {
+        auto* xt = obs->operator_xt();
+        Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) return false;
+            auto res = c.data_stack().pop();
+            if (!res) return false;
+            return observer(*res, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::MapWith: {
+        auto* xt = obs->operator_xt();
+        Value context = obs->state();
+        Observer wrapped = [xt, context, observer](Value v, ExecutionContext& c) -> bool {
+            value_addref(context);
+            c.data_stack().push(context);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) return false;
+            auto res = c.data_stack().pop();
+            if (!res) return false;
+            return observer(*res, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::Filter: {
+        auto* xt = obs->operator_xt();
+        Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) { value_release(v); return false; }
+            auto pred = c.data_stack().pop();
+            if (!pred) { value_release(v); return false; }
+            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                return observer(v, c);
+            }
+            value_release(v);
+            return true;
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::FilterWith: {
+        auto* xt = obs->operator_xt();
+        Value context = obs->state();
+        Observer wrapped = [xt, context, observer](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);
+            value_addref(context);
+            c.data_stack().push(context);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) { value_release(v); return false; }
+            auto pred = c.data_stack().pop();
+            if (!pred) { value_release(v); return false; }
+            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                return observer(v, c);
+            }
+            value_release(v);
+            return true;
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::Scan: {
+        auto* xt = obs->operator_xt();
+        struct ScanState {
+            Value accum;
+            ~ScanState() { value_release(accum); }
+        };
+        auto state = std::make_shared<ScanState>();
+        state->accum = obs->state();
+        value_addref(state->accum);
+        Observer wrapped = [xt, state, observer](Value v, ExecutionContext& c) -> bool {
+            c.data_stack().push(state->accum);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) return false;
+            auto res = c.data_stack().pop();
+            if (!res) return false;
+            value_release(state->accum);
+            state->accum = *res;
+            value_addref(state->accum);
+            return observer(state->accum, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::Reduce:
+        return false;  // terminal-only, not a pipeline node
+
+    case K::Take: {
+        auto remaining = std::make_shared<int64_t>(obs->param());
+        Observer wrapped = [remaining, observer](Value v, ExecutionContext& c) -> bool {
+            if (*remaining <= 0) { value_release(v); return false; }
+            --(*remaining);
+            return observer(v, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::Skip: {
+        auto to_skip = std::make_shared<int64_t>(obs->param());
+        Observer wrapped = [to_skip, observer](Value v, ExecutionContext& c) -> bool {
+            if (*to_skip > 0) { --(*to_skip); value_release(v); return true; }
+            return observer(v, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::Distinct: {
+        struct DistinctState {
+            bool has_prev = false;
+            Value prev{};
+            ~DistinctState() { if (has_prev) value_release(prev); }
+        };
+        auto state = std::make_shared<DistinctState>();
+        Observer wrapped = [state, observer](Value v, ExecutionContext& c) -> bool {
+            bool duplicate = state->has_prev && v.type == state->prev.type
+                             && v.as_int == state->prev.as_int;
+            if (duplicate) { value_release(v); return true; }
+            if (state->has_prev) value_release(state->prev);
+            state->prev = v;
+            value_addref(v);
+            state->has_prev = true;
+            return observer(v, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::Tap: {
+        auto* xt = obs->operator_xt();
+        Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) { value_release(v); return false; }
+            auto discard = c.data_stack().pop();
+            if (discard) discard->release();
+            return observer(v, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::Pairwise: {
+        struct PairState {
+            bool has_prev = false;
+            Value prev{};
+            ~PairState() { if (has_prev) value_release(prev); }
+        };
+        auto state = std::make_shared<PairState>();
+        Observer wrapped = [state, observer](Value v, ExecutionContext& c) -> bool {
+            if (!state->has_prev) {
+                state->prev = v;
+                state->has_prev = true;
+                return true;
+            }
+            auto* pair = new HeapArray();
+            pair->push_back(state->prev);
+            pair->push_back(v);
+            state->prev = v;
+            value_addref(v);
+            return observer(Value::from(pair), c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::First: {
+        auto emitted = std::make_shared<bool>(false);
+        Observer wrapped = [emitted, observer](Value v, ExecutionContext& c) -> bool {
+            if (*emitted) { value_release(v); return false; }
+            *emitted = true;
+            return observer(v, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::TakeWhile: {
+        auto* xt = obs->operator_xt();
+        Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+            value_addref(v);
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) { value_release(v); return false; }
+            auto pred = c.data_stack().pop();
+            if (!pred) { value_release(v); return false; }
+            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
+                return observer(v, c);
+            }
+            value_release(v);
+            return false;  // stop on first false
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::DistinctUntil: {
+        struct DUState {
+            bool has_prev = false;
+            Value prev{};
+            ~DUState() { if (has_prev) value_release(prev); }
+        };
+        auto state = std::make_shared<DUState>();
+        Observer wrapped = [state, observer](Value v, ExecutionContext& c) -> bool {
+            if (state->has_prev && v.type == state->prev.type
+                && v.as_int == state->prev.as_int) {
+                value_release(v);
+                return true;
+            }
+            if (state->has_prev) value_release(state->prev);
+            state->prev = v;
+            value_addref(v);
+            state->has_prev = true;
+            return observer(v, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::StartWith: {
+        Value prepend = obs->state();
+        value_addref(prepend);
+        if (!observer(prepend, ctx)) return true;
+        return execute_pipeline(obs->source(), ctx, observer, pipeline);
+    }
+
+    case K::Timestamp: {
+        Observer wrapped = [observer](Value v, ExecutionContext& c) -> bool {
+            auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            auto* pair = new HeapArray();
+            pair->push_back(Value(int64_t(now_us)));
+            pair->push_back(v);
+            return observer(Value::from(pair), c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    case K::TimeInterval: {
+        auto last_time = std::make_shared<std::chrono::steady_clock::time_point>(
+            std::chrono::steady_clock::now());
+        Observer wrapped = [last_time, observer](Value v, ExecutionContext& c) -> bool {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                now - *last_time).count();
+            *last_time = now;
+            auto* pair = new HeapArray();
+            pair->push_back(Value(int64_t(elapsed_us)));
+            pair->push_back(v);
+            return observer(Value::from(pair), c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
+    // =====================================================================
+    // Not yet migrated — delegate to old functions.
+    // Completion-dependent operators (Last, Buffer, BufferWhen, Window,
+    // Finalize, Catch) and all sources/combination/temporal operators
+    // remain in execute_observable / build_async_pipeline.
+    // =====================================================================
+
+    default:
+        break;
+    }
+
+    // Fall through: delegate to old functions
     if (pipeline) {
-        // Called from within a pipeline build — register nodes
         build_async_pipeline(obs, ctx, observer, *pipeline);
         return true;
     }
-    // Top-level call — auto-detect sync vs async
     if (needs_async(obs)) {
         AsyncPipeline ap;
         build_async_pipeline(obs, ctx, observer, ap);
@@ -1547,155 +1615,29 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return true;
     }
 
-    // --- Transform ---
-
-    case K::Map: {
-        auto* xt = obs->operator_xt();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) return false;
-            auto res = c.data_stack().pop();
-            if (!res) return false;
-            return observer(*res, c);
-        });
-    }
-
-    case K::MapWith: {
-        auto* xt = obs->operator_xt();
-        Value context = obs->state();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            value_addref(context);
-            c.data_stack().push(context);
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) return false;
-            auto res = c.data_stack().pop();
-            if (!res) return false;
-            return observer(*res, c);
-        });
-    }
-
-    case K::Filter: {
-        auto* xt = obs->operator_xt();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            value_addref(v);
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) { value_release(v); return false; }
-            auto pred = c.data_stack().pop();
-            if (!pred) { value_release(v); return false; }
-            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
-                return observer(v, c);
-            }
-            value_release(v);
-            return true;  // continue, but don't forward
-        });
-    }
-
-    case K::FilterWith: {
-        auto* xt = obs->operator_xt();
-        Value context = obs->state();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            value_addref(v);
-            value_addref(context);
-            c.data_stack().push(context);
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) { value_release(v); return false; }
-            auto pred = c.data_stack().pop();
-            if (!pred) { value_release(v); return false; }
-            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
-                return observer(v, c);
-            }
-            value_release(v);
-            return true;
-        });
-    }
-
-    // --- Accumulate ---
-
-    case K::Scan: {
-        auto* xt = obs->operator_xt();
-        Value accum = obs->state();
-        value_addref(accum);
-        bool ok = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            c.data_stack().push(accum);
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) return false;
-            auto res = c.data_stack().pop();
-            if (!res) return false;
-            accum = *res;
-            value_addref(accum);
-            bool cont = observer(accum, c);
-            return cont;
-        });
-        value_release(accum);
-        return ok;
-    }
-
-    // Reduce is handled as a terminal — not used as a pipeline node.
-    case K::Reduce:
-        return false;
-
-    // --- Limiting ---
-
-    case K::Take: {
-        int64_t remaining = obs->param();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            if (remaining <= 0) { value_release(v); return false; }
-            --remaining;
-            return observer(v, c);
-        });
-    }
-
-    case K::Skip: {
-        int64_t to_skip = obs->param();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            if (to_skip > 0) { --to_skip; value_release(v); return true; }
-            return observer(v, c);
-        });
-    }
-
-    case K::Distinct: {
-        bool has_prev = false;
-        Value prev = {};
-        bool ok = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            // Simple equality: same type + same as_int/as_float
-            bool duplicate = has_prev && v.type == prev.type && v.as_int == prev.as_int;
-            if (duplicate) {
-                value_release(v);
-                return true;
-            }
-            if (has_prev) value_release(prev);
-            prev = v;
-            value_addref(v);
-            has_prev = true;
-            return observer(v, c);
-        });
-        if (has_prev) value_release(prev);
-        return ok;
-    }
-
     // --- Combination ---
 
     case K::Concat: {
-        bool ok = execute_observable(obs->source(), ctx, observer);
+        bool ok = execute_pipeline(obs->source(), ctx, observer);
         if (!ok) return false;
-        return execute_observable(obs->source_b(), ctx, observer);
+        return execute_pipeline(obs->source_b(), ctx, observer);
     }
 
     case K::Merge: {
         // Phase 1 (synchronous): sequential merge — same as concat.
         // param_ (max_concurrent) stored for future async use.
-        bool ok = execute_observable(obs->source(), ctx, observer);
+        bool ok = execute_pipeline(obs->source(), ctx, observer);
         if (!ok) return false;
-        return execute_observable(obs->source_b(), ctx, observer);
+        return execute_pipeline(obs->source_b(), ctx, observer);
     }
 
     case K::Zip: {
         std::vector<Value> vals_a, vals_b;
-        execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
+        execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
             vals_a.push_back(v);
             return true;
         });
-        execute_observable(obs->source_b(), ctx, [&](Value v, ExecutionContext&) -> bool {
+        execute_pipeline(obs->source_b(), ctx, [&](Value v, ExecutionContext&) -> bool {
             vals_b.push_back(v);
             return true;
         });
@@ -1744,7 +1686,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
 
     case K::Delay: {
         int64_t delay_us = obs->param();
-        return execute_observable(obs->source(), ctx,
+        return execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 auto target = std::chrono::steady_clock::now()
                             + std::chrono::microseconds(delay_us);
@@ -1756,36 +1698,9 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
             });
     }
 
-    case K::Timestamp: {
-        return execute_observable(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::system_clock::now().time_since_epoch()).count();
-                auto* pair = new HeapArray();
-                pair->push_back(Value(int64_t(now_us)));
-                pair->push_back(v);
-                return observer(Value::from(pair), c);
-            });
-    }
-
-    case K::TimeInterval: {
-        auto last_time = std::chrono::steady_clock::now();
-        return execute_observable(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                auto now = std::chrono::steady_clock::now();
-                auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    now - last_time).count();
-                last_time = now;
-                auto* pair = new HeapArray();
-                pair->push_back(Value(int64_t(elapsed_us)));
-                pair->push_back(v);
-                return observer(Value::from(pair), c);
-            });
-    }
-
     case K::DelayEach: {
         auto* xt = obs->operator_xt();
-        return execute_observable(obs->source(), ctx,
+        return execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 // Push value, execute xt to get delay-us
                 value_addref(v);
@@ -1813,7 +1728,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         bool has_value = false;
         auto last_emission_time = std::chrono::steady_clock::now();
 
-        bool completed = execute_observable(obs->source(), ctx,
+        bool completed = execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& /*c*/) -> bool {
                 if (has_value) value_release(last_value);
                 last_value = v;
@@ -1840,7 +1755,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         int64_t window_us = obs->param();
         auto gate_until = std::chrono::steady_clock::time_point::min();
 
-        return execute_observable(obs->source(), ctx,
+        return execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 auto now = std::chrono::steady_clock::now();
                 if (now >= gate_until) {
@@ -1859,7 +1774,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         auto next_sample = std::chrono::steady_clock::now()
                          + std::chrono::microseconds(period_us);
 
-        bool completed = execute_observable(obs->source(), ctx,
+        bool completed = execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 if (has_latest) value_release(latest);
                 latest = v;
@@ -1888,7 +1803,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         auto deadline = std::chrono::steady_clock::now()
                       + std::chrono::microseconds(limit_us);
 
-        return execute_observable(obs->source(), ctx,
+        return execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 auto now = std::chrono::steady_clock::now();
                 if (now > deadline) {
@@ -1908,7 +1823,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         bool in_window = false;
         auto window_end = std::chrono::steady_clock::time_point::min();
 
-        bool completed = execute_observable(obs->source(), ctx,
+        bool completed = execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 if (has_value) value_release(last_value);
                 last_value = v;
@@ -1952,7 +1867,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         auto window_end = std::chrono::steady_clock::now()
                         + std::chrono::microseconds(window_us);
 
-        bool completed = execute_observable(obs->source(), ctx,
+        bool completed = execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 buffer->push_back(v);
 
@@ -1983,7 +1898,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         auto deadline = std::chrono::steady_clock::now()
                       + std::chrono::microseconds(duration_us);
 
-        return execute_observable(obs->source(), ctx,
+        return execute_pipeline(obs->source(), ctx,
             [&](Value v, ExecutionContext& c) -> bool {
                 if (std::chrono::steady_clock::now() > deadline) {
                     value_release(v);
@@ -2005,7 +1920,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
                             + std::chrono::microseconds(delay_us);
                 if (!sleep_until_or_tick(ctx, target)) return false;
             }
-            bool ok = execute_observable(obs->source(), ctx, observer);
+            bool ok = execute_pipeline(obs->source(), ctx, observer);
             if (ok) return true;
             if (!ctx.tick()) return false;  // check cancellation between retries
         }
@@ -2017,7 +1932,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
     case K::Buffer: {
         int64_t count = obs->param();
         auto* batch = new HeapArray();
-        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+        bool result = execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
             batch->push_back(v);  // takes ownership of v's ref
             if (static_cast<int64_t>(batch->length()) >= count) {
                 // Emit full batch
@@ -2039,7 +1954,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
     case K::BufferWhen: {
         auto* xt = obs->operator_xt();
         auto* batch = new HeapArray();
-        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+        bool result = execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
             value_addref(v);  // one ref for batch, one for predicate test
             batch->push_back(v);  // takes one ref
             // Test predicate with the value
@@ -2068,7 +1983,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         int64_t size = obs->param();
         std::vector<Value> ring;
         ring.reserve(static_cast<size_t>(size));
-        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+        bool result = execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
             value_addref(v);  // ring holds one ref
             ring.push_back(v);
             if (static_cast<int64_t>(ring.size()) > size) {
@@ -2095,7 +2010,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
 
     case K::FlatMap: {
         auto* xt = obs->operator_xt();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+        return execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
             // Push value, execute xt — should return an Observable
             c.data_stack().push(v);
             if (!execute_xt(xt, c)) return false;
@@ -2107,7 +2022,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
             }
             auto* sub_obs = opt->as_observable();
             // Execute sub-observable, forwarding emissions to downstream observer
-            bool ok = execute_observable(sub_obs, c, observer);
+            bool ok = execute_pipeline(sub_obs, c, observer);
             sub_obs->release();
             return ok;
         });
@@ -2410,48 +2325,10 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
 
     // --- Gap fill: high-value RxJS operators ---
 
-    case K::Tap: {
-        auto* xt = obs->operator_xt();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            value_addref(v);
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) { value_release(v); return false; }
-            auto discard = c.data_stack().pop();
-            if (discard) discard->release();
-            return observer(v, c);
-        });
-    }
-
-    case K::Pairwise: {
-        bool has_prev = false;
-        Value prev;
-        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            if (!has_prev) {
-                prev = v;
-                has_prev = true;
-                return true;
-            }
-            auto* pair = new HeapArray();
-            pair->push_back(prev);
-            value_addref(v);
-            pair->push_back(v);
-            prev = v;
-            return observer(Value::from(pair), c);
-        });
-        if (has_prev) value_release(prev);
-        return result;
-    }
-
-    case K::First:
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            observer(v, c);
-            return false;  // stop after first
-        });
-
     case K::Last: {
         bool has_value = false;
         Value last_val;
-        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
+        bool result = execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
             if (has_value) value_release(last_val);
             last_val = v;
             has_value = true;
@@ -2462,51 +2339,9 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return result;
     }
 
-    case K::TakeWhile: {
-        auto* xt = obs->operator_xt();
-        return execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            value_addref(v);
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) { value_release(v); return false; }
-            auto pred = c.data_stack().pop();
-            if (!pred) { value_release(v); return false; }
-            if (pred->type == Value::Type::Boolean && pred->as_bool()) {
-                return observer(v, c);
-            }
-            value_release(v);
-            return false;  // stop
-        });
-    }
-
-    case K::DistinctUntil: {
-        bool has_prev = false;
-        Value prev;
-        bool result = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            bool duplicate = has_prev && v.type == prev.type && v.as_int == prev.as_int;
-            if (duplicate) {
-                value_release(v);
-                return true;
-            }
-            if (has_prev) value_release(prev);
-            value_addref(v);
-            prev = v;
-            has_prev = true;
-            return observer(v, c);
-        });
-        if (has_prev) value_release(prev);
-        return result;
-    }
-
-    case K::StartWith: {
-        Value start_val = obs->state();
-        value_addref(start_val);
-        if (!observer(start_val, ctx)) return true;
-        return execute_observable(obs->source(), ctx, observer);
-    }
-
     case K::Finalize: {
         auto* xt = obs->operator_xt();
-        bool result = execute_observable(obs->source(), ctx, observer);
+        bool result = execute_pipeline(obs->source(), ctx, observer);
         execute_xt(xt, ctx);
         auto discard = ctx.data_stack().pop();
         if (discard) discard->release();
@@ -2517,7 +2352,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         auto* xt = obs->operator_xt();
         // Collect all upstream values
         std::vector<Value> upstream;
-        bool src_ok = execute_observable(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
+        bool src_ok = execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
             upstream.push_back(v);
             return true;
         });
@@ -2542,11 +2377,11 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
             auto* sub_obs = opt->as_observable();
             bool is_last = (i == upstream.size() - 1);
             if (is_last) {
-                bool ok = execute_observable(sub_obs, ctx, observer);
+                bool ok = execute_pipeline(sub_obs, ctx, observer);
                 sub_obs->release();
                 return ok;
             } else {
-                execute_observable(sub_obs, ctx, [](Value v, ExecutionContext&) -> bool {
+                execute_pipeline(sub_obs, ctx, [](Value v, ExecutionContext&) -> bool {
                     value_release(v);
                     return true;
                 });
@@ -2558,7 +2393,7 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
 
     case K::Catch: {
         auto* xt = obs->operator_xt();
-        bool result = execute_observable(obs->source(), ctx, observer);
+        bool result = execute_pipeline(obs->source(), ctx, observer);
         if (!result) {
             if (!execute_xt(xt, ctx)) return false;
             auto opt = ctx.data_stack().pop();
@@ -2567,11 +2402,34 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
                 return false;
             }
             auto* fallback = opt->as_observable();
-            result = execute_observable(fallback, ctx, observer);
+            result = execute_pipeline(fallback, ctx, observer);
             fallback->release();
         }
         return result;
     }
+
+    // Migrated transforms — redirect to execute_pipeline (sync mode)
+    case K::Map:
+    case K::MapWith:
+    case K::Filter:
+    case K::FilterWith:
+    case K::Scan:
+    case K::Reduce:
+    case K::Take:
+    case K::Skip:
+    case K::Distinct:
+    case K::Tap:
+    case K::Pairwise:
+    case K::First:
+    case K::TakeWhile:
+    case K::DistinctUntil:
+    case K::StartWith:
+    case K::Timestamp:
+    case K::TimeInterval:
+        return execute_pipeline(obs, ctx, observer);
+
+    default:
+        return false;
 
     } // switch
     return false;
