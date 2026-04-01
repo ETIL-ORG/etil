@@ -763,6 +763,11 @@ public:
     }
 
     /// True if any deferred groups haven't been activated yet.
+    /// True if pipeline has any registered nodes or pending deferred groups.
+    bool has_nodes() const {
+        return !nodes_.empty() || has_pending_deferred();
+    }
+
     bool has_pending_deferred() const {
         for (const auto& group : deferred_) {
             if (!group.activated && !group.nodes.empty()) return true;
@@ -1474,17 +1479,27 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 }
 
-/// Build and run an async observable pipeline.
-static bool execute_observable_async(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
-    AsyncPipeline pipeline;
-    build_async_pipeline(obs, ctx, observer, pipeline);
-    return run_async_pipeline(ctx, pipeline);
-}
-
-/// Dispatch to sync or async execution based on pipeline analysis.
-static bool run_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
+/// Unified pipeline execution — single entry point for sync and async.
+///
+/// When pipeline is non-null, operators register libuv handles for async
+/// execution and return true (nodes registered, not yet executed).
+/// When null, auto-detects: if the pipeline needs async, creates one
+/// internally and runs it. Otherwise executes synchronously.
+///
+/// Phase 1: delegates to the existing functions.
+static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
+                              const Observer& observer,
+                              AsyncPipeline* pipeline = nullptr) {
+    if (pipeline) {
+        // Called from within a pipeline build — register nodes
+        build_async_pipeline(obs, ctx, observer, *pipeline);
+        return true;
+    }
+    // Top-level call — auto-detect sync vs async
     if (needs_async(obs)) {
-        return execute_observable_async(obs, ctx, observer);
+        AsyncPipeline ap;
+        build_async_pipeline(obs, ctx, observer, ap);
+        return run_async_pipeline(ctx, ap);
     }
     return execute_observable(obs, ctx, observer);
 }
@@ -2715,7 +2730,7 @@ bool prim_obs_reduce(ExecutionContext& ctx) {
     }
     auto* xt = xt_val->as_xt_impl();
     Value accum = *opt_init;
-    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
+    bool ok = execute_pipeline(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
         c.data_stack().push(accum);
         c.data_stack().push(v);
         if (!execute_xt(xt, c)) return false;
@@ -2820,7 +2835,7 @@ bool prim_obs_subscribe(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) { ctx.data_stack().push(*xt_val); return false; }
     auto* xt = xt_val->as_xt_impl();
-    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
+    bool ok = execute_pipeline(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
         c.data_stack().push(v);
         return execute_xt(xt, c);
     });
@@ -2834,7 +2849,7 @@ bool prim_obs_to_array(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) return false;
     auto* result = new HeapArray();
-    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = execute_pipeline(src, ctx, [&](Value v, ExecutionContext&) -> bool {
         result->push_back(v);
         return true;
     });
@@ -2849,7 +2864,7 @@ bool prim_obs_count(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) return false;
     int64_t count = 0;
-    bool ok = run_observable(src, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = execute_pipeline(src, ctx, [&](Value v, ExecutionContext&) -> bool {
         value_release(v);
         ++count;
         return true;
@@ -3236,7 +3251,7 @@ bool prim_obs_write_file(ExecutionContext& ctx) {
         return false;
     }
 
-    bool ok = run_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = execute_pipeline(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
         if (v.type == Value::Type::String && v.as_ptr) {
             auto sv = v.as_string()->view();
             file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
@@ -3289,7 +3304,7 @@ bool prim_obs_append_file(ExecutionContext& ctx) {
         return false;
     }
 
-    bool ok = run_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = execute_pipeline(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
         if (v.type == Value::Type::String && v.as_ptr) {
             auto sv = v.as_string()->view();
             file.write(sv.data(), static_cast<std::streamsize>(sv.size()));
@@ -3588,7 +3603,7 @@ bool prim_obs_to_string(ExecutionContext& ctx) {
     auto* obs = pop_observable(ctx);
     if (!obs) return false;
     std::string result;
-    bool ok = run_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+    bool ok = execute_pipeline(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
         if (v.type == Value::Type::String && v.as_ptr) {
             result += v.as_string()->view();
         }
