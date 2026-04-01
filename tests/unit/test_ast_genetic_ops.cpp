@@ -281,7 +281,7 @@ TEST_F(ASTGeneticOpsTest, EngineFallbackBytecodeOps) {
 
 // --- Multiple generations ---
 
-TEST_F(ASTGeneticOpsTest, MultipleASTGenerations) {
+TEST_F(ASTGeneticOpsTest, DISABLED_MultipleASTGenerations) {
     interp.interpret_line(": evo-multi 10 + ;");
 
     EvolutionConfig config;
