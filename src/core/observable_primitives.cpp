@@ -841,26 +841,11 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
 
     switch (obs->obs_kind()) {
 
-    // --- Source: Timer ---
-    case K::Timer: {
-        auto node = std::make_unique<TimerNode>();
-        int64_t delay_us = obs->state().as_int;
-        int64_t period_us = obs->param();
-        node->delay_ms = (delay_us > 0) ? static_cast<uint64_t>((delay_us + 999) / 1000) : 0;
-        node->period_ms = (period_us > 0) ? static_cast<uint64_t>((period_us + 999) / 1000) : 0;
-        node->observer = observer;
-        node->ctx = &ctx;
-        pipeline.add_node(std::move(node));
-        return;
-    }
-
     // --- Combination: Merge ---
     case K::Merge: {
         // Both sources register on the event loop concurrently.
-        // max_concurrent < 2 degrades to sequential (source B after A completes).
-        // Phase 2: always concurrent for simplicity. max_concurrent=1 deferred.
-        build_async_pipeline(obs->source(), ctx, observer, pipeline);
-        build_async_pipeline(obs->source_b(), ctx, observer, pipeline);
+        execute_pipeline(obs->source(), ctx, observer, &pipeline);
+        execute_pipeline(obs->source_b(), ctx, observer, &pipeline);
         return;
     }
 
@@ -878,7 +863,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
                 return observer(v, c);
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -925,7 +910,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                                state->quiet_ms, 0);
                 return true;
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -945,7 +930,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 value_release(v);
                 return true;
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -997,7 +982,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 }
                 return true;
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -1047,7 +1032,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 }
                 return true;
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -1090,7 +1075,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 }
                 return true;
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -1130,7 +1115,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 }
                 return observer(v, c);
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -1164,7 +1149,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                     }, limit_ms, 0);
                 return observer(v, c);
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -1186,7 +1171,7 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 }
                 return observer(v, c);
             };
-            build_async_pipeline(obs->source(), ctx, wrapped, pipeline);
+            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
             return;
         }
         break;
@@ -1250,8 +1235,8 @@ static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 return !state->stopped;
             };
 
-            build_async_pipeline(obs->source(), ctx, obs_a, pipeline);
-            build_async_pipeline(obs->source_b(), ctx, obs_b, pipeline);
+            execute_pipeline(obs->source(), ctx, obs_a, &pipeline);
+            execute_pipeline(obs->source_b(), ctx, obs_b, &pipeline);
             return;
         }
         break;
@@ -1549,10 +1534,104 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     // =====================================================================
+    // Unified sources — sync/async branching on pipeline pointer.
+    // =====================================================================
+
+    case K::FromArray: {
+        if (pipeline) {
+            auto node = std::make_unique<IdleNode>();
+            auto* arr = obs->source_array();
+            for (size_t i = 0; i < arr->length(); ++i) {
+                Value v;
+                if (arr->get(i, v)) node->values.push_back(v);
+            }
+            node->observer = observer;
+            node->ctx = &ctx;
+            if (!node->values.empty()) pipeline->add_node(std::move(node));
+            return true;
+        }
+        auto* arr = obs->source_array();
+        for (size_t i = 0; i < arr->length(); ++i) {
+            if (!ctx.tick()) return false;
+            Value v;
+            if (!arr->get(i, v)) return false;
+            if (!observer(v, ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::Of: {
+        if (pipeline) {
+            auto node = std::make_unique<IdleNode>();
+            Value v = obs->state();
+            value_addref(v);
+            node->values.push_back(v);
+            node->observer = observer;
+            node->ctx = &ctx;
+            pipeline->add_node(std::move(node));
+            return true;
+        }
+        Value v = obs->state();
+        value_addref(v);
+        observer(v, ctx);
+        return true;
+    }
+
+    case K::Empty:
+        return true;
+
+    case K::Range: {
+        int64_t start = obs->state().as_int;
+        int64_t end = obs->param();
+        if (pipeline) {
+            auto node = std::make_unique<IdleNode>();
+            for (int64_t i = start; i < end; ++i)
+                node->values.push_back(Value(i));
+            node->observer = observer;
+            node->ctx = &ctx;
+            if (!node->values.empty()) pipeline->add_node(std::move(node));
+            return true;
+        }
+        for (int64_t i = start; i < end; ++i) {
+            if (!ctx.tick()) return false;
+            if (!observer(Value(i), ctx)) return true;
+        }
+        return true;
+    }
+
+    case K::Timer: {
+        int64_t delay_us = obs->state().as_int;
+        int64_t period_us = obs->param();
+        if (pipeline) {
+            auto node = std::make_unique<TimerNode>();
+            node->delay_ms = (delay_us > 0) ? static_cast<uint64_t>((delay_us + 999) / 1000) : 0;
+            node->period_ms = (period_us > 0) ? static_cast<uint64_t>((period_us + 999) / 1000) : 0;
+            node->observer = observer;
+            node->ctx = &ctx;
+            pipeline->add_node(std::move(node));
+            return true;
+        }
+        if (delay_us > 0) {
+            auto target = std::chrono::steady_clock::now()
+                        + std::chrono::microseconds(delay_us);
+            if (!sleep_until_or_tick(ctx, target)) return false;
+        }
+        if (!observer(Value(int64_t(0)), ctx)) return true;
+        if (period_us <= 0) return true;
+        int64_t counter = 1;
+        auto next_tick = std::chrono::steady_clock::now()
+                       + std::chrono::microseconds(period_us);
+        while (true) {
+            if (!sleep_until_or_tick(ctx, next_tick)) return false;
+            if (!observer(Value(counter++), ctx)) return true;
+            next_tick += std::chrono::microseconds(period_us);
+        }
+    }
+
+    // =====================================================================
     // Not yet migrated — delegate to old functions.
     // Completion-dependent operators (Last, Buffer, BufferWhen, Window,
-    // Finalize, Catch) and all sources/combination/temporal operators
-    // remain in execute_observable / build_async_pipeline.
+    // Finalize, Catch) and combination/temporal operators.
     // =====================================================================
 
     default:
@@ -1581,39 +1660,6 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
 static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
     using K = HeapObservable::Kind;
     switch (obs->obs_kind()) {
-
-    // --- Creation ---
-
-    case K::FromArray: {
-        auto* arr = obs->source_array();
-        for (size_t i = 0; i < arr->length(); ++i) {
-            if (!ctx.tick()) return false;
-            Value v;
-            if (!arr->get(i, v)) return false;
-            if (!observer(v, ctx)) return true;  // stop = normal completion
-        }
-        return true;
-    }
-
-    case K::Of: {
-        Value v = obs->state();
-        value_addref(v);
-        observer(v, ctx);
-        return true;
-    }
-
-    case K::Empty:
-        return true;
-
-    case K::Range: {
-        int64_t start = obs->state().as_int;
-        int64_t end = obs->param();
-        for (int64_t i = start; i < end; ++i) {
-            if (!ctx.tick()) return false;
-            if (!observer(Value(i), ctx)) return true;
-        }
-        return true;
-    }
 
     // --- Combination ---
 
@@ -1655,31 +1701,6 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         for (size_t j = (ok ? i + 1 : i); j < vals_a.size(); ++j) value_release(vals_a[j]);
         for (size_t j = (ok ? i + 1 : i); j < vals_b.size(); ++j) value_release(vals_b[j]);
         return ok;
-    }
-
-    // --- Temporal: Creation ---
-
-    case K::Timer: {
-        int64_t delay_us = obs->state().as_int;
-        int64_t period_us = obs->param();
-        // Initial delay
-        if (delay_us > 0) {
-            auto target = std::chrono::steady_clock::now()
-                        + std::chrono::microseconds(delay_us);
-            if (!sleep_until_or_tick(ctx, target)) return false;
-        }
-        // Emit 0
-        if (!observer(Value(int64_t(0)), ctx)) return true;
-        if (period_us <= 0) return true;  // one-shot
-        // Repeating emissions
-        int64_t counter = 1;
-        auto next_tick = std::chrono::steady_clock::now()
-                       + std::chrono::microseconds(period_us);
-        while (true) {
-            if (!sleep_until_or_tick(ctx, next_tick)) return false;
-            if (!observer(Value(counter++), ctx)) return true;
-            next_tick += std::chrono::microseconds(period_us);
-        }
     }
 
     // --- Temporal: Transform ---
@@ -2408,7 +2429,12 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return result;
     }
 
-    // Migrated transforms — redirect to execute_pipeline (sync mode)
+    // Migrated operators — redirect to execute_pipeline (sync mode)
+    case K::FromArray:
+    case K::Of:
+    case K::Empty:
+    case K::Range:
+    case K::Timer:
     case K::Map:
     case K::MapWith:
     case K::Filter:
