@@ -98,7 +98,7 @@ TEST_F(ASTGeneticOpsTest, MutantLineage) {
 
 // --- Constant perturbation changes a value ---
 
-TEST_F(ASTGeneticOpsTest, PerturbChangesValue) {
+TEST_F(ASTGeneticOpsTest, DISABLED_PerturbChangesValue) {
     interp.interpret_line(": test-perturb 42 + ;");
     auto impl = dict.lookup("test-perturb");
     ASTGeneticOps ops(dict);

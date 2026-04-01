@@ -506,6 +506,20 @@ static bool sleep_until_or_tick(ExecutionContext& ctx,
     return true;
 }
 
+/// Execute an Xt that should return an observable, pop and validate the result.
+/// Returns the observable, or nullptr on failure (value released, error printed).
+static HeapObservable* execute_xt_pop_observable(WordImpl* xt, ExecutionContext& ctx,
+                                                  const char* caller = nullptr) {
+    if (!execute_xt(xt, ctx)) return nullptr;
+    auto opt = ctx.data_stack().pop();
+    if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+        if (opt) opt->release();
+        if (caller) ctx.err() << "Error: " << caller << " xt must return an observable\n";
+        return nullptr;
+    }
+    return opt->as_observable();
+}
+
 // ---------------------------------------------------------------------------
 // Async infrastructure (Phase 1)
 // ---------------------------------------------------------------------------
@@ -1645,13 +1659,8 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             // Async: inner observables register dynamically on the running loop
             Observer wrapped = [xt, observer, pipeline, &ctx](Value v, ExecutionContext& c) -> bool {
                 c.data_stack().push(v);
-                if (!execute_xt(xt, c)) return false;
-                auto opt = c.data_stack().pop();
-                if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
-                    if (opt) opt->release();
-                    return false;
-                }
-                auto* sub_obs = opt->as_observable();
+                auto* sub_obs = execute_xt_pop_observable(xt, c);
+                if (!sub_obs) return false;
                 execute_pipeline(sub_obs, c, observer, pipeline);
                 pipeline->register_new_nodes();
                 sub_obs->release();
@@ -1662,14 +1671,8 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
         // Sync: sequential inner execution
         return execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
             c.data_stack().push(v);
-            if (!execute_xt(xt, c)) return false;
-            auto opt = c.data_stack().pop();
-            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
-                if (opt) opt->release();
-                c.err() << "Error: obs-flat-map xt must return an observable\n";
-                return false;
-            }
-            auto* sub_obs = opt->as_observable();
+            auto* sub_obs = execute_xt_pop_observable(xt, c, "obs-flat-map");
+            if (!sub_obs) return false;
             bool ok = execute_pipeline(sub_obs, c, observer);
             sub_obs->release();
             return ok;
@@ -1688,13 +1691,8 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 }
                 *inner_start = pipeline->node_count();
                 c.data_stack().push(v);
-                if (!execute_xt(xt, c)) return false;
-                auto opt = c.data_stack().pop();
-                if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
-                    if (opt) opt->release();
-                    return false;
-                }
-                auto* sub_obs = opt->as_observable();
+                auto* sub_obs = execute_xt_pop_observable(xt, c);
+                if (!sub_obs) return false;
                 execute_pipeline(sub_obs, c, observer, pipeline);
                 pipeline->register_new_nodes();
                 sub_obs->release();
@@ -1714,14 +1712,8 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
                 return false;
             }
             ctx.data_stack().push(upstream[i]);
-            if (!execute_xt(xt, ctx)) return false;
-            auto opt = ctx.data_stack().pop();
-            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
-                if (opt) opt->release();
-                ctx.err() << "Error: obs-switch-map xt must return an observable\n";
-                return false;
-            }
-            auto* sub_obs = opt->as_observable();
+            auto* sub_obs = execute_xt_pop_observable(xt, ctx, "obs-switch-map");
+            if (!sub_obs) return false;
             bool is_last = (i == upstream.size() - 1);
             if (is_last) {
                 bool ok = execute_pipeline(sub_obs, ctx, observer);
@@ -2178,13 +2170,8 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         auto* xt = obs->operator_xt();
         bool result = execute_pipeline(obs->source(), ctx, observer);
         if (!result) {
-            if (!execute_xt(xt, ctx)) return false;
-            auto opt = ctx.data_stack().pop();
-            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
-                if (opt) opt->release();
-                return false;
-            }
-            auto* fallback = opt->as_observable();
+            auto* fallback = execute_xt_pop_observable(xt, ctx, "obs-catch");
+            if (!fallback) return false;
             result = execute_pipeline(fallback, ctx, observer);
             fallback->release();
         }
