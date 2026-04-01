@@ -829,441 +829,6 @@ static bool run_async_pipeline(ExecutionContext& ctx, AsyncPipeline& pipeline) {
     return ok;
 }
 
-/// Recursively build an async pipeline from the observable tree.
-///
-/// For source nodes (Timer): creates TimerNode on the pipeline.
-/// For sync subtrees: collects values into IdleNode.
-/// For transforms between async nodes: wraps observer and recurses.
-/// For Merge: recurses into both sources with the same observer.
-static void build_async_pipeline(HeapObservable* obs, ExecutionContext& ctx,
-                                  const Observer& observer, AsyncPipeline& pipeline) {
-    using K = HeapObservable::Kind;
-
-    switch (obs->obs_kind()) {
-
-    // --- Combination: Merge ---
-    case K::Merge: {
-        // Both sources register on the event loop concurrently.
-        execute_pipeline(obs->source(), ctx, observer, &pipeline);
-        execute_pipeline(obs->source_b(), ctx, observer, &pipeline);
-        return;
-    }
-
-    // --- Temporal transforms: wrap observer with timer-driven logic ---
-
-    case K::Delay: {
-        if (needs_async(obs->source())) {
-            int64_t delay_us = obs->param();
-            uint64_t delay_ms = static_cast<uint64_t>((delay_us + 999) / 1000);
-            // Each value gets a one-shot timer. For simplicity, use sleep in the
-            // observer callback — the event loop is still running so other sources
-            // can interleave. This is correct for small delays.
-            // For truly non-blocking per-value delay, we'd need a per-value timer queue.
-            Observer wrapped = [delay_ms, observer](Value v, ExecutionContext& c) -> bool {
-                std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
-                return observer(v, c);
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::DebounceTime: {
-        if (needs_async(obs->source())) {
-            uint64_t quiet_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
-            struct DebounceState {
-                TransformTimerNode* timer_node = nullptr;
-                Value last_value{};
-                bool has_value = false;
-                Observer downstream;
-                ExecutionContext* ctx = nullptr;
-                uint64_t quiet_ms = 0;
-
-                static void on_fire(uv_timer_t* h) {
-                    auto* self = static_cast<DebounceState*>(h->data);
-                    if (self->has_value) {
-                        self->downstream(self->last_value, *self->ctx);
-                        self->has_value = false;
-                    }
-                }
-                ~DebounceState() { if (has_value) value_release(last_value); }
-            };
-            auto state = std::make_shared<DebounceState>();
-            state->downstream = observer;
-            state->ctx = &ctx;
-            state->quiet_ms = quiet_ms;
-
-            auto timer_node = std::make_unique<TransformTimerNode>();
-            state->timer_node = timer_node.get();
-            pipeline.add_node(std::move(timer_node));
-
-            Observer wrapped = [state](Value v, ExecutionContext&) -> bool {
-                if (state->has_value) value_release(state->last_value);
-                state->last_value = v;
-                value_addref(v);
-                state->has_value = true;
-                // Reset the debounce timer
-                state->timer_node->handle.data = state.get();
-                uv_timer_stop(&state->timer_node->handle);
-                uv_timer_start(&state->timer_node->handle, DebounceState::on_fire,
-                               state->quiet_ms, 0);
-                return true;
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::ThrottleTime: {
-        if (needs_async(obs->source())) {
-            int64_t window_us = obs->param();
-            auto gate_until = std::make_shared<std::chrono::steady_clock::time_point>(
-                std::chrono::steady_clock::time_point::min());
-            Observer wrapped = [gate_until, window_us, observer](Value v, ExecutionContext& c) -> bool {
-                auto now = std::chrono::steady_clock::now();
-                if (now >= *gate_until) {
-                    *gate_until = now + std::chrono::microseconds(window_us);
-                    return observer(v, c);
-                }
-                value_release(v);
-                return true;
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::SampleTime: {
-        if (needs_async(obs->source())) {
-            uint64_t period_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
-            struct SampleState {
-                TransformTimerNode* timer_node = nullptr;
-                Value latest{};
-                bool has_latest = false;
-                bool emitted_latest = true;
-                Observer downstream;
-                ExecutionContext* ctx = nullptr;
-
-                static void on_sample(uv_timer_t* h) {
-                    auto* self = static_cast<SampleState*>(h->data);
-                    if (self->has_latest && !self->emitted_latest) {
-                        value_addref(self->latest);
-                        self->downstream(self->latest, *self->ctx);
-                        self->emitted_latest = true;
-                    }
-                }
-                ~SampleState() { if (has_latest) value_release(latest); }
-            };
-            auto state = std::make_shared<SampleState>();
-            state->downstream = observer;
-            state->ctx = &ctx;
-
-            auto timer_node = std::make_unique<TransformTimerNode>();
-            state->timer_node = timer_node.get();
-            timer_node->handle.data = state.get();
-            pipeline.add_node(std::move(timer_node));
-
-            // Start the periodic sample timer during registration
-            // (The timer_node is already added; we start it via a post-register hook)
-            auto* raw_state = state.get();
-            Observer wrapped = [state, period_ms, raw_state](Value v, ExecutionContext&) -> bool {
-                if (state->has_latest) value_release(state->latest);
-                state->latest = v;
-                value_addref(v);
-                state->has_latest = true;
-                state->emitted_latest = false;
-                // Start timer on first value if not yet started
-                if (!uv_is_active(reinterpret_cast<uv_handle_t*>(&state->timer_node->handle))) {
-                    uv_timer_start(&state->timer_node->handle, SampleState::on_sample,
-                                   period_ms, period_ms);
-                }
-                return true;
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::AuditTime: {
-        if (needs_async(obs->source())) {
-            uint64_t window_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
-            struct AuditState {
-                TransformTimerNode* timer_node = nullptr;
-                Value last_value{};
-                bool has_value = false;
-                bool in_window = false;
-                Observer downstream;
-                ExecutionContext* ctx = nullptr;
-                uint64_t window_ms = 0;
-
-                static void on_fire(uv_timer_t* h) {
-                    auto* self = static_cast<AuditState*>(h->data);
-                    if (self->has_value) {
-                        value_addref(self->last_value);
-                        self->downstream(self->last_value, *self->ctx);
-                    }
-                    self->in_window = false;
-                }
-                ~AuditState() { if (has_value) value_release(last_value); }
-            };
-            auto state = std::make_shared<AuditState>();
-            state->downstream = observer;
-            state->ctx = &ctx;
-            state->window_ms = window_ms;
-
-            auto timer_node = std::make_unique<TransformTimerNode>();
-            state->timer_node = timer_node.get();
-            pipeline.add_node(std::move(timer_node));
-
-            Observer wrapped = [state](Value v, ExecutionContext&) -> bool {
-                if (state->has_value) value_release(state->last_value);
-                state->last_value = v;
-                value_addref(v);
-                state->has_value = true;
-                if (!state->in_window) {
-                    state->in_window = true;
-                    state->timer_node->handle.data = state.get();
-                    uv_timer_start(&state->timer_node->handle, AuditState::on_fire,
-                                   state->window_ms, 0);
-                }
-                return true;
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::BufferTime: {
-        if (needs_async(obs->source())) {
-            uint64_t period_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
-            struct BufferTimeState {
-                TransformTimerNode* timer_node = nullptr;
-                HeapArray* buffer = nullptr;
-                Observer downstream;
-                ExecutionContext* ctx = nullptr;
-
-                static void on_flush(uv_timer_t* h) {
-                    auto* self = static_cast<BufferTimeState*>(h->data);
-                    if (self->buffer && self->buffer->length() > 0) {
-                        auto* emit_buf = self->buffer;
-                        self->buffer = new HeapArray();
-                        self->downstream(Value::from(emit_buf), *self->ctx);
-                    }
-                }
-                ~BufferTimeState() { delete buffer; }
-            };
-            auto state = std::make_shared<BufferTimeState>();
-            state->buffer = new HeapArray();
-            state->downstream = observer;
-            state->ctx = &ctx;
-
-            auto timer_node = std::make_unique<TransformTimerNode>();
-            state->timer_node = timer_node.get();
-            timer_node->handle.data = state.get();
-            pipeline.add_node(std::move(timer_node));
-
-            Observer wrapped = [state, period_ms](Value v, ExecutionContext&) -> bool {
-                state->buffer->push_back(v);
-                if (!uv_is_active(reinterpret_cast<uv_handle_t*>(&state->timer_node->handle))) {
-                    uv_timer_start(&state->timer_node->handle, BufferTimeState::on_flush,
-                                   period_ms, period_ms);
-                }
-                return true;
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::TakeUntilTime: {
-        if (needs_async(obs->source())) {
-            uint64_t duration_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
-            auto expired = std::make_shared<bool>(false);
-
-            auto timer_node = std::make_unique<TransformTimerNode>();
-            auto* raw_timer = timer_node.get();
-            pipeline.add_node(std::move(timer_node));
-
-            struct DeadlineData {
-                std::shared_ptr<bool> expired;
-            };
-            auto dd = std::make_shared<DeadlineData>();
-            dd->expired = expired;
-            raw_timer->handle.data = dd.get();
-
-            // Start deadline timer immediately during registration
-            // We can't start here since loop isn't available yet.
-            // Instead, start on first value.
-            auto started = std::make_shared<bool>(false);
-            Observer wrapped = [expired, observer, raw_timer, dd, duration_ms, started](
-                    Value v, ExecutionContext& c) -> bool {
-                if (*expired) { value_release(v); return false; }
-                if (!*started) {
-                    *started = true;
-                    raw_timer->handle.data = dd.get();
-                    uv_timer_start(&raw_timer->handle,
-                        [](uv_timer_t* h) {
-                            auto* d = static_cast<DeadlineData*>(h->data);
-                            *d->expired = true;
-                        }, duration_ms, 0);
-                }
-                return observer(v, c);
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::Timeout: {
-        if (needs_async(obs->source())) {
-            uint64_t limit_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
-            auto timed_out = std::make_shared<bool>(false);
-
-            auto timer_node = std::make_unique<TransformTimerNode>();
-            auto* raw_timer = timer_node.get();
-            pipeline.add_node(std::move(timer_node));
-
-            struct TimeoutData {
-                std::shared_ptr<bool> timed_out;
-            };
-            auto td = std::make_shared<TimeoutData>();
-            td->timed_out = timed_out;
-
-            Observer wrapped = [timed_out, observer, raw_timer, td, limit_ms](
-                    Value v, ExecutionContext& c) -> bool {
-                if (*timed_out) { value_release(v); return false; }
-                // Reset timeout timer on each emission
-                raw_timer->handle.data = td.get();
-                uv_timer_stop(&raw_timer->handle);
-                uv_timer_start(&raw_timer->handle,
-                    [](uv_timer_t* h) {
-                        auto* d = static_cast<TimeoutData*>(h->data);
-                        *d->timed_out = true;
-                    }, limit_ms, 0);
-                return observer(v, c);
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::DelayEach: {
-        if (needs_async(obs->source())) {
-            auto* xt = obs->operator_xt();
-            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
-                value_addref(v);
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) { value_release(v); return false; }
-                auto delay_opt = c.data_stack().pop();
-                if (!delay_opt) { value_release(v); return false; }
-                int64_t delay_us = delay_opt->as_int;
-                if (delay_us > 0) {
-                    std::this_thread::sleep_for(
-                        std::chrono::microseconds(delay_us));
-                }
-                return observer(v, c);
-            };
-            execute_pipeline(obs->source(), ctx, wrapped, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    case K::RetryDelay:
-        // RetryDelay in async: fall through to sync collection for now.
-        // True async retry would need to re-register source handles on the loop.
-        break;
-
-    // --- Combination operators ---
-
-    // Concat: sequential by definition — run A to completion, then B.
-    // Collected synchronously via IdleNode (falls through to default).
-    case K::Concat:
-        break;
-
-    case K::Zip: {
-        if (needs_async(obs->source()) || needs_async(obs->source_b())) {
-            struct ZipState {
-                std::queue<Value> queue_a, queue_b;
-                bool a_done = false, b_done = false;
-                Observer downstream;
-                ExecutionContext* ctx = nullptr;
-                bool stopped = false;
-
-                void try_emit() {
-                    while (!stopped && !queue_a.empty() && !queue_b.empty()) {
-                        auto* pair = new HeapArray();
-                        pair->push_back(queue_a.front());
-                        queue_a.pop();
-                        pair->push_back(queue_b.front());
-                        queue_b.pop();
-                        if (!downstream(Value::from(pair), *ctx)) {
-                            stopped = true;
-                        }
-                    }
-                }
-
-                ~ZipState() {
-                    while (!queue_a.empty()) { value_release(queue_a.front()); queue_a.pop(); }
-                    while (!queue_b.empty()) { value_release(queue_b.front()); queue_b.pop(); }
-                }
-            };
-
-            auto state = std::make_shared<ZipState>();
-            state->downstream = observer;
-            state->ctx = &ctx;
-
-            Observer obs_a = [state](Value v, ExecutionContext&) -> bool {
-                if (state->stopped) { value_release(v); return false; }
-                state->queue_a.push(v);
-                state->try_emit();
-                return !state->stopped;
-            };
-
-            Observer obs_b = [state](Value v, ExecutionContext&) -> bool {
-                if (state->stopped) { value_release(v); return false; }
-                state->queue_b.push(v);
-                state->try_emit();
-                return !state->stopped;
-            };
-
-            execute_pipeline(obs->source(), ctx, obs_a, &pipeline);
-            execute_pipeline(obs->source_b(), ctx, obs_b, &pipeline);
-            return;
-        }
-        break;
-    }
-
-    // FlatMap and SwitchMap require dynamic node creation — deferred to future.
-    case K::FlatMap:
-    case K::SwitchMap:
-        break;  // fall through to sync collection
-
-    default:
-        break;
-    }
-
-    // --- Default: synchronous subtree → collect into IdleNode ---
-    auto node = std::make_unique<IdleNode>();
-    node->observer = observer;
-    node->ctx = &ctx;
-    execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
-        node->values.push_back(v);
-        return true;
-    });
-    if (!node->values.empty()) {
-        pipeline.add_node(std::move(node));
-    }
-}
-
 /// Unified pipeline execution — single entry point for sync and async.
 ///
 /// When pipeline is non-null, operators register libuv handles for async
@@ -1629,24 +1194,474 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     // =====================================================================
-    // Not yet migrated — delegate to old functions.
-    // Completion-dependent operators (Last, Buffer, BufferWhen, Window,
-    // Finalize, Catch) and combination/temporal operators.
+    // Unified combination operators
+    // =====================================================================
+
+    case K::Concat: {
+        // Sequential: run A to completion, then B
+        if (pipeline) {
+            // Async: collect both sequentially into IdleNode
+            // (true deferred concat requires dynamic registration — future work)
+        } else {
+            bool ok = execute_pipeline(obs->source(), ctx, observer);
+            if (!ok) return false;
+            return execute_pipeline(obs->source_b(), ctx, observer);
+        }
+        break;  // async falls through to IdleNode default
+    }
+
+    case K::Merge: {
+        if (pipeline) {
+            // Async: both sources register concurrently
+            execute_pipeline(obs->source(), ctx, observer, pipeline);
+            execute_pipeline(obs->source_b(), ctx, observer, pipeline);
+            return true;
+        }
+        // Sync: sequential
+        bool ok = execute_pipeline(obs->source(), ctx, observer);
+        if (!ok) return false;
+        return execute_pipeline(obs->source_b(), ctx, observer);
+    }
+
+    case K::Zip: {
+        if (pipeline) {
+            // Async: concurrent buffered pairing
+            struct ZipState {
+                std::queue<Value> queue_a, queue_b;
+                Observer downstream;
+                ExecutionContext* ctx = nullptr;
+                bool stopped = false;
+                void try_emit() {
+                    while (!stopped && !queue_a.empty() && !queue_b.empty()) {
+                        auto* pair = new HeapArray();
+                        pair->push_back(queue_a.front()); queue_a.pop();
+                        pair->push_back(queue_b.front()); queue_b.pop();
+                        if (!downstream(Value::from(pair), *ctx)) stopped = true;
+                    }
+                }
+                ~ZipState() {
+                    while (!queue_a.empty()) { value_release(queue_a.front()); queue_a.pop(); }
+                    while (!queue_b.empty()) { value_release(queue_b.front()); queue_b.pop(); }
+                }
+            };
+            auto state = std::make_shared<ZipState>();
+            state->downstream = observer;
+            state->ctx = &ctx;
+            Observer obs_a = [state](Value v, ExecutionContext&) -> bool {
+                if (state->stopped) { value_release(v); return false; }
+                state->queue_a.push(v); state->try_emit(); return !state->stopped;
+            };
+            Observer obs_b = [state](Value v, ExecutionContext&) -> bool {
+                if (state->stopped) { value_release(v); return false; }
+                state->queue_b.push(v); state->try_emit(); return !state->stopped;
+            };
+            execute_pipeline(obs->source(), ctx, obs_a, pipeline);
+            execute_pipeline(obs->source_b(), ctx, obs_b, pipeline);
+            return true;
+        }
+        // Sync: collect-then-pair
+        std::vector<Value> vals_a, vals_b;
+        execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
+            vals_a.push_back(v); return true;
+        });
+        execute_pipeline(obs->source_b(), ctx, [&](Value v, ExecutionContext&) -> bool {
+            vals_b.push_back(v); return true;
+        });
+        size_t n = std::min(vals_a.size(), vals_b.size());
+        bool zip_ok = true;
+        size_t zi = 0;
+        for (; zi < n; ++zi) {
+            if (!ctx.tick()) { zip_ok = false; break; }
+            auto* pair = new HeapArray();
+            pair->push_back(vals_a[zi]); pair->push_back(vals_b[zi]);
+            if (!observer(Value::from(pair), ctx)) break;
+        }
+        for (size_t j = (zip_ok ? zi + 1 : zi); j < vals_a.size(); ++j) value_release(vals_a[j]);
+        for (size_t j = (zip_ok ? zi + 1 : zi); j < vals_b.size(); ++j) value_release(vals_b[j]);
+        return zip_ok;
+    }
+
+    // =====================================================================
+    // Unified temporal transforms
+    // =====================================================================
+
+    case K::Delay: {
+        int64_t delay_us = obs->param();
+        if (pipeline) {
+            uint64_t delay_ms = static_cast<uint64_t>((delay_us + 999) / 1000);
+            Observer wrapped = [delay_ms, observer](Value v, ExecutionContext& c) -> bool {
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+                return observer(v, c);
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        return execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto target = std::chrono::steady_clock::now()
+                            + std::chrono::microseconds(delay_us);
+                if (!sleep_until_or_tick(c, target)) { value_release(v); return false; }
+                return observer(v, c);
+            });
+    }
+
+    case K::DelayEach: {
+        auto* xt = obs->operator_xt();
+        if (pipeline) {
+            Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+                value_addref(v);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) { value_release(v); return false; }
+                auto delay_opt = c.data_stack().pop();
+                if (!delay_opt) { value_release(v); return false; }
+                int64_t d = delay_opt->as_int;
+                if (d > 0) std::this_thread::sleep_for(std::chrono::microseconds(d));
+                return observer(v, c);
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        return execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                value_addref(v);
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) { value_release(v); return false; }
+                auto delay_opt = c.data_stack().pop();
+                if (!delay_opt) { value_release(v); return false; }
+                int64_t d = delay_opt->as_int;
+                if (d > 0) {
+                    auto target = std::chrono::steady_clock::now() + std::chrono::microseconds(d);
+                    if (!sleep_until_or_tick(c, target)) { value_release(v); return false; }
+                }
+                return observer(v, c);
+            });
+    }
+
+    case K::DebounceTime: {
+        if (pipeline) {
+            uint64_t quiet_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
+            struct DebounceState {
+                TransformTimerNode* timer_node = nullptr;
+                Value last_value{}; bool has_value = false;
+                Observer downstream; ExecutionContext* ctx = nullptr;
+                uint64_t quiet_ms = 0;
+                static void on_fire(uv_timer_t* h) {
+                    auto* self = static_cast<DebounceState*>(h->data);
+                    if (self->has_value) { self->downstream(self->last_value, *self->ctx); self->has_value = false; }
+                }
+                ~DebounceState() { if (has_value) value_release(last_value); }
+            };
+            auto state = std::make_shared<DebounceState>();
+            state->downstream = observer; state->ctx = &ctx; state->quiet_ms = quiet_ms;
+            auto tn = std::make_unique<TransformTimerNode>();
+            state->timer_node = tn.get();
+            pipeline->add_node(std::move(tn));
+            Observer wrapped = [state](Value v, ExecutionContext&) -> bool {
+                if (state->has_value) value_release(state->last_value);
+                state->last_value = v; value_addref(v); state->has_value = true;
+                state->timer_node->handle.data = state.get();
+                uv_timer_stop(&state->timer_node->handle);
+                uv_timer_start(&state->timer_node->handle, DebounceState::on_fire, state->quiet_ms, 0);
+                return true;
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync
+        int64_t quiet_us = obs->param();
+        Value last_value = {}; bool has_value = false;
+        auto last_time = std::chrono::steady_clock::now();
+        bool completed = execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext&) -> bool {
+                if (has_value) value_release(last_value);
+                last_value = v; value_addref(last_value); has_value = true;
+                last_time = std::chrono::steady_clock::now();
+                return true;
+            });
+        if (has_value) { (void)quiet_us; observer(last_value, ctx); }
+        return completed;
+    }
+
+    case K::ThrottleTime: {
+        int64_t window_us = obs->param();
+        if (pipeline) {
+            auto gate_until = std::make_shared<std::chrono::steady_clock::time_point>(
+                std::chrono::steady_clock::time_point::min());
+            Observer wrapped = [gate_until, window_us, observer](Value v, ExecutionContext& c) -> bool {
+                auto now = std::chrono::steady_clock::now();
+                if (now >= *gate_until) {
+                    *gate_until = now + std::chrono::microseconds(window_us);
+                    return observer(v, c);
+                }
+                value_release(v); return true;
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        auto gate_until = std::chrono::steady_clock::time_point::min();
+        return execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto now = std::chrono::steady_clock::now();
+                if (now >= gate_until) {
+                    gate_until = now + std::chrono::microseconds(window_us);
+                    return observer(v, c);
+                }
+                value_release(v); return true;
+            });
+    }
+
+    case K::SampleTime: {
+        if (pipeline) {
+            uint64_t period_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
+            struct SampleState {
+                TransformTimerNode* timer_node = nullptr;
+                Value latest{}; bool has_latest = false; bool emitted_latest = true;
+                Observer downstream; ExecutionContext* ctx = nullptr;
+                static void on_sample(uv_timer_t* h) {
+                    auto* self = static_cast<SampleState*>(h->data);
+                    if (self->has_latest && !self->emitted_latest) {
+                        value_addref(self->latest);
+                        self->downstream(self->latest, *self->ctx);
+                        self->emitted_latest = true;
+                    }
+                }
+                ~SampleState() { if (has_latest) value_release(latest); }
+            };
+            auto state = std::make_shared<SampleState>();
+            state->downstream = observer; state->ctx = &ctx;
+            auto tn = std::make_unique<TransformTimerNode>();
+            state->timer_node = tn.get(); tn->handle.data = state.get();
+            pipeline->add_node(std::move(tn));
+            Observer wrapped = [state, period_ms](Value v, ExecutionContext&) -> bool {
+                if (state->has_latest) value_release(state->latest);
+                state->latest = v; value_addref(v); state->has_latest = true; state->emitted_latest = false;
+                if (!uv_is_active(reinterpret_cast<uv_handle_t*>(&state->timer_node->handle)))
+                    uv_timer_start(&state->timer_node->handle, SampleState::on_sample, period_ms, period_ms);
+                return true;
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync
+        int64_t period_us = obs->param();
+        Value latest = {}; bool has_latest = false;
+        auto next_sample = std::chrono::steady_clock::now() + std::chrono::microseconds(period_us);
+        bool completed = execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                if (has_latest) value_release(latest);
+                latest = v; value_addref(latest); has_latest = true;
+                auto now = std::chrono::steady_clock::now();
+                while (has_latest && now >= next_sample) {
+                    if (!observer(latest, c)) { has_latest = false; return false; }
+                    has_latest = false; next_sample += std::chrono::microseconds(period_us);
+                    now = std::chrono::steady_clock::now();
+                }
+                return true;
+            });
+        if (has_latest) value_release(latest);
+        return completed;
+    }
+
+    case K::AuditTime: {
+        if (pipeline) {
+            uint64_t window_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
+            struct AuditState {
+                TransformTimerNode* timer_node = nullptr;
+                Value last_value{}; bool has_value = false; bool in_window = false;
+                Observer downstream; ExecutionContext* ctx = nullptr; uint64_t window_ms = 0;
+                static void on_fire(uv_timer_t* h) {
+                    auto* self = static_cast<AuditState*>(h->data);
+                    if (self->has_value) { value_addref(self->last_value); self->downstream(self->last_value, *self->ctx); }
+                    self->in_window = false;
+                }
+                ~AuditState() { if (has_value) value_release(last_value); }
+            };
+            auto state = std::make_shared<AuditState>();
+            state->downstream = observer; state->ctx = &ctx; state->window_ms = window_ms;
+            auto tn = std::make_unique<TransformTimerNode>();
+            state->timer_node = tn.get();
+            pipeline->add_node(std::move(tn));
+            Observer wrapped = [state](Value v, ExecutionContext&) -> bool {
+                if (state->has_value) value_release(state->last_value);
+                state->last_value = v; value_addref(v); state->has_value = true;
+                if (!state->in_window) {
+                    state->in_window = true; state->timer_node->handle.data = state.get();
+                    uv_timer_start(&state->timer_node->handle, AuditState::on_fire, state->window_ms, 0);
+                }
+                return true;
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync
+        int64_t window_us = obs->param();
+        Value last_value = {}; bool has_value = false; bool in_window = false;
+        auto window_end = std::chrono::steady_clock::time_point::min();
+        bool completed = execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                if (has_value) value_release(last_value);
+                last_value = v; value_addref(last_value); has_value = true;
+                auto now = std::chrono::steady_clock::now();
+                if (!in_window) { in_window = true; window_end = now + std::chrono::microseconds(window_us); }
+                if (now >= window_end) {
+                    Value emit_v = last_value; value_addref(emit_v); in_window = false;
+                    if (!observer(emit_v, c)) return false;
+                    in_window = true; window_end = now + std::chrono::microseconds(window_us);
+                }
+                return true;
+            });
+        if (has_value && in_window) { observer(last_value, ctx); has_value = false; }
+        if (has_value) value_release(last_value);
+        return completed;
+    }
+
+    case K::BufferTime: {
+        if (pipeline) {
+            uint64_t period_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
+            struct BufferTimeState {
+                TransformTimerNode* timer_node = nullptr;
+                HeapArray* buffer = nullptr; Observer downstream; ExecutionContext* ctx = nullptr;
+                static void on_flush(uv_timer_t* h) {
+                    auto* self = static_cast<BufferTimeState*>(h->data);
+                    if (self->buffer && self->buffer->length() > 0) {
+                        auto* eb = self->buffer; self->buffer = new HeapArray();
+                        self->downstream(Value::from(eb), *self->ctx);
+                    }
+                }
+                ~BufferTimeState() { delete buffer; }
+            };
+            auto state = std::make_shared<BufferTimeState>();
+            state->buffer = new HeapArray(); state->downstream = observer; state->ctx = &ctx;
+            auto tn = std::make_unique<TransformTimerNode>();
+            state->timer_node = tn.get(); tn->handle.data = state.get();
+            pipeline->add_node(std::move(tn));
+            Observer wrapped = [state, period_ms](Value v, ExecutionContext&) -> bool {
+                state->buffer->push_back(v);
+                if (!uv_is_active(reinterpret_cast<uv_handle_t*>(&state->timer_node->handle)))
+                    uv_timer_start(&state->timer_node->handle, BufferTimeState::on_flush, period_ms, period_ms);
+                return true;
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync
+        int64_t window_us = obs->param();
+        auto* buffer = new HeapArray();
+        auto window_end = std::chrono::steady_clock::now() + std::chrono::microseconds(window_us);
+        bool completed = execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                buffer->push_back(v);
+                auto now = std::chrono::steady_clock::now();
+                if (now >= window_end) {
+                    auto* eb = buffer; buffer = new HeapArray();
+                    window_end = now + std::chrono::microseconds(window_us);
+                    return observer(Value::from(eb), c);
+                }
+                return true;
+            });
+        if (buffer->length() > 0) observer(Value::from(buffer), ctx); else delete buffer;
+        return completed;
+    }
+
+    case K::TakeUntilTime: {
+        if (pipeline) {
+            uint64_t duration_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
+            auto expired = std::make_shared<bool>(false);
+            auto tn = std::make_unique<TransformTimerNode>();
+            auto* raw_timer = tn.get();
+            pipeline->add_node(std::move(tn));
+            struct DD { std::shared_ptr<bool> expired; };
+            auto dd = std::make_shared<DD>(); dd->expired = expired;
+            auto started = std::make_shared<bool>(false);
+            Observer wrapped = [expired, observer, raw_timer, dd, duration_ms, started](
+                    Value v, ExecutionContext& c) -> bool {
+                if (*expired) { value_release(v); return false; }
+                if (!*started) {
+                    *started = true; raw_timer->handle.data = dd.get();
+                    uv_timer_start(&raw_timer->handle, [](uv_timer_t* h) {
+                        auto* d = static_cast<DD*>(h->data); *d->expired = true;
+                    }, duration_ms, 0);
+                }
+                return observer(v, c);
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync
+        int64_t duration_us = obs->param();
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(duration_us);
+        return execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                if (std::chrono::steady_clock::now() > deadline) { value_release(v); return false; }
+                return observer(v, c);
+            });
+    }
+
+    case K::Timeout: {
+        if (pipeline) {
+            uint64_t limit_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
+            auto timed_out = std::make_shared<bool>(false);
+            auto tn = std::make_unique<TransformTimerNode>();
+            auto* raw_timer = tn.get();
+            pipeline->add_node(std::move(tn));
+            struct TD { std::shared_ptr<bool> timed_out; };
+            auto td = std::make_shared<TD>(); td->timed_out = timed_out;
+            Observer wrapped = [timed_out, observer, raw_timer, td, limit_ms](
+                    Value v, ExecutionContext& c) -> bool {
+                if (*timed_out) { value_release(v); return false; }
+                raw_timer->handle.data = td.get();
+                uv_timer_stop(&raw_timer->handle);
+                uv_timer_start(&raw_timer->handle, [](uv_timer_t* h) {
+                    auto* d = static_cast<TD*>(h->data); *d->timed_out = true;
+                }, limit_ms, 0);
+                return observer(v, c);
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync
+        int64_t limit_us = obs->param();
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(limit_us);
+        return execute_pipeline(obs->source(), ctx,
+            [&](Value v, ExecutionContext& c) -> bool {
+                auto now = std::chrono::steady_clock::now();
+                if (now > deadline) { value_release(v); return false; }
+                deadline = now + std::chrono::microseconds(limit_us);
+                return observer(v, c);
+            });
+    }
+
+    case K::RetryDelay: {
+        // Sync only (dynamic re-registration deferred to Phase 5)
+        int64_t delay_us = obs->state().as_int;
+        int64_t max_retries = obs->param();
+        for (int64_t attempt = 0; attempt <= max_retries; ++attempt) {
+            if (attempt > 0 && delay_us > 0) {
+                auto target = std::chrono::steady_clock::now() + std::chrono::microseconds(delay_us);
+                if (!sleep_until_or_tick(ctx, target)) return false;
+            }
+            bool ok = execute_pipeline(obs->source(), ctx, observer);
+            if (ok) return true;
+            if (!ctx.tick()) return false;
+        }
+        return false;
+    }
+
+    // =====================================================================
+    // Not yet migrated — completion-dependent operators remain in
+    // execute_observable: Last, Buffer, BufferWhen, Window, Finalize,
+    // Catch, FlatMap, SwitchMap, File I/O, HTTP.
     // =====================================================================
 
     default:
         break;
     }
 
-    // Fall through: delegate to old functions
+    // Fall through: non-migrated operators (Last, Buffer, BufferWhen,
+    // Window, Finalize, Catch, FlatMap, SwitchMap, File I/O, HTTP).
+    // These run synchronously via execute_observable.
+    // In async context (pipeline != null), collect into IdleNode.
     if (pipeline) {
-        build_async_pipeline(obs, ctx, observer, *pipeline);
+        auto node = std::make_unique<IdleNode>();
+        node->observer = observer;
+        node->ctx = &ctx;
+        execute_observable(obs, ctx, [&](Value v, ExecutionContext&) -> bool {
+            node->values.push_back(v);
+            return true;
+        });
+        if (!node->values.empty()) pipeline->add_node(std::move(node));
         return true;
-    }
-    if (needs_async(obs)) {
-        AsyncPipeline ap;
-        build_async_pipeline(obs, ctx, observer, ap);
-        return run_async_pipeline(ctx, ap);
     }
     return execute_observable(obs, ctx, observer);
 }
@@ -1660,293 +1675,6 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
 static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observer& observer) {
     using K = HeapObservable::Kind;
     switch (obs->obs_kind()) {
-
-    // --- Combination ---
-
-    case K::Concat: {
-        bool ok = execute_pipeline(obs->source(), ctx, observer);
-        if (!ok) return false;
-        return execute_pipeline(obs->source_b(), ctx, observer);
-    }
-
-    case K::Merge: {
-        // Phase 1 (synchronous): sequential merge — same as concat.
-        // param_ (max_concurrent) stored for future async use.
-        bool ok = execute_pipeline(obs->source(), ctx, observer);
-        if (!ok) return false;
-        return execute_pipeline(obs->source_b(), ctx, observer);
-    }
-
-    case K::Zip: {
-        std::vector<Value> vals_a, vals_b;
-        execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
-            vals_a.push_back(v);
-            return true;
-        });
-        execute_pipeline(obs->source_b(), ctx, [&](Value v, ExecutionContext&) -> bool {
-            vals_b.push_back(v);
-            return true;
-        });
-        size_t n = std::min(vals_a.size(), vals_b.size());
-        bool ok = true;
-        size_t i = 0;
-        for (; i < n; ++i) {
-            if (!ctx.tick()) { ok = false; break; }
-            auto* pair = new HeapArray();
-            pair->push_back(vals_a[i]);
-            pair->push_back(vals_b[i]);
-            if (!observer(Value::from(pair), ctx)) break;
-        }
-        // Release any unconsumed values
-        for (size_t j = (ok ? i + 1 : i); j < vals_a.size(); ++j) value_release(vals_a[j]);
-        for (size_t j = (ok ? i + 1 : i); j < vals_b.size(); ++j) value_release(vals_b[j]);
-        return ok;
-    }
-
-    // --- Temporal: Transform ---
-
-    case K::Delay: {
-        int64_t delay_us = obs->param();
-        return execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                auto target = std::chrono::steady_clock::now()
-                            + std::chrono::microseconds(delay_us);
-                if (!sleep_until_or_tick(c, target)) {
-                    value_release(v);
-                    return false;
-                }
-                return observer(v, c);
-            });
-    }
-
-    case K::DelayEach: {
-        auto* xt = obs->operator_xt();
-        return execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                // Push value, execute xt to get delay-us
-                value_addref(v);
-                c.data_stack().push(v);
-                if (!execute_xt(xt, c)) { value_release(v); return false; }
-                auto delay_opt = c.data_stack().pop();
-                if (!delay_opt) { value_release(v); return false; }
-                int64_t delay_us = delay_opt->as_int;
-                if (delay_us > 0) {
-                    auto target = std::chrono::steady_clock::now()
-                                + std::chrono::microseconds(delay_us);
-                    if (!sleep_until_or_tick(c, target)) {
-                        value_release(v);
-                        return false;
-                    }
-                }
-                return observer(v, c);
-            });
-    }
-
-    // --- Temporal: Rate-Limiting ---
-
-    case K::DebounceTime: {
-        Value last_value = {};
-        bool has_value = false;
-        auto last_emission_time = std::chrono::steady_clock::now();
-
-        bool completed = execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& /*c*/) -> bool {
-                if (has_value) value_release(last_value);
-                last_value = v;
-                value_addref(last_value);
-                has_value = true;
-                last_emission_time = std::chrono::steady_clock::now();
-                return true;
-            });
-
-        // Source completed; emit pending value if quiet period elapsed
-        if (has_value) {
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                now - last_emission_time).count();
-            // For synchronous sources (instantaneous), all emissions arrive at once,
-            // so elapsed ≈ 0, which is < quiet_us. Still emit on completion (RxJS behavior).
-            (void)elapsed;
-            observer(last_value, ctx);
-        }
-        return completed;
-    }
-
-    case K::ThrottleTime: {
-        int64_t window_us = obs->param();
-        auto gate_until = std::chrono::steady_clock::time_point::min();
-
-        return execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                auto now = std::chrono::steady_clock::now();
-                if (now >= gate_until) {
-                    gate_until = now + std::chrono::microseconds(window_us);
-                    return observer(v, c);
-                }
-                value_release(v);
-                return true;
-            });
-    }
-
-    case K::SampleTime: {
-        int64_t period_us = obs->param();
-        Value latest = {};
-        bool has_latest = false;
-        auto next_sample = std::chrono::steady_clock::now()
-                         + std::chrono::microseconds(period_us);
-
-        bool completed = execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                if (has_latest) value_release(latest);
-                latest = v;
-                value_addref(latest);
-                has_latest = true;
-
-                auto now = std::chrono::steady_clock::now();
-                while (has_latest && now >= next_sample) {
-                    if (!observer(latest, c)) {
-                        has_latest = false;
-                        return false;
-                    }
-                    has_latest = false;
-                    next_sample += std::chrono::microseconds(period_us);
-                    now = std::chrono::steady_clock::now();
-                }
-                return true;
-            });
-
-        if (has_latest) value_release(latest);
-        return completed;
-    }
-
-    case K::Timeout: {
-        int64_t limit_us = obs->param();
-        auto deadline = std::chrono::steady_clock::now()
-                      + std::chrono::microseconds(limit_us);
-
-        return execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                auto now = std::chrono::steady_clock::now();
-                if (now > deadline) {
-                    value_release(v);
-                    return false;  // timeout
-                }
-                // Reset deadline on each emission
-                deadline = now + std::chrono::microseconds(limit_us);
-                return observer(v, c);
-            });
-    }
-
-    case K::AuditTime: {
-        int64_t window_us = obs->param();
-        Value last_value = {};
-        bool has_value = false;
-        bool in_window = false;
-        auto window_end = std::chrono::steady_clock::time_point::min();
-
-        bool completed = execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                if (has_value) value_release(last_value);
-                last_value = v;
-                value_addref(last_value);
-                has_value = true;
-
-                auto now = std::chrono::steady_clock::now();
-                if (!in_window) {
-                    // First emission starts the window
-                    in_window = true;
-                    window_end = now + std::chrono::microseconds(window_us);
-                }
-
-                if (now >= window_end) {
-                    // Window elapsed, emit the last value seen
-                    Value emit_v = last_value;
-                    value_addref(emit_v);
-                    in_window = false;
-                    if (!observer(emit_v, c)) return false;
-                    // Start new window if this was also a trigger
-                    in_window = true;
-                    window_end = now + std::chrono::microseconds(window_us);
-                }
-                return true;
-            });
-
-        // Emit trailing value if window active
-        if (has_value && in_window) {
-            observer(last_value, ctx);
-            has_value = false;
-        }
-        if (has_value) value_release(last_value);
-        return completed;
-    }
-
-    // --- Temporal: Windowed ---
-
-    case K::BufferTime: {
-        int64_t window_us = obs->param();
-        auto* buffer = new HeapArray();
-        auto window_end = std::chrono::steady_clock::now()
-                        + std::chrono::microseconds(window_us);
-
-        bool completed = execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                buffer->push_back(v);
-
-                auto now = std::chrono::steady_clock::now();
-                if (now >= window_end) {
-                    // Emit the buffer and start a new one
-                    auto* emit_buf = buffer;
-                    buffer = new HeapArray();
-                    window_end = now + std::chrono::microseconds(window_us);
-                    return observer(Value::from(emit_buf), c);
-                }
-                return true;
-            });
-
-        // Emit remaining buffer if non-empty
-        if (buffer->length() > 0) {
-            observer(Value::from(buffer), ctx);
-        } else {
-            delete buffer;
-        }
-        return completed;
-    }
-
-    // --- Temporal: Limiting ---
-
-    case K::TakeUntilTime: {
-        int64_t duration_us = obs->param();
-        auto deadline = std::chrono::steady_clock::now()
-                      + std::chrono::microseconds(duration_us);
-
-        return execute_pipeline(obs->source(), ctx,
-            [&](Value v, ExecutionContext& c) -> bool {
-                if (std::chrono::steady_clock::now() > deadline) {
-                    value_release(v);
-                    return false;  // time's up
-                }
-                return observer(v, c);
-            });
-    }
-
-    // --- Temporal: Error Recovery ---
-
-    case K::RetryDelay: {
-        int64_t delay_us = obs->state().as_int;
-        int64_t max_retries = obs->param();
-
-        for (int64_t attempt = 0; attempt <= max_retries; ++attempt) {
-            if (attempt > 0 && delay_us > 0) {
-                auto target = std::chrono::steady_clock::now()
-                            + std::chrono::microseconds(delay_us);
-                if (!sleep_until_or_tick(ctx, target)) return false;
-            }
-            bool ok = execute_pipeline(obs->source(), ctx, observer);
-            if (ok) return true;
-            if (!ctx.tick()) return false;  // check cancellation between retries
-        }
-        return false;  // all retries exhausted
-    }
 
     // --- AVO Phase 1: Buffer + Composition ---
 
@@ -2430,6 +2158,19 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
     }
 
     // Migrated operators — redirect to execute_pipeline (sync mode)
+    case K::Concat:
+    case K::Merge:
+    case K::Zip:
+    case K::Delay:
+    case K::DelayEach:
+    case K::DebounceTime:
+    case K::ThrottleTime:
+    case K::SampleTime:
+    case K::Timeout:
+    case K::AuditTime:
+    case K::BufferTime:
+    case K::TakeUntilTime:
+    case K::RetryDelay:
     case K::FromArray:
     case K::Of:
     case K::Empty:
