@@ -702,9 +702,31 @@ public:
     /// Register all active nodes on the event loop.
     void register_handles(uv_loop_t* loop) {
         loop_ = loop;
+        registered_count_ = nodes_.size();
         for (auto& node : nodes_) {
             node->register_on(loop);
         }
+    }
+
+    /// Register any nodes added after initial registration (dynamic nodes).
+    void register_new_nodes() {
+        if (!loop_) return;
+        while (registered_count_ < nodes_.size()) {
+            nodes_[registered_count_]->register_on(loop_);
+            ++registered_count_;
+        }
+    }
+
+    /// Stop and close all nodes from index 'from' onward (for SwitchMap cancellation).
+    void stop_and_close_from(size_t from) {
+        for (size_t i = from; i < nodes_.size(); ++i) {
+            nodes_[i]->stop();
+            nodes_[i]->close();
+        }
+        // Drain close callbacks
+        if (loop_) uv_run(loop_, UV_RUN_NOWAIT);
+        nodes_.erase(nodes_.begin() + static_cast<long>(from), nodes_.end());
+        if (registered_count_ > nodes_.size()) registered_count_ = nodes_.size();
     }
 
     /// Check deferred groups — activate any whose conditions are met.
@@ -797,6 +819,7 @@ private:
     std::vector<std::unique_ptr<AsyncNode>> nodes_;
     std::vector<DeferredGroup> deferred_;
     uv_loop_t* loop_ = nullptr;
+    size_t registered_count_ = 0;
 };
 
 /// Run an async pipeline on the libuv event loop.
@@ -1639,9 +1662,110 @@ static bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     // =====================================================================
+    // Dynamic node operators — async via recursive execute_pipeline
+    // =====================================================================
+
+    case K::FlatMap: {
+        auto* xt = obs->operator_xt();
+        if (pipeline) {
+            // Async: inner observables register dynamically on the running loop
+            Observer wrapped = [xt, observer, pipeline, &ctx](Value v, ExecutionContext& c) -> bool {
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) return false;
+                auto opt = c.data_stack().pop();
+                if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                    if (opt) opt->release();
+                    return false;
+                }
+                auto* sub_obs = opt->as_observable();
+                execute_pipeline(sub_obs, c, observer, pipeline);
+                pipeline->register_new_nodes();
+                sub_obs->release();
+                return true;
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync: sequential inner execution
+        return execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) return false;
+            auto opt = c.data_stack().pop();
+            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                if (opt) opt->release();
+                c.err() << "Error: obs-flat-map xt must return an observable\n";
+                return false;
+            }
+            auto* sub_obs = opt->as_observable();
+            bool ok = execute_pipeline(sub_obs, c, observer);
+            sub_obs->release();
+            return ok;
+        });
+    }
+
+    case K::SwitchMap: {
+        auto* xt = obs->operator_xt();
+        if (pipeline) {
+            // Async: cancel previous inner, register new inner dynamically
+            auto inner_start = std::make_shared<size_t>(pipeline->node_count());
+            Observer wrapped = [xt, observer, pipeline, inner_start, &ctx](Value v, ExecutionContext& c) -> bool {
+                // Cancel previous inner nodes
+                if (*inner_start < pipeline->node_count()) {
+                    pipeline->stop_and_close_from(*inner_start);
+                }
+                *inner_start = pipeline->node_count();
+                c.data_stack().push(v);
+                if (!execute_xt(xt, c)) return false;
+                auto opt = c.data_stack().pop();
+                if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                    if (opt) opt->release();
+                    return false;
+                }
+                auto* sub_obs = opt->as_observable();
+                execute_pipeline(sub_obs, c, observer, pipeline);
+                pipeline->register_new_nodes();
+                sub_obs->release();
+                return true;
+            };
+            return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+        }
+        // Sync: collect upstream, only forward last inner
+        std::vector<Value> upstream;
+        bool src_ok = execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
+            upstream.push_back(v); return true;
+        });
+        if (!src_ok) { for (auto& v : upstream) value_release(v); return false; }
+        for (size_t i = 0; i < upstream.size(); ++i) {
+            if (!ctx.tick()) {
+                for (size_t j = i; j < upstream.size(); ++j) value_release(upstream[j]);
+                return false;
+            }
+            ctx.data_stack().push(upstream[i]);
+            if (!execute_xt(xt, ctx)) return false;
+            auto opt = ctx.data_stack().pop();
+            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
+                if (opt) opt->release();
+                ctx.err() << "Error: obs-switch-map xt must return an observable\n";
+                return false;
+            }
+            auto* sub_obs = opt->as_observable();
+            bool is_last = (i == upstream.size() - 1);
+            if (is_last) {
+                bool ok = execute_pipeline(sub_obs, ctx, observer);
+                sub_obs->release();
+                return ok;
+            }
+            execute_pipeline(sub_obs, ctx, [](Value v, ExecutionContext&) -> bool {
+                value_release(v); return true;
+            });
+            sub_obs->release();
+        }
+        return true;
+    }
+
+    // =====================================================================
     // Not yet migrated — completion-dependent operators remain in
     // execute_observable: Last, Buffer, BufferWhen, Window, Finalize,
-    // Catch, FlatMap, SwitchMap, File I/O, HTTP.
+    // Catch, File I/O, HTTP.
     // =====================================================================
 
     default:
@@ -1755,26 +1879,6 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         // Release remaining ring values
         for (auto& v : ring) value_release(v);
         return result;
-    }
-
-    case K::FlatMap: {
-        auto* xt = obs->operator_xt();
-        return execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext& c) -> bool {
-            // Push value, execute xt — should return an Observable
-            c.data_stack().push(v);
-            if (!execute_xt(xt, c)) return false;
-            auto opt = c.data_stack().pop();
-            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
-                if (opt) opt->release();
-                c.err() << "Error: obs-flat-map xt must return an observable\n";
-                return false;
-            }
-            auto* sub_obs = opt->as_observable();
-            // Execute sub-observable, forwarding emissions to downstream observer
-            bool ok = execute_pipeline(sub_obs, c, observer);
-            sub_obs->release();
-            return ok;
-        });
     }
 
     // --- AVO Phase 2: Streaming File I/O ---
@@ -2097,49 +2201,6 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
         return result;
     }
 
-    case K::SwitchMap: {
-        auto* xt = obs->operator_xt();
-        // Collect all upstream values
-        std::vector<Value> upstream;
-        bool src_ok = execute_pipeline(obs->source(), ctx, [&](Value v, ExecutionContext&) -> bool {
-            upstream.push_back(v);
-            return true;
-        });
-        if (!src_ok) {
-            for (auto& v : upstream) value_release(v);
-            return false;
-        }
-        // Only forward emissions from the last inner observable
-        for (size_t i = 0; i < upstream.size(); ++i) {
-            if (!ctx.tick()) {
-                for (size_t j = i; j < upstream.size(); ++j) value_release(upstream[j]);
-                return false;
-            }
-            ctx.data_stack().push(upstream[i]);
-            if (!execute_xt(xt, ctx)) return false;
-            auto opt = ctx.data_stack().pop();
-            if (!opt || opt->type != Value::Type::Observable || !opt->as_ptr) {
-                if (opt) opt->release();
-                ctx.err() << "Error: obs-switch-map xt must return an observable\n";
-                return false;
-            }
-            auto* sub_obs = opt->as_observable();
-            bool is_last = (i == upstream.size() - 1);
-            if (is_last) {
-                bool ok = execute_pipeline(sub_obs, ctx, observer);
-                sub_obs->release();
-                return ok;
-            } else {
-                execute_pipeline(sub_obs, ctx, [](Value v, ExecutionContext&) -> bool {
-                    value_release(v);
-                    return true;
-                });
-                sub_obs->release();
-            }
-        }
-        return true;
-    }
-
     case K::Catch: {
         auto* xt = obs->operator_xt();
         bool result = execute_pipeline(obs->source(), ctx, observer);
@@ -2171,6 +2232,8 @@ static bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const
     case K::BufferTime:
     case K::TakeUntilTime:
     case K::RetryDelay:
+    case K::FlatMap:
+    case K::SwitchMap:
     case K::FromArray:
     case K::Of:
     case K::Empty:
