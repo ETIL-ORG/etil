@@ -12,6 +12,7 @@
 #include "etil/core/value_helpers.hpp"
 #include "etil/core/word_impl.hpp"
 #include "etil/core/observable_execution.hpp"
+#include "etil/core/observable_async.hpp"
 
 #include "etil/core/heap_byte_array.hpp"
 #include "etil/core/heap_json.hpp"
@@ -288,6 +289,16 @@ bool prim_obs_zip(ExecutionContext& ctx) {
 
 // --- Terminal ---
 
+/// Walk the observable tree. Return true if any node requires async execution
+/// (i.e., contains a Timer source that needs the libuv event loop).
+static bool needs_async(HeapObservable* obs) {
+    if (!obs) return false;
+    if (obs->obs_kind() == HeapObservable::Kind::Timer) return true;
+    if (needs_async(obs->source())) return true;
+    if (needs_async(obs->source_b())) return true;
+    return false;
+}
+
 // obs-subscribe ( obs xt -- )
 bool prim_obs_subscribe(ExecutionContext& ctx) {
     auto xt_val = ctx.data_stack().pop();
@@ -296,10 +307,18 @@ bool prim_obs_subscribe(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) { ctx.data_stack().push(*xt_val); return false; }
     auto* xt = xt_val->as_xt_impl();
-    bool ok = execute_pipeline(src, ctx, [&](Value v, ExecutionContext& c) -> bool {
+    Observer observer = [&](Value v, ExecutionContext& c) -> bool {
         c.data_stack().push(v);
         return execute_xt(xt, c);
-    });
+    };
+    bool ok;
+    if (needs_async(src)) {
+        AsyncPipeline pipeline;
+        execute_pipeline(src, ctx, observer, &pipeline);
+        ok = run_async_pipeline(ctx, pipeline);
+    } else {
+        ok = execute_pipeline(src, ctx, observer);
+    }
     src->release();
     xt->release();
     return ok;
@@ -310,10 +329,18 @@ bool prim_obs_to_array(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) return false;
     auto* result = new HeapArray();
-    bool ok = execute_pipeline(src, ctx, [&](Value v, ExecutionContext&) -> bool {
+    Observer observer = [&](Value v, ExecutionContext&) -> bool {
         result->push_back(v);
         return true;
-    });
+    };
+    bool ok;
+    if (needs_async(src)) {
+        AsyncPipeline pipeline;
+        execute_pipeline(src, ctx, observer, &pipeline);
+        ok = run_async_pipeline(ctx, pipeline);
+    } else {
+        ok = execute_pipeline(src, ctx, observer);
+    }
     src->release();
     if (!ok) { delete result; return false; }
     ctx.data_stack().push(Value::from(result));
@@ -325,11 +352,19 @@ bool prim_obs_count(ExecutionContext& ctx) {
     auto* src = pop_observable(ctx);
     if (!src) return false;
     int64_t count = 0;
-    bool ok = execute_pipeline(src, ctx, [&](Value v, ExecutionContext&) -> bool {
+    Observer observer = [&](Value v, ExecutionContext&) -> bool {
         value_release(v);
         ++count;
         return true;
-    });
+    };
+    bool ok;
+    if (needs_async(src)) {
+        AsyncPipeline pipeline;
+        execute_pipeline(src, ctx, observer, &pipeline);
+        ok = run_async_pipeline(ctx, pipeline);
+    } else {
+        ok = execute_pipeline(src, ctx, observer);
+    }
     src->release();
     if (!ok) return false;
     ctx.data_stack().push(Value(count));
