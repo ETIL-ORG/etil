@@ -915,11 +915,18 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     case K::SwitchMap: {
         auto* xt = obs->operator_xt();
         if (pipeline) {
-            // Async: cancel previous inner, register new inner dynamically
-            auto inner_start = std::make_shared<size_t>(pipeline->node_count());
+            // Async: cancel previous inner, register new inner dynamically.
+            // inner_start tracks where inner nodes begin in the pipeline.
+            // Initialized to SIZE_MAX so the first call knows to set it
+            // (can't set it before execute_pipeline registers outer source nodes).
+            auto inner_start = std::make_shared<size_t>(SIZE_MAX);
             Observer wrapped = [xt, observer, pipeline, inner_start, &ctx](Value v, ExecutionContext& c) -> bool {
-                // Cancel previous inner nodes
-                if (*inner_start < pipeline->node_count()) {
+                if (*inner_start == SIZE_MAX) {
+                    // First call — outer source nodes are now registered.
+                    // Inner nodes start after them.
+                    *inner_start = pipeline->node_count();
+                } else if (*inner_start < pipeline->node_count()) {
+                    // Cancel previous inner nodes (not outer source nodes)
                     pipeline->stop_and_close_from(*inner_start);
                 }
                 *inner_start = pipeline->node_count();
