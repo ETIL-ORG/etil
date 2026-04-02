@@ -448,7 +448,7 @@ if [ "$DRY_RUN" = true ]; then
 else
     _run_smoke_test() {
         set -euo pipefail
-        API_KEY=$(docker inspect etil-mcp-http --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ETIL_MCP_API_KEY | cut -d= -f2)
+        API_KEY=$(docker inspect etil-mcp-http --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ETIL_MCP_API_KEY | cut -d= -f2-)
         URL="http://127.0.0.1:8080/mcp"
         AUTH="Authorization: Bearer $API_KEY"
         CT="Content-Type: application/json"
@@ -496,7 +496,7 @@ else
         for attempt in $(seq 1 $SMOKE_MAX_RETRIES); do
             if SMOKE_RESULT=$($SSH_CMD "bash -s" <<'SMOKE_REMOTE'
 set -euo pipefail
-API_KEY=$(docker inspect etil-mcp-http --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ETIL_MCP_API_KEY | cut -d= -f2)
+API_KEY=$(docker inspect etil-mcp-http --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ETIL_MCP_API_KEY | cut -d= -f2-)
 URL="http://127.0.0.1:8080/mcp"
 AUTH="Authorization: Bearer $API_KEY"
 CT="Content-Type: application/json"
