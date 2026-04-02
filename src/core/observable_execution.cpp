@@ -430,14 +430,28 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     case K::Concat: {
         // Sequential: run A to completion, then B
         if (pipeline) {
-            // Async: collect both sequentially into IdleNode
-            // (true deferred concat requires dynamic registration — future work)
-        } else {
-            bool ok = execute_pipeline(obs->source(), ctx, observer);
-            if (!ok) return false;
-            return execute_pipeline(obs->source_b(), ctx, observer);
+            // Async: register source A now, defer source B until A completes
+            size_t a_start = pipeline->node_count();
+            execute_pipeline(obs->source(), ctx, observer, pipeline);
+            size_t a_end = pipeline->node_count();
+
+            // Build source B's nodes into a temporary pipeline
+            AsyncPipeline b_pipeline;
+            execute_pipeline(obs->source_b(), ctx, observer, &b_pipeline);
+
+            // Defer B's nodes — activate when all of A's source nodes are done
+            auto b_nodes = b_pipeline.extract_nodes();
+            if (!b_nodes.empty()) {
+                pipeline->add_deferred(std::move(b_nodes),
+                    [pipeline, a_start, a_end]() {
+                        return pipeline->sources_done_in_range(a_start, a_end);
+                    });
+            }
+            return true;
         }
-        break;  // async falls through to IdleNode default
+        bool ok = execute_pipeline(obs->source(), ctx, observer);
+        if (!ok) return false;
+        return execute_pipeline(obs->source_b(), ctx, observer);
     }
 
     case K::Merge: {

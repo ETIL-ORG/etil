@@ -258,10 +258,12 @@ public:
         return true;
     }
 
-    /// True when any node signaled stop (subscriber returned false).
+    /// True when any active (not-yet-done) node signaled stop.
+    /// Nodes that are both stopped and done completed normally (e.g., Take
+    /// stopping a timer after N items) and should not trigger early exit.
     bool stopped() const {
         for (const auto& node : nodes_) {
-            if (node->stopped) return true;
+            if (node->stopped && !node->done) return true;
         }
         return false;
     }
