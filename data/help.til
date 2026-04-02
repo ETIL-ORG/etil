@@ -482,8 +482,8 @@ s" ," s" examples" s" code" s" create mydata 10 , 20 , 30 ," meta! drop
 s" @" s" examples" s" code" s" create myvar 0 ,\nmyvar @ .\n=> 0" meta! drop
 s" !" s" examples" s" code" s" create myvar 0 ,\n42 myvar !\nmyvar @ .\n=> 42" meta! drop
 s" allot" s" examples" s" code" s" create buffer 100 allot" meta! drop
-s" cell-get" s" examples" s" code" s" : pair create , , does> ;\ns\" A\" s\" B\" pair p\np 0 cell-get s. => B\np 1 cell-get s. => A" meta! drop
-s" cell-set" s" examples" s" code" s" : pair create , , does> ;\ns\" A\" s\" B\" pair p\ns\" X\" p 0 cell-set\np 0 cell-get s. => X" meta! drop
+s" cell-get" s" examples" s" code" s| : pair create , , does> ;\n10 20 pair p\np 0 cell-get . => 20\np 1 cell-get . => 10| meta! drop
+s" cell-set" s" examples" s" code" s| : pair create , , does> ;\n10 20 pair p\n99 p 0 cell-set\np 0 cell-get . => 99| meta! drop
 
 # --- Math ---
 
