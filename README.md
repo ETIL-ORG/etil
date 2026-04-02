@@ -2836,7 +2836,7 @@ for other real-time applications.
 - **FORTH 2012 Standard**: http://www.forth200x.org/documents/forth-2012.pdf
 - **Threaded Interpretive Languages**: R.G. Loeliger, 1981
 - **Genetic Programming**: Koza, "Genetic Programming", 1992
-- **MCP Specification**: https://modelcontextprotocol.io/specification/2024-11-05
+- **MCP Specification**: https://modelcontextprotocol.io/specification/2025-11-25
 - **JSON-RPC Specification**: https://www.jsonrpc.org/specification
 
 ## License
