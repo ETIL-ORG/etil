@@ -469,11 +469,21 @@ s" allot" s" description" s" text" s" Reserve n cells in last created word" meta
 s" allot" s" stack-effect" s" text" s" ( n -- )" meta! drop
 s" allot" s" category" s" text" s" memory" meta! drop
 
+s" cell-get" s" description" s" text" s" Fetch value at cell index n from a data field" meta! drop
+s" cell-get" s" stack-effect" s" text" s" ( dataref n -- value )" meta! drop
+s" cell-get" s" category" s" text" s" memory" meta! drop
+
+s" cell-set" s" description" s" text" s" Store value at cell index n in a data field" meta! drop
+s" cell-set" s" stack-effect" s" text" s" ( value dataref n -- )" meta! drop
+s" cell-set" s" category" s" text" s" memory" meta! drop
+
 s" create" s" examples" s" code" s" : constant create , does> @ ;\n99 constant bottles\nbottles .\n=> 99" meta! drop
 s" ," s" examples" s" code" s" create mydata 10 , 20 , 30 ," meta! drop
 s" @" s" examples" s" code" s" create myvar 0 ,\nmyvar @ .\n=> 0" meta! drop
 s" !" s" examples" s" code" s" create myvar 0 ,\n42 myvar !\nmyvar @ .\n=> 42" meta! drop
 s" allot" s" examples" s" code" s" create buffer 100 allot" meta! drop
+s" cell-get" s" examples" s" code" s" : pair create , , does> ;\ns\" A\" s\" B\" pair p\np 0 cell-get s. => B\np 1 cell-get s. => A" meta! drop
+s" cell-set" s" examples" s" code" s" : pair create , , does> ;\ns\" A\" s\" B\" pair p\ns\" X\" p 0 cell-set\np 0 cell-get s. => X" meta! drop
 
 # --- Math ---
 

@@ -386,7 +386,7 @@ LITE
 | Comparison | `=` `<>` `<` `>` `<=` `>=` `0=` `0<` `0>` |
 | Logic | `true` `false` `not` `bool` `and` `or` `xor` `invert` `lshift` `rshift` `lroll` `rroll` |
 | I/O | `.` `.s` `cr` `emit` `space` `spaces` `words` |
-| Memory | `create` `,` `@` `!` `allot` `immediate` |
+| Memory | `create` `,` `@` `!` `allot` `cell-get` `cell-set` `immediate` |
 | Math | `sqrt` `sin` `cos` `tan` `tanh` `asin` `acos` `atan` `atan2` `log` `log2` `log10` `exp` `pow` `ceil` `floor` `round` `trunc` `fmin` `fmax` `pi` `f~` `random` `random-seed` `random-range` |
 | String | `type` `s.` `s+` `s=` `s<>` `slength` `substr` `strim` `sfind` `sreplace` `ssplit` `sjoin` `sregex-find` `sregex-replace` `sregex-search` `sregex-match` `staint` `sprintf` |
 | Array | `array-new` `array-push` `array-pop` `array-get` `array-set` `array-length` `array-shift` `array-unshift` `array-compact` `array-reverse` |
@@ -1114,6 +1114,8 @@ that manufacture new words with shared behavior and per-word data.
 | `create` | `( -- )` | Define a word with a data field (reads name from input) |
 | `,` | `( x -- )` | Append value to last created word's data field |
 | `allot` | `( n -- )` | Reserve n cells in last created word |
+| `cell-get` | `( dataref n -- value )` | Fetch value at cell index n from a data field |
+| `cell-set` | `( value dataref n -- )` | Store value at cell index n in a data field |
 | `does>` | `( -- )` | Set runtime behavior for `create`d words (**compile-only**) |
 | `immediate` | `( -- )` | Mark last defined word as immediate (runs during compilation) |
 

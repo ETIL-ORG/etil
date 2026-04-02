@@ -931,6 +931,69 @@ bool prim_allot(ExecutionContext& ctx) {
     return true;
 }
 
+// cell-get ( dataref n -- value )
+bool prim_cell_get(ExecutionContext& ctx) {
+    auto opt_n = ctx.data_stack().pop();
+    if (!opt_n) return false;
+    auto opt_ref = ctx.data_stack().pop();
+    if (!opt_ref) { ctx.data_stack().push(*opt_n); return false; }
+    if (opt_ref->type != Value::Type::DataRef) {
+        ctx.err() << "Error: cell-get expects a dataref\n";
+        ctx.data_stack().push(*opt_ref);
+        ctx.data_stack().push(*opt_n);
+        return false;
+    }
+    auto idx = opt_ref->dataref_index();
+    auto* field = ctx.data_field_registry().resolve(idx);
+    auto off = static_cast<size_t>(opt_n->as_int);
+    if (!field || off >= field->size()) {
+        ctx.err() << "Error: cell-get index " << opt_n->as_int
+                  << " out of bounds (size " << (field ? field->size() : 0) << ")\n";
+        ctx.data_stack().push(*opt_ref);
+        ctx.data_stack().push(*opt_n);
+        return false;
+    }
+    auto& val = (*field)[off];
+    val.addref();
+    ctx.data_stack().push(val);
+    return true;
+}
+
+// cell-set ( value dataref n -- )
+bool prim_cell_set(ExecutionContext& ctx) {
+    auto opt_n = ctx.data_stack().pop();
+    if (!opt_n) return false;
+    auto opt_ref = ctx.data_stack().pop();
+    if (!opt_ref) { ctx.data_stack().push(*opt_n); return false; }
+    auto opt_val = ctx.data_stack().pop();
+    if (!opt_val) {
+        ctx.data_stack().push(*opt_ref);
+        ctx.data_stack().push(*opt_n);
+        return false;
+    }
+    if (opt_ref->type != Value::Type::DataRef) {
+        ctx.err() << "Error: cell-set expects a dataref\n";
+        ctx.data_stack().push(*opt_val);
+        ctx.data_stack().push(*opt_ref);
+        ctx.data_stack().push(*opt_n);
+        return false;
+    }
+    auto idx = opt_ref->dataref_index();
+    auto* field = ctx.data_field_registry().resolve(idx);
+    auto off = static_cast<size_t>(opt_n->as_int);
+    if (!field || off >= field->size()) {
+        ctx.err() << "Error: cell-set index " << opt_n->as_int
+                  << " out of bounds (size " << (field ? field->size() : 0) << ")\n";
+        ctx.data_stack().push(*opt_val);
+        ctx.data_stack().push(*opt_ref);
+        ctx.data_stack().push(*opt_n);
+        return false;
+    }
+    (*field)[off].release();
+    (*field)[off] = *opt_val;
+    return true;
+}
+
 // --- Math primitives ---
 // Helper: pop one value, convert to double
 namespace {
@@ -3096,6 +3159,8 @@ static const PrimEntry prim_table[] = {
     {"@",        prim_fetch,   1, 1, {T::Unknown},                       {T::Unknown}},
     {"!",        prim_store,   2, 0, {T::Unknown, T::Unknown},           {}},
     {"allot",    prim_allot,   1, 0, {T::Integer},                       {}},
+    {"cell-get", prim_cell_get, 2, 1, {T::Unknown, T::Integer},          {T::Unknown}},
+    {"cell-set", prim_cell_set, 3, 0, {T::Unknown, T::Unknown, T::Integer}, {}},
     // Math (unary — all return Float)
     {"sqrt",     prim_sqrt,    1, 1, {T::Unknown},                       {T::Float}},
     {"sin",      prim_sin,     1, 1, {T::Unknown},                       {T::Float}},
