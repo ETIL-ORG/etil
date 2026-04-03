@@ -1837,10 +1837,12 @@ bool prim_evolve_bridge(ExecutionContext& ctx) {
     from_str->release();
     to_str->release();
 
-    auto* dict = ctx.dictionary();
-    if (!dict) return false;
-    dict->set_concept_metadata(word, "bridge-from", MetadataFormat::Text, std::move(from_type));
-    dict->set_concept_metadata(word, "bridge-to", MetadataFormat::Text, std::move(to_type));
+    auto* engine = ctx.evolution_engine();
+    if (!engine) return false;
+
+    auto type_from = etil::evolution::BridgeMap::parse_sig_type(from_type);
+    auto type_to = etil::evolution::BridgeMap::parse_sig_type(to_type);
+    engine->bridge_map().add(type_from, type_to, word);
     return true;
 }
 
