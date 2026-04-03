@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Mark Deazley. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
-# Create a feature branch with a version bump.
+# Create a feature branch with a minor version bump.
 #
-# Usage: branch.sh [--dry-run]
-#   --dry-run   Show plan without executing
+# Usage: branch.sh <branch-name> [--dry-run]
+#   <branch-name>  Descriptive name (e.g., type-directed-bridges)
+#   --dry-run      Show plan without executing
 #
-# Creates a branch named YYYYMMDDThhmmss-vX.Y.Z with a version bump commit.
+# Creates a branch with a minor version bump (X.Y+1.0) and initial commit.
 # Must be run from master with a clean working tree.
 
 set -euo pipefail
@@ -17,27 +18,41 @@ source "$SCRIPT_DIR/env.sh"
 etil_require_cmd git
 
 # --- Parse args ---
+BRANCH_NAME=""
 DRY_RUN=false
 
 for arg in "$@"; do
     case "$arg" in
         --dry-run)  DRY_RUN=true ;;
         --help|-h)
-            echo "Usage: $0 [--dry-run]"
+            echo "Usage: $0 <branch-name> [--dry-run]"
             echo ""
-            echo "Creates a feature branch with a version bump commit."
-            echo "Branch name: YYYYMMDDThhmmss-vX.Y.Z (new version)"
+            echo "Creates a feature branch with a minor version bump (X.Y+1.0)."
+            echo "Branch name should be descriptive (e.g., type-directed-bridges)."
             echo ""
             echo "  --dry-run   Show plan without executing"
             exit 0
             ;;
-        *)
-            echo "Unknown argument: $arg"
+        -*)
+            echo "Unknown option: $arg"
             echo "Run with --help for usage."
             exit 1
             ;;
+        *)
+            if [[ -z "$BRANCH_NAME" ]]; then
+                BRANCH_NAME="$arg"
+            else
+                echo "Unexpected argument: $arg"
+                echo "Run with --help for usage."
+                exit 1
+            fi
+            ;;
     esac
 done
+
+if [[ -z "$BRANCH_NAME" ]]; then
+    etil_die "Branch name required. Usage: $0 <branch-name> [--dry-run]"
+fi
 
 cd "$ETIL_PROJECT_DIR"
 
@@ -55,40 +70,33 @@ if [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
     etil_die "Untracked files present. Commit or remove them first."
 fi
 
-# --- Compute new version ---
+# --- Preview or execute ---
 etil_parse_version
 OLD_VERSION="$ETIL_VERSION"
-NEW_PATCH=$((ETIL_VERSION_PATCH + 1))
-NEW_VERSION="${ETIL_VERSION_MAJOR}.${ETIL_VERSION_MINOR}.${NEW_PATCH}"
-
-# --- Branch name ---
-TIMESTAMP=$(date -u '+%Y%m%dT%H%M%S')
-BRANCH_NAME="${TIMESTAMP}-v${NEW_VERSION}"
-
-etil_log "Current version: v$OLD_VERSION"
-etil_log "New version:     v$NEW_VERSION"
-etil_log "Branch name:     $BRANCH_NAME"
 
 if [[ "$DRY_RUN" == true ]]; then
+    NEW_VERSION=$("$SCRIPT_DIR/version-bump.sh" minor --dry-run)
     etil_log "[dry-run] Would create branch '$BRANCH_NAME'"
-    etil_log "[dry-run] Would bump CMakeLists.txt: v$OLD_VERSION → v$NEW_VERSION"
+    etil_log "[dry-run] Would bump CMakeLists.txt: v$OLD_VERSION → v$NEW_VERSION (minor)"
     etil_log "[dry-run] Would commit: Bump version to v$NEW_VERSION"
     exit 0
 fi
+
+etil_log "Current version: v$OLD_VERSION"
+etil_log "Branch name:     $BRANCH_NAME"
 
 # --- Create branch ---
 git checkout -b "$BRANCH_NAME"
 etil_log "Created branch: $BRANCH_NAME"
 
-# --- Bump version ---
-etil_version_bump_patch >/dev/null
-etil_parse_version
-etil_log "Bumped CMakeLists.txt: v$OLD_VERSION → v$ETIL_VERSION"
+# --- Bump minor version (resets patch to 0) ---
+NEW_VERSION=$("$SCRIPT_DIR/version-bump.sh" minor)
+etil_log "Bumped CMakeLists.txt: v$OLD_VERSION → v$NEW_VERSION (minor)"
 
 # --- Commit ---
 git add CMakeLists.txt
 git commit -m "$(cat <<EOF
-Bump version to v$ETIL_VERSION
+Bump version to v$NEW_VERSION
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
