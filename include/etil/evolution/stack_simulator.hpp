@@ -43,6 +43,10 @@ private:
 
     bool is_shuffle_word(const std::string& word) const;
     bool is_opaque_word(const std::string& word) const;
+
+    /// Infer input types by analyzing which concrete-typed words first consume each input.
+    void infer_input_types(ASTNode& ast, const etil::core::Dictionary& dict,
+                           int n_inputs, std::vector<SigType>& input_types);
 };
 
 } // namespace etil::evolution

@@ -243,3 +243,161 @@ TEST_F(CompileTimeInferenceTest, UserWordUsableInIndex) {
     }
     EXPECT_TRUE(found);
 }
+
+// --- Phase 0: Type signature backfill validation ---
+
+TEST_F(StackSimulatorTest, ComparisonOutputBoolean) {
+    // Comparisons must return Boolean, not Integer
+    auto impl = dict.lookup("=");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, ZeroComparisonOutputBoolean) {
+    auto impl = dict.lookup("0=");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, TrueFalseOutputBoolean) {
+    auto impl_t = dict.lookup("true");
+    ASSERT_TRUE(impl_t.has_value());
+    ASSERT_EQ((*impl_t)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_t)->signature().outputs[0], T::Boolean);
+
+    auto impl_f = dict.lookup("false");
+    ASSERT_TRUE(impl_f.has_value());
+    ASSERT_EQ((*impl_f)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_f)->signature().outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, NotBoolOutputBoolean) {
+    auto impl_not = dict.lookup("not");
+    ASSERT_TRUE(impl_not.has_value());
+    ASSERT_EQ((*impl_not)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_not)->signature().outputs[0], T::Boolean);
+
+    auto impl_bool = dict.lookup("bool");
+    ASSERT_TRUE(impl_bool.has_value());
+    ASSERT_EQ((*impl_bool)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_bool)->signature().outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, WithinOutputBoolean) {
+    auto impl = dict.lookup("within");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, TickOutputXt) {
+    auto impl = dict.lookup("'");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Xt);
+}
+
+TEST_F(StackSimulatorTest, ExecuteInputXt) {
+    auto impl = dict.lookup("execute");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Xt);
+}
+
+TEST_F(StackSimulatorTest, XtQueryInputXtOutputBoolean) {
+    auto impl = dict.lookup("xt?");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Xt);
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, XtBodyInputXtOutputDataRef) {
+    auto impl = dict.lookup("xt-body");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Xt);
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::DataRef);
+}
+
+TEST_F(StackSimulatorTest, AndOrXorRemainPolymorphic) {
+    // and/or/xor are dual-purpose (boolean + bitwise integer)
+    // They must remain Unknown for inputs and outputs
+    for (const char* word : {"and", "or", "xor"}) {
+        auto impl = dict.lookup(word);
+        ASSERT_TRUE(impl.has_value()) << word;
+        const auto& sig = (*impl)->signature();
+        for (const auto& t : sig.inputs) {
+            EXPECT_EQ(t, T::Unknown) << word << " input should be Unknown (polymorphic)";
+        }
+        for (const auto& t : sig.outputs) {
+            EXPECT_EQ(t, T::Unknown) << word << " output should be Unknown (polymorphic)";
+        }
+    }
+}
+
+TEST_F(StackSimulatorTest, ArithmeticInputsRemainPolymorphic) {
+    // Arithmetic words accept Integer and Float — must stay Unknown until
+    // a Numeric meta-type is added
+    for (const char* word : {"+", "-", "*", "/", "mod"}) {
+        auto impl = dict.lookup(word);
+        ASSERT_TRUE(impl.has_value()) << word;
+        const auto& sig = (*impl)->signature();
+        for (const auto& t : sig.inputs) {
+            EXPECT_EQ(t, T::Unknown) << word << " input should be Unknown (Int/Float polymorphic)";
+        }
+    }
+}
+
+// --- Input type inference for TIL-compiled words ---
+
+TEST_F(CompileTimeInferenceTest, InferStringInputFromSplus) {
+    // `: str-pair dup s+ ;` — s+ needs (String, String), so input must be String
+    interp.interpret_line(": str-pair dup s+ ;");
+    auto impl = dict.lookup("str-pair");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::String);
+}
+
+TEST_F(CompileTimeInferenceTest, InferUnknownInputFromAdd) {
+    // `: double dup + ;` — + takes Unknown (polymorphic), so input stays Unknown
+    interp.interpret_line(": my-dbl dup + ;");
+    auto impl = dict.lookup("my-dbl");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Unknown);
+}
+
+TEST_F(CompileTimeInferenceTest, InferArrayInputFromArrayLength) {
+    // `: len array-length ;` — array-length needs Array
+    interp.interpret_line(": len array-length ;");
+    auto impl = dict.lookup("len");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Array);
+}
+
+TEST_F(CompileTimeInferenceTest, InferOutputTypeFromBody) {
+    // `: to-str number->string ;` — output should be String
+    interp.interpret_line(": to-str number->string ;");
+    auto impl = dict.lookup("to-str");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::String);
+}

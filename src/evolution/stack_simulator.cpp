@@ -15,6 +15,94 @@ bool StackSimulator::annotate(ASTNode& ast, const Dictionary& dict) {
     return state.valid;
 }
 
+void StackSimulator::infer_input_types(
+    ASTNode& ast, const Dictionary& dict,
+    int n_inputs, std::vector<T>& input_types) {
+
+    // Walk the AST and find the first word that consumes each input position.
+    // If that word has a concrete input type, propagate it back.
+    //
+    // We simulate a stack seeded with tagged Unknown values (one per input),
+    // then track which concrete-typed word first consumes each tagged slot.
+
+    // Simple approach: simulate with a stack of n_inputs Unknowns,
+    // and for each WordCall, check if it has concrete input types.
+    // If it does, and the stack position being consumed corresponds to
+    // one of our original inputs, record that type.
+
+    struct TaggedType {
+        T type;
+        int input_index;  // -1 if not an original input
+    };
+
+    std::vector<TaggedType> tag_stack;
+    for (int i = 0; i < n_inputs; ++i) {
+        tag_stack.push_back({T::Unknown, i});
+    }
+
+    // Flatten sequence children for linear walk
+    std::vector<ASTNode*> nodes;
+    if (ast.kind == ASTNodeKind::Sequence) {
+        for (auto& child : ast.children) {
+            nodes.push_back(&child);
+        }
+    } else {
+        nodes.push_back(&ast);
+    }
+
+    for (auto* node : nodes) {
+        if (node->kind == ASTNodeKind::Literal) {
+            tag_stack.push_back({T::Unknown, -1});
+            // Refine literal type
+            switch (node->literal_op) {
+                case Instruction::Op::PushInt:    tag_stack.back().type = T::Integer; break;
+                case Instruction::Op::PushFloat:  tag_stack.back().type = T::Float; break;
+                case Instruction::Op::PushBool:   tag_stack.back().type = T::Boolean; break;
+                case Instruction::Op::PushString: tag_stack.back().type = T::String; break;
+                default: break;
+            }
+        } else if (node->kind == ASTNodeKind::WordCall) {
+            if (is_shuffle_word(node->word_name)) {
+                // Shuffle words rearrange but don't constrain types — skip
+                // (A full implementation would track tag positions through shuffles,
+                //  but that's complex and the payoff is marginal.)
+                continue;
+            }
+            auto impl = dict.lookup(node->word_name);
+            if (!impl) continue;
+            const auto& word_sig = (*impl)->signature();
+            if (word_sig.inputs.empty() && word_sig.outputs.empty()) continue;
+
+            // Check inputs: if the word has a concrete input type and the
+            // corresponding stack position is a tagged original input, propagate.
+            size_t n_consume = word_sig.inputs.size();
+            for (size_t i = 0; i < n_consume && !tag_stack.empty(); ++i) {
+                size_t stack_pos = tag_stack.size() - n_consume + i;
+                if (stack_pos < tag_stack.size()) {
+                    auto& slot = tag_stack[stack_pos];
+                    T word_wants = word_sig.inputs[i];
+                    if (slot.input_index >= 0 && word_wants != T::Unknown) {
+                        // First concrete constraint on this input
+                        auto idx = static_cast<size_t>(slot.input_index);
+                        if (idx < input_types.size() && input_types[idx] == T::Unknown) {
+                            input_types[idx] = word_wants;
+                        }
+                    }
+                }
+            }
+
+            // Pop consumed, push produced
+            for (size_t i = 0; i < n_consume && !tag_stack.empty(); ++i) {
+                tag_stack.pop_back();
+            }
+            for (const auto& t : word_sig.outputs) {
+                tag_stack.push_back({t, -1});
+            }
+        }
+        // Other node kinds (PushXt, etc.) — skip for input inference
+    }
+}
+
 TypeSignature StackSimulator::infer_signature(
     ASTNode& ast, const Dictionary& dict) {
 
@@ -29,12 +117,17 @@ TypeSignature StackSimulator::infer_signature(
         return sig;
     }
 
-    // For a simple approach: inputs = items consumed, outputs = items produced
-    // We can read them from the effect annotation on the root node
     if (ast.effect.valid) {
-        // Build input types (we may not know them precisely)
-        for (int i = 0; i < ast.effect.consumed; ++i) {
-            sig.inputs.push_back(T::Unknown);
+        int n_inputs = ast.effect.consumed;
+
+        // Infer input types by running a second simulation pass.
+        // Start with Unknown placeholders on the stack, then see what types
+        // the first consumer of each input position expects.
+        std::vector<T> input_types(static_cast<size_t>(n_inputs), T::Unknown);
+        infer_input_types(ast, dict, n_inputs, input_types);
+
+        for (int i = 0; i < n_inputs; ++i) {
+            sig.inputs.push_back(input_types[static_cast<size_t>(i)]);
         }
         for (int i = 0; i < ast.effect.produced; ++i) {
             if (i < static_cast<int>(state.type_stack.size())) {
