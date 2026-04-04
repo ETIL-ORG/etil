@@ -55,8 +55,13 @@ public:
     void set_speed_weight(double w) { speed_weight_ = w; }
     double speed_weight() const { return speed_weight_; }
 
+    /// Set an error stream for fitness evaluation. Mutation errors go here
+    /// instead of stderr. Typically the evolution log file.
+    void set_error_stream(std::ostream* err) { err_stream_ = err; }
+
 private:
     double speed_weight_ = 0.1;
+    std::ostream* err_stream_ = nullptr;  // null = use default (stderr)
 
     bool run_single_test(
         etil::core::WordImpl& impl,

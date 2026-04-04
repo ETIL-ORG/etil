@@ -21,6 +21,7 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
     ast_genetic_ops_.set_logger(&logger_);
     ast_genetic_ops_.set_config(&config_);
     ast_genetic_ops_.set_bridge_map(&bridge_map_);
+    // Fitness error stream is wired lazily in evolve_word() after logging starts
 }
 
 void EvolutionEngine::register_tests(
@@ -61,6 +62,9 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
     }
     auto& state = state_it->second;
     auto& tests = state.tests;
+
+    // Route fitness evaluation errors to the evolution log file
+    fitness_.set_error_stream(logger_.stream());
 
     // Get current implementations
     auto impls_opt = dict_.get_implementations(word);
