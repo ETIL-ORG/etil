@@ -352,6 +352,9 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
         return false;
     }
 
+    // Annotate AST to get type states at each node
+    simulator_.annotate(ast, dict_);
+
     // Find all Sequence nodes
     std::vector<ASTNode*> sequences;
     collect_nodes(ast, [](const ASTNode& n) { return n.kind == ASTNodeKind::Sequence; }, sequences);
@@ -365,20 +368,46 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
     std::uniform_int_distribution<size_t> pos_dist(0, target_seq->children.size());
     size_t insert_pos = pos_dist(rng_);
 
+    // Get stack types at the insertion point for type-directed filtering
+    std::vector<TypeSignature::Type> stack_types;
+    if (insert_pos < target_seq->children.size()) {
+        // State before the node at insert_pos = state at insertion point
+        auto ts = simulator_.types_at(&target_seq->children[insert_pos]);
+        if (ts.valid) stack_types = ts.stack_types;
+    } else if (insert_pos == 0) {
+        // Inserting at start of sequence — use sequence's own state
+        auto ts = simulator_.types_at(target_seq);
+        if (ts.valid) stack_types = ts.stack_types;
+    }
+    // else: inserting at end — no recorded state, fall back to depth-only
+
+    // Extract just TOS for (1,1) word filtering
+    std::vector<TypeSignature::Type> tos_type;
+    if (!stack_types.empty()) {
+        tos_type.push_back(stack_types.back());
+    }
+
     // 70% grow-word, 30% grow-literal
     std::uniform_int_distribution<int> choice(0, 9);
     ASTNode new_node;
 
     if (choice(rng_) < 7) {
-        // Grow-word: prefer (1,1) stack-neutral words
-        // Use pool if configured, otherwise full dictionary
+        // Grow-word: prefer (1,1) stack-neutral words, type-directed
         std::vector<std::string> candidates;
         if (word_pool_ && !word_pool_->empty()) {
-            candidates = index_.find_restricted(1, 1, *word_pool_);
-            if (candidates.empty())
+            // Pool-restricted: type-compatible within pool
+            auto type_compat = index_.find_type_compatible(1, 1, tos_type);
+            for (const auto& name : type_compat) {
+                for (const auto& p : *word_pool_) {
+                    if (name == p) { candidates.push_back(name); break; }
+                }
+            }
+            if (candidates.empty()) {
+                // Fall back to pool-restricted (0,1)
                 candidates = index_.find_restricted(0, 1, *word_pool_);
+            }
         } else {
-            candidates = index_.find_compatible(1, 1);
+            candidates = index_.find_type_compatible(1, 1, tos_type);
             if (candidates.empty())
                 candidates = index_.find_compatible(0, 1);
         }
@@ -388,10 +417,11 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
         new_node = ASTNode::make_word_call(candidates[word_dist(rng_)]);
 
         if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
+            std::string type_tag = tos_type.empty() ? "" : " [typed]";
             logger_->log(EvolveLogCategory::Grow,
                 "Inserted word '" + new_node.word_name
                 + "' at position " + std::to_string(insert_pos)
-                + " (" + std::to_string(count_nodes(ast)) + " nodes)");
+                + " (" + std::to_string(count_nodes(ast)) + " nodes)" + type_tag);
         }
     } else {
         // Grow-literal: random int [-10, 10] or float [-1.0, 1.0]

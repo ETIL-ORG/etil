@@ -552,6 +552,126 @@ TEST_F(ASTGeneticOpsTest, TypeDirectedSubstituteWithPool) {
 }
 
 // ===================================================================
+// Phase 5: Type-directed grow_node()
+// ===================================================================
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedGrowProducesValidMutants) {
+    // `: test 42 dup + ;` — Integer on the stack at most positions
+    // Grow should produce valid mutants with type-directed word selection
+    interp.interpret_line(": td-grow 42 dup + ;");
+    auto impl = dict.lookup("td-grow");
+    ASSERT_TRUE(impl.has_value());
+
+    EvolutionConfig config;
+    config.mutation_weights = {0.0, 0.0, 0.0, 0.0, 100.0, 0.0};  // grow only
+    config.max_ast_nodes = 30;
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+
+    int produced = 0;
+    for (int i = 0; i < 30; ++i) {
+        auto child = ops.mutate(**impl);
+        if (child && child->bytecode()) produced++;
+    }
+    EXPECT_GT(produced, 0);
+}
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedGrowIncludesBridges) {
+    // `: test 42 dup + ;` — Integer on the stack
+    // int->float (Integer → Float) should appear as a valid grow candidate
+    // Use a small pool to make the test deterministic
+    interp.interpret_line(": td-grow-bridge 42 dup + ;");
+    auto impl = dict.lookup("td-grow-bridge");
+    ASSERT_TRUE(impl.has_value());
+
+    EvolutionConfig config;
+    config.mutation_weights = {0.0, 0.0, 0.0, 0.0, 100.0, 0.0};
+    config.max_ast_nodes = 30;
+
+    // Pool of (1,1) words: int->float (Integer-compatible bridge),
+    // float->int (needs Float — should be excluded at typed positions),
+    // dup (polymorphic, always compatible)
+    std::vector<std::string> pool = {"dup", "+", "int->float", "float->int"};
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+    ops.set_word_pool(&pool);
+
+    std::set<std::string> grown_words;
+    for (int i = 0; i < 100; ++i) {
+        auto child = ops.mutate(**impl);
+        if (!child || !child->bytecode()) continue;
+        Decompiler dec;
+        auto ast = dec.decompile(*child->bytecode());
+        for (const auto& node : ast.children) {
+            if (node.kind == ASTNodeKind::WordCall) {
+                grown_words.insert(node.word_name);
+            }
+        }
+    }
+
+    // int->float is (Integer → Float) — a bridge word, Integer-compatible
+    // With only 4 pool words, it should appear
+    EXPECT_GT(grown_words.count("int->float"), 0u);
+}
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedGrowUnknownFallback) {
+    // `: test dup + ;` — Unknown types throughout
+    // Should still produce mutations via depth-only fallback
+    interp.interpret_line(": td-grow-unk dup + ;");
+    auto impl = dict.lookup("td-grow-unk");
+    ASSERT_TRUE(impl.has_value());
+
+    EvolutionConfig config;
+    config.mutation_weights = {0.0, 0.0, 0.0, 0.0, 100.0, 0.0};
+    config.max_ast_nodes = 30;
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+
+    int produced = 0;
+    for (int i = 0; i < 30; ++i) {
+        auto child = ops.mutate(**impl);
+        if (child && child->bytecode()) produced++;
+    }
+    EXPECT_GT(produced, 0);
+}
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedGrowBloatControl) {
+    // Bloat control still works with type-directed grow
+    // `1 2 + 3 * 4 + 5 -` = Sequence(1) + 8 children = 9 nodes
+    interp.interpret_line(": td-grow-bloat 1 2 + 3 * 4 + 5 - ;");
+    auto impl = dict.lookup("td-grow-bloat");
+    ASSERT_TRUE(impl.has_value());
+
+    EvolutionConfig config;
+    config.mutation_weights = {0.0, 0.0, 0.0, 0.0, 100.0, 0.0};
+    config.max_ast_nodes = 8;  // below the starting 9 nodes
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+
+    // AST starts at 9 nodes but max is 8 — grow is always rejected.
+    // Mutate falls back to other operators (substitute, perturb) which
+    // may succeed. Verify no child has MORE nodes than the original,
+    // proving grow was blocked and didn't add nodes.
+    Decompiler dec;
+    auto orig_ast = dec.decompile(*(*impl)->bytecode());
+    size_t orig_count = count_nodes(orig_ast);
+
+    for (int i = 0; i < 20; ++i) {
+        auto child = ops.mutate(**impl);
+        if (!child || !child->bytecode()) continue;
+        auto child_ast = dec.decompile(*child->bytecode());
+        size_t child_count = count_nodes(child_ast);
+        // Grow was blocked, so child should never have more nodes
+        // (substitute/perturb don't add nodes)
+        EXPECT_LE(child_count, orig_count);
+    }
+}
+
+// ===================================================================
 // Tag tier substitution verification
 // ===================================================================
 
