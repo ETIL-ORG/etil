@@ -34,6 +34,9 @@ public:
     /// Set word pool for the current evolution run (empty = full dictionary).
     void set_word_pool(const std::vector<std::string>* pool) { word_pool_ = pool; }
 
+    /// Set the bridge map for type repair bridge insertion.
+    void set_bridge_map(const BridgeMap* map) { repair_.set_bridge_map(map); }
+
     /// Mutate a WordImpl using AST-level operators.
     /// Returns a new WordImpl with mutated bytecode, or null if mutation failed.
     etil::core::WordImplPtr mutate(const etil::core::WordImpl& parent);
@@ -46,6 +49,11 @@ public:
 
     /// Rebuild the signature index (call when dictionary changes).
     void rebuild_index();
+
+    /// Check if inserting bridge_word at position in a Sequence creates
+    /// a no-op inverse pair with an adjacent node (e.g., int->float + float->int).
+    static bool is_inverse_bridge(const ASTNode& seq, size_t position,
+                                  const std::string& bridge_word);
 
 private:
     etil::core::Dictionary& dict_;
@@ -67,6 +75,7 @@ private:
     bool grow_node(ASTNode& ast);
     bool shrink_node(ASTNode& ast);
     bool block_crossover(ASTNode& ast_a, const ASTNode& ast_b);
+
 };
 
 } // namespace etil::evolution

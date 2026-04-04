@@ -5,6 +5,7 @@
 
 #include "etil/evolution/genetic_ops.hpp"
 #include "etil/evolution/ast_genetic_ops.hpp"
+#include "etil/evolution/bridge_map.hpp"
 #include "etil/evolution/fitness.hpp"
 #include "etil/evolution/evolve_logger.hpp"
 #include "etil/selection/selection_engine.hpp"
@@ -79,6 +80,8 @@ public:
     EvolutionConfig& config() { return config_; }
     Fitness& fitness() { return fitness_; }
     EvolveLogger& logger() { return logger_; }
+    BridgeMap& bridge_map() { return bridge_map_; }
+    const BridgeMap& bridge_map() const { return bridge_map_; }
 
 private:
     EvolutionConfig config_;
@@ -86,6 +89,7 @@ private:
     GeneticOps genetic_ops_;           // bytecode-level (fallback + constant perturbation)
     ASTGeneticOps ast_genetic_ops_;    // AST-level (structural mutations)
     Fitness fitness_;
+    BridgeMap bridge_map_;
     EvolveLogger logger_;
     etil::selection::SelectionEngine parent_selector_;
 

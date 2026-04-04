@@ -1837,10 +1837,12 @@ bool prim_evolve_bridge(ExecutionContext& ctx) {
     from_str->release();
     to_str->release();
 
-    auto* dict = ctx.dictionary();
-    if (!dict) return false;
-    dict->set_concept_metadata(word, "bridge-from", MetadataFormat::Text, std::move(from_type));
-    dict->set_concept_metadata(word, "bridge-to", MetadataFormat::Text, std::move(to_type));
+    auto* engine = ctx.evolution_engine();
+    if (!engine) return false;
+
+    auto type_from = etil::evolution::BridgeMap::parse_sig_type(from_type);
+    auto type_to = etil::evolution::BridgeMap::parse_sig_type(to_type);
+    engine->bridge_map().add(type_from, type_to, word);
     return true;
 }
 
@@ -3106,7 +3108,7 @@ static const PrimEntry prim_table[] = {
     {"abs",     prim_abs,     1, 1, {T::Unknown},                       {T::Unknown}},
     {"max",     prim_max,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
     {"min",     prim_min,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
-    {"within",  prim_within,  3, 1, {T::Unknown, T::Unknown, T::Unknown},{T::Unknown}},
+    {"within",  prim_within,  3, 1, {T::Unknown, T::Unknown, T::Unknown},{T::Boolean}},
     // Stack
     {"dup",     prim_dup,     1, 2, {T::Unknown},                       {T::Unknown, T::Unknown}},
     {"drop",    prim_drop,    1, 0, {T::Unknown},                       {}},
@@ -3119,21 +3121,21 @@ static const PrimEntry prim_table[] = {
     {"depth",   prim_depth,   0, 1, {},                                 {T::Integer}},
     {"?dup",    prim_qdup,    1, 0, {T::Unknown},                       {}},
     {"roll",    prim_roll,    1, 0, {T::Integer},                       {}},
-    // Comparison
-    {"=",       prim_eq,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
-    {"<>",      prim_neq,     2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
-    {"<",       prim_lt,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
-    {">",       prim_gt,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
-    {"<=",      prim_le,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
-    {">=",      prim_ge,      2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
-    {"0=",      prim_zero_eq, 1, 1, {T::Unknown},                       {T::Integer}},
-    {"0<",      prim_zero_lt, 1, 1, {T::Unknown},                       {T::Integer}},
-    {"0>",      prim_zero_gt, 1, 1, {T::Unknown},                       {T::Integer}},
+    // Comparison (all return Value(bool))
+    {"=",       prim_eq,      2, 1, {T::Unknown, T::Unknown},           {T::Boolean}},
+    {"<>",      prim_neq,     2, 1, {T::Unknown, T::Unknown},           {T::Boolean}},
+    {"<",       prim_lt,      2, 1, {T::Unknown, T::Unknown},           {T::Boolean}},
+    {">",       prim_gt,      2, 1, {T::Unknown, T::Unknown},           {T::Boolean}},
+    {"<=",      prim_le,      2, 1, {T::Unknown, T::Unknown},           {T::Boolean}},
+    {">=",      prim_ge,      2, 1, {T::Unknown, T::Unknown},           {T::Boolean}},
+    {"0=",      prim_zero_eq, 1, 1, {T::Unknown},                       {T::Boolean}},
+    {"0<",      prim_zero_lt, 1, 1, {T::Unknown},                       {T::Boolean}},
+    {"0>",      prim_zero_gt, 1, 1, {T::Unknown},                       {T::Boolean}},
     // Boolean
-    {"true",    prim_true,    0, 1, {},                                 {T::Unknown}},
-    {"false",   prim_false,   0, 1, {},                                 {T::Unknown}},
-    {"not",     prim_not,     1, 1, {T::Unknown},                       {T::Unknown}},
-    {"bool",    prim_to_bool, 1, 1, {T::Unknown},                       {T::Unknown}},
+    {"true",    prim_true,    0, 1, {},                                 {T::Boolean}},
+    {"false",   prim_false,   0, 1, {},                                 {T::Boolean}},
+    {"not",     prim_not,     1, 1, {T::Unknown},                       {T::Boolean}},
+    {"bool",    prim_to_bool, 1, 1, {T::Unknown},                       {T::Boolean}},
     // Logic
     {"and",     prim_and,     2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
     {"or",      prim_or,      2, 1, {T::Unknown, T::Unknown},           {T::Unknown}},
@@ -3183,7 +3185,7 @@ static const PrimEntry prim_table[] = {
     {"fmax",     prim_fmax,    2, 1, {T::Unknown, T::Unknown},           {T::Float}},
     {"pi",       prim_pi,      0, 1, {},                                 {T::Float}},
     {"tanh",     prim_tanh,    1, 1, {T::Unknown},                       {T::Float}},
-    {"f~",       prim_fapprox, 3, 1, {T::Unknown, T::Unknown, T::Unknown},{T::Integer}},
+    {"f~",       prim_fapprox, 3, 1, {T::Unknown, T::Unknown, T::Unknown},{T::Boolean}},
     // PRNG
     {"random",       prim_random,       0, 1, {},                         {T::Float}},
     {"random-seed",  prim_random_seed,  1, 0, {T::Integer},              {}},
@@ -3192,16 +3194,16 @@ static const PrimEntry prim_table[] = {
     {"sys-semver",       prim_sys_semver,       0, 0, {},                 {}},
     {"sys-timestamp",    prim_sys_timestamp,    0, 0, {},                 {}},
     {"sys-datafields",   prim_sys_datafields,   0, 0, {},                 {}},
-    {"sys-notification", prim_sys_notification, 1, 0, {T::Unknown},      {}},
-    {"user-notification",prim_user_notification,2, 1, {T::String, T::String},{T::Integer}},
-    {"abort",            prim_abort,            1, 0, {T::Unknown},      {}},
+    {"sys-notification", prim_sys_notification, 1, 0, {T::String},       {}},
+    {"user-notification",prim_user_notification,2, 1, {T::String, T::String},{T::Boolean}},
+    {"abort",            prim_abort,            1, 0, {T::String},       {}},
     // Selection
     {"select-strategy",  prim_select_strategy,  1, 0, {T::Integer},      {}},
-    {"select-epsilon",   prim_select_epsilon,   1, 0, {T::Unknown},      {}},
+    {"select-epsilon",   prim_select_epsilon,   1, 0, {T::Float},        {}},
     {"select-off",       prim_select_off,       0, 0, {},                {}},
     // Evolution
-    {"evolve-register",  prim_evolve_register,  2, 1, {T::String, T::Array}, {T::Unknown}},
-    {"evolve-register-pool", prim_evolve_register_pool, 3, 1, {T::String, T::Array, T::Array}, {T::Unknown}},
+    {"evolve-register",  prim_evolve_register,  2, 1, {T::String, T::Array}, {T::Boolean}},
+    {"evolve-register-pool", prim_evolve_register_pool, 3, 1, {T::String, T::Array, T::Array}, {T::Boolean}},
     {"evolve-word",      prim_evolve_word,      1, 1, {T::String},           {T::Integer}},
     {"evolve-all",       prim_evolve_all,       0, 0, {},                    {}},
     {"evolve-status",    prim_evolve_status,    1, 1, {T::String},           {T::Integer}},
@@ -3209,54 +3211,54 @@ static const PrimEntry prim_table[] = {
     {"evolve-untag",     prim_evolve_untag,     1, 0, {T::String}, {}},
     {"evolve-bridge",    prim_evolve_bridge,    3, 0, {T::String, T::String, T::String}, {}},
     {"evolve-fitness-mode",  prim_evolve_fitness_mode,  1, 0, {T::Integer}, {}},
-    {"evolve-fitness-alpha",       prim_evolve_fitness_alpha,       1, 0, {T::Unknown}, {}},
+    {"evolve-fitness-alpha",       prim_evolve_fitness_alpha,       1, 0, {T::Float},   {}},
     {"evolve-instruction-budget",  prim_evolve_instruction_budget, 1, 0, {T::Integer}, {}},
     {"evolve-mutation-weights",    prim_evolve_mutation_weights,  6, 0, {T::Unknown, T::Unknown, T::Unknown, T::Unknown, T::Unknown, T::Unknown}, {}},
     {"evolve-log-start",       prim_evolve_log_start,       2, 0, {T::Integer, T::Integer}, {}},
     {"evolve-log-stop",        prim_evolve_log_stop,        0, 0, {},                    {}},
     {"evolve-log-dir",         prim_evolve_log_dir,         1, 0, {T::String},           {}},
-    {"evolve-log-show-failed", prim_evolve_log_show_failed, 1, 0, {T::Unknown},          {}},
+    {"evolve-log-show-failed", prim_evolve_log_show_failed, 1, 0, {T::Boolean},          {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
-    {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::Unknown}},
-    {"us->iso-us", prim_us_to_iso_us,1, 1, {T::Integer},{T::Unknown}},
+    {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::String}},
+    {"us->iso-us", prim_us_to_iso_us,1, 1, {T::Integer},{T::String}},
     {"us->jd",     prim_us_to_jd,    1, 1, {T::Integer},{T::Float}},
-    {"jd->us",     prim_jd_to_us,    1, 1, {T::Unknown},{T::Integer}},
+    {"jd->us",     prim_jd_to_us,    1, 1, {T::Float},  {T::Integer}},
     {"us->mjd",    prim_us_to_mjd,   1, 1, {T::Integer},{T::Float}},
-    {"mjd->us",    prim_mjd_to_us,   1, 1, {T::Unknown},{T::Integer}},
+    {"mjd->us",    prim_mjd_to_us,   1, 1, {T::Float},  {T::Integer}},
     {"sleep",      prim_sleep,       1, 0, {T::Integer},{}},
     {"elapsed",    prim_elapsed,     1, 1, {T::Unknown},{T::Integer}},
     // Input-reading
-    {"word-read",        prim_word_read,        0, 2, {},          {T::Unknown, T::Integer}},
-    {"string-read-delim",prim_string_read_delim,1, 2, {T::Integer},{T::Unknown, T::Integer}},
+    {"word-read",        prim_word_read,        0, 2, {},          {T::String, T::Boolean}},
+    {"string-read-delim",prim_string_read_delim,1, 2, {T::Integer},{T::String, T::Boolean}},
     // Dictionary operations
-    {"dict-forget",     prim_dict_forget,     1, 1, {T::Unknown}, {T::Integer}},
-    {"dict-forget-all", prim_dict_forget_all, 1, 1, {T::Unknown}, {T::Integer}},
-    {"file-load",       prim_file_load,       1, 1, {T::Unknown}, {T::Integer}},
+    {"dict-forget",     prim_dict_forget,     1, 1, {T::String},  {T::Boolean}},
+    {"dict-forget-all", prim_dict_forget_all, 1, 1, {T::String},  {T::Boolean}},
+    {"file-load",       prim_file_load,       1, 1, {T::String},  {T::Boolean}},
     {"include",         prim_include,         0, 0, {},            {}},
     {"library",         prim_library,         0, 0, {},            {}},
     {"evaluate",        prim_evaluate,        1, 0, {T::String},   {}},
     {"marker",          prim_marker,          0, 0, {},            {}},
     {"marker-restore",  prim_marker_restore,  1, 0, {T::String},   {}},
     // Metadata (stack-based)
-    {"dict-meta-set",  prim_dict_meta_set,  4, 1, {T::Unknown, T::Unknown, T::Unknown, T::Unknown},{T::Integer}},
-    {"dict-meta-get",  prim_dict_meta_get,  2, 2, {T::Unknown, T::Unknown},           {T::Unknown, T::Integer}},
-    {"dict-meta-del",  prim_dict_meta_del,  2, 1, {T::Unknown, T::Unknown},           {T::Integer}},
-    {"dict-meta-keys", prim_dict_meta_keys, 1, 2, {T::Unknown},                       {T::Unknown, T::Integer}},
-    {"impl-meta-set",  prim_impl_meta_set,  4, 1, {T::Unknown, T::Unknown, T::Unknown, T::Unknown},{T::Integer}},
-    {"impl-meta-get",  prim_impl_meta_get,  2, 2, {T::Unknown, T::Unknown},           {T::Unknown, T::Integer}},
+    {"dict-meta-set",  prim_dict_meta_set,  4, 1, {T::String, T::String, T::Unknown, T::Unknown},{T::Boolean}},
+    {"dict-meta-get",  prim_dict_meta_get,  2, 2, {T::String, T::String},             {T::Unknown, T::Boolean}},
+    {"dict-meta-del",  prim_dict_meta_del,  2, 1, {T::String, T::String},             {T::Boolean}},
+    {"dict-meta-keys", prim_dict_meta_keys, 1, 2, {T::String},                        {T::Array, T::Boolean}},
+    {"impl-meta-set",  prim_impl_meta_set,  4, 1, {T::String, T::String, T::Unknown, T::Unknown},{T::Boolean}},
+    {"impl-meta-get",  prim_impl_meta_get,  2, 2, {T::String, T::String},             {T::Unknown, T::Boolean}},
     // Help & Debug
     {"help",    prim_help,    0, 0, {},                                 {}},
     {"dump",    prim_dump,    1, 1, {T::Unknown},                       {T::Unknown}},
     {"see",     prim_see,     0, 0, {},                                 {}},
     // Execution tokens
-    {"'",       prim_tick,        0, 1, {},          {T::Unknown}},
-    {"execute", prim_execute,     1, 0, {T::Unknown},{}},
-    {"xt?",     prim_xt_query,    1, 1, {T::Unknown},{T::Integer}},
-    {">name",   prim_xt_to_name,  1, 1, {T::Unknown},{T::String}},
+    {"'",       prim_tick,        0, 1, {},          {T::Xt}},
+    {"execute", prim_execute,     1, 0, {T::Xt},     {}},
+    {"xt?",     prim_xt_query,    1, 1, {T::Xt},     {T::Boolean}},
+    {">name",   prim_xt_to_name,  1, 1, {T::Xt},     {T::String}},
     // Defining words
     {"immediate",prim_immediate,  0, 0, {},          {}},
-    {"xt-body",  prim_xt_body,    1, 1, {T::Unknown},{T::Unknown}},
+    {"xt-body",  prim_xt_body,    1, 1, {T::Xt},     {T::DataRef}},
     // Stack display
     {".s",       prim_dot_s,      0, 0, {},          {}},
     // Type conversion

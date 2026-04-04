@@ -9,10 +9,56 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <unordered_map>
 
 namespace etil::evolution {
 
 using namespace etil::core;
+
+// --- Inverse bridge pairs (symmetric) ---
+// Inserting one next to its inverse creates a no-op cycle.
+
+static const std::unordered_map<std::string, std::string>& inverse_bridges() {
+    static const std::unordered_map<std::string, std::string> pairs = {
+        {"int->float",     "float->int"},
+        {"float->int",     "int->float"},
+        {"string->bytes",  "bytes->string"},
+        {"bytes->string",  "string->bytes"},
+        {"ssplit",         "sjoin"},
+        {"sjoin",          "ssplit"},
+        {"map->json",      "json->map"},
+        {"json->map",      "map->json"},
+        {"array->mat",     "mat->array"},
+        {"mat->array",     "array->mat"},
+    };
+    return pairs;
+}
+
+static bool is_bridge_word(const std::string& word) {
+    return inverse_bridges().count(word) > 0;
+}
+
+bool ASTGeneticOps::is_inverse_bridge(
+    const ASTNode& seq, size_t position, const std::string& bridge_word) {
+    const auto& inv = inverse_bridges();
+    auto it = inv.find(bridge_word);
+    if (it == inv.end()) return false;  // not a bridge word — no cycle possible
+    const auto& inverse = it->second;
+
+    // Check the node before the insertion point
+    if (position > 0 && position - 1 < seq.children.size()) {
+        const auto& prev = seq.children[position - 1];
+        if (prev.kind == ASTNodeKind::WordCall && prev.word_name == inverse)
+            return true;
+    }
+    // Check the node at the insertion point (will be pushed right after insert)
+    if (position < seq.children.size()) {
+        const auto& next = seq.children[position];
+        if (next.kind == ASTNodeKind::WordCall && next.word_name == inverse)
+            return true;
+    }
+    return false;
+}
 
 ASTGeneticOps::ASTGeneticOps(Dictionary& dict)
     : dict_(dict)
@@ -40,6 +86,9 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
     collect_nodes(ast, [](const ASTNode& n) { return n.kind == ASTNodeKind::WordCall; }, calls);
     if (calls.empty()) return false;
 
+    // Annotate AST to get type states at each node
+    simulator_.annotate(ast, dict_);
+
     // Pick a random call to substitute
     std::uniform_int_distribution<size_t> dist(0, calls.size() - 1);
     ASTNode* target = calls[dist(rng_)];
@@ -51,6 +100,19 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
     int consumed = static_cast<int>(sig.inputs.size());
     int produced = static_cast<int>(sig.outputs.size());
 
+    // Extract stack types at the target node for type-directed filtering
+    auto type_state = simulator_.types_at(target);
+    std::vector<TypeSignature::Type> stack_types;
+    if (type_state.valid && !type_state.stack_types.empty() && consumed > 0) {
+        // Take the top 'consumed' types from the stack (deepest consumed first)
+        size_t stack_sz = type_state.stack_types.size();
+        size_t start = (stack_sz >= static_cast<size_t>(consumed))
+                       ? stack_sz - static_cast<size_t>(consumed) : 0;
+        for (size_t i = start; i < stack_sz; ++i) {
+            stack_types.push_back(type_state.stack_types[i]);
+        }
+    }
+
     // Find compatible alternatives — pool-restricted or tiered
     std::string old_name = target->word_name;
     std::string chosen_name;
@@ -58,24 +120,49 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
     size_t l1 = 0, l2 = 0, l3 = 0;
 
     if (word_pool_ && !word_pool_->empty()) {
-        // Pool-restricted: only words in the pool
-        auto restricted = index_.find_restricted(consumed, produced, *word_pool_);
+        // Pool-restricted: type-compatible words within the pool
+        auto type_compat = index_.find_type_compatible(consumed, produced, stack_types);
+        // Intersect with pool
+        std::vector<std::string> restricted;
+        for (const auto& name : type_compat) {
+            for (const auto& p : *word_pool_) {
+                if (name == p) { restricted.push_back(name); break; }
+            }
+        }
         restricted.erase(
             std::remove(restricted.begin(), restricted.end(), target->word_name),
             restricted.end());
         if (restricted.empty()) return false;
         std::uniform_int_distribution<size_t> rdist(0, restricted.size() - 1);
         chosen_name = restricted[rdist(rng_)];
-        l1 = restricted.size();  // all pool words are "Level 1" conceptually
+        l1 = restricted.size();
         chosen_level = 1;
     } else {
-        // Tiered matching from full dictionary
+        // Type-compatible candidates with tiered ranking from full dictionary
+        auto type_compat = index_.find_type_compatible(consumed, produced, stack_types);
+
+        // Apply tiered ranking to the type-compatible set
         auto target_tags = index_.get_tags(target->word_name);
-        auto candidates = index_.find_tiered(consumed, produced, target_tags);
-        candidates.erase(
-            std::remove_if(candidates.begin(), candidates.end(),
-                [&](const auto& p) { return p.first == target->word_name; }),
-            candidates.end());
+        std::vector<std::pair<std::string, int>> candidates;
+        for (const auto& name : type_compat) {
+            if (name == target->word_name) continue;
+            auto word_tags = index_.get_tags(name);
+            int level = 3;
+            if (!target_tags.empty() && !word_tags.empty()) {
+                size_t matches = 0;
+                for (const auto& t : target_tags) {
+                    for (const auto& wt : word_tags) {
+                        if (t == wt) { matches++; break; }
+                    }
+                }
+                if (matches == target_tags.size() && matches == word_tags.size()) {
+                    level = 1;
+                } else if (matches > 0) {
+                    level = 2;
+                }
+            }
+            candidates.push_back({name, level});
+        }
         if (candidates.empty()) return false;
 
         // Count per level
@@ -103,12 +190,18 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
 
     if (logger_ && logger_->enabled(EvolveLogCategory::Substitute)) {
         std::string pool_tag = (word_pool_ && !word_pool_->empty()) ? " [pool]" : "";
+        std::string type_tag = stack_types.empty() ? "" : " [typed]";
         logger_->log(EvolveLogCategory::Substitute,
             "'" + old_name + "' → '" + chosen_name
             + "' (Level " + std::to_string(chosen_level)
             + ", candidates: L1=" + std::to_string(l1)
             + " L2=" + std::to_string(l2)
-            + " L3=" + std::to_string(l3) + ")" + pool_tag);
+            + " L3=" + std::to_string(l3) + ")" + pool_tag + type_tag);
+    }
+    if ((is_bridge_word(old_name) || is_bridge_word(chosen_name)) &&
+        logger_ && logger_->enabled(EvolveLogCategory::Bridge)) {
+        logger_->log(EvolveLogCategory::Bridge,
+            "substitute: '" + old_name + "' → '" + chosen_name + "'");
     }
     return true;
 }
@@ -310,6 +403,9 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
         return false;
     }
 
+    // Annotate AST to get type states at each node
+    simulator_.annotate(ast, dict_);
+
     // Find all Sequence nodes
     std::vector<ASTNode*> sequences;
     collect_nodes(ast, [](const ASTNode& n) { return n.kind == ASTNodeKind::Sequence; }, sequences);
@@ -323,33 +419,87 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
     std::uniform_int_distribution<size_t> pos_dist(0, target_seq->children.size());
     size_t insert_pos = pos_dist(rng_);
 
+    // Get stack types at the insertion point for type-directed filtering
+    std::vector<TypeSignature::Type> stack_types;
+    if (insert_pos < target_seq->children.size()) {
+        // State before the node at insert_pos = state at insertion point
+        auto ts = simulator_.types_at(&target_seq->children[insert_pos]);
+        if (ts.valid) stack_types = ts.stack_types;
+    } else if (insert_pos == 0) {
+        // Inserting at start of sequence — use sequence's own state
+        auto ts = simulator_.types_at(target_seq);
+        if (ts.valid) stack_types = ts.stack_types;
+    }
+    // else: inserting at end — no recorded state, fall back to depth-only
+
+    // Extract just TOS for (1,1) word filtering
+    std::vector<TypeSignature::Type> tos_type;
+    if (!stack_types.empty()) {
+        tos_type.push_back(stack_types.back());
+    }
+
     // 70% grow-word, 30% grow-literal
     std::uniform_int_distribution<int> choice(0, 9);
     ASTNode new_node;
 
     if (choice(rng_) < 7) {
-        // Grow-word: prefer (1,1) stack-neutral words
-        // Use pool if configured, otherwise full dictionary
+        // Grow-word: prefer (1,1) stack-neutral words, type-directed
         std::vector<std::string> candidates;
         if (word_pool_ && !word_pool_->empty()) {
-            candidates = index_.find_restricted(1, 1, *word_pool_);
-            if (candidates.empty())
+            // Pool-restricted: type-compatible within pool
+            auto type_compat = index_.find_type_compatible(1, 1, tos_type);
+            for (const auto& name : type_compat) {
+                for (const auto& p : *word_pool_) {
+                    if (name == p) { candidates.push_back(name); break; }
+                }
+            }
+            if (candidates.empty()) {
+                // Fall back to pool-restricted (0,1)
                 candidates = index_.find_restricted(0, 1, *word_pool_);
+            }
         } else {
-            candidates = index_.find_compatible(1, 1);
+            candidates = index_.find_type_compatible(1, 1, tos_type);
             if (candidates.empty())
                 candidates = index_.find_compatible(0, 1);
         }
         if (candidates.empty()) return false;
 
+        // Select a word, rejecting inverse bridge cycles (try up to 5 times)
         std::uniform_int_distribution<size_t> word_dist(0, candidates.size() - 1);
-        new_node = ASTNode::make_word_call(candidates[word_dist(rng_)]);
+        std::string chosen;
+        for (int attempt = 0; attempt < 5; ++attempt) {
+            chosen = candidates[word_dist(rng_)];
+            if (!is_inverse_bridge(*target_seq, insert_pos, chosen)) break;
+            if (logger_ && logger_->enabled(EvolveLogCategory::Bridge)) {
+                // Find what the inverse is
+                std::string inverse_of;
+                if (insert_pos > 0 && insert_pos - 1 < target_seq->children.size() &&
+                    target_seq->children[insert_pos - 1].kind == ASTNodeKind::WordCall)
+                    inverse_of = target_seq->children[insert_pos - 1].word_name;
+                else if (insert_pos < target_seq->children.size() &&
+                         target_seq->children[insert_pos].kind == ASTNodeKind::WordCall)
+                    inverse_of = target_seq->children[insert_pos].word_name;
+                logger_->log(EvolveLogCategory::Bridge,
+                    "cycle: " + chosen + " rejected (inverse of "
+                    + inverse_of + " at position " + std::to_string(insert_pos) + ")");
+            }
+            chosen.clear();
+        }
+        if (chosen.empty()) return false;
+        new_node = ASTNode::make_word_call(chosen);
 
         if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
+            std::string type_tag = tos_type.empty() ? "" : " [typed]";
             logger_->log(EvolveLogCategory::Grow,
                 "Inserted word '" + new_node.word_name
                 + "' at position " + std::to_string(insert_pos)
-                + " (" + std::to_string(count_nodes(ast)) + " nodes)");
+                + " (" + std::to_string(count_nodes(ast)) + " nodes)" + type_tag);
+        }
+        if (is_bridge_word(new_node.word_name) &&
+            logger_ && logger_->enabled(EvolveLogCategory::Bridge)) {
+            logger_->log(EvolveLogCategory::Bridge,
+                "grow: " + new_node.word_name + " at position "
+                + std::to_string(insert_pos));
         }
     } else {
         // Grow-literal: random int [-10, 10] or float [-1.0, 1.0]

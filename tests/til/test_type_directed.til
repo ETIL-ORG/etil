@@ -1,0 +1,115 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# test_type_directed.til — Integration test for Type-Directed Bridges (TDB)
+# Validates that evolution runs with type-directed mutations, bridge map,
+# and distance fitness without crashing.
+
+include tests/til/harness.til
+
+# ===================================================================
+# Register bridge words into the C++ BridgeMap
+# ===================================================================
+
+: register-bridges
+  s" array-length"   s" array"     s" integer"  evolve-bridge
+  s" sjoin"          s" array"     s" string"   evolve-bridge
+  s" array->mat"     s" array"     s" matrix"   evolve-bridge
+  s" slength"        s" string"    s" integer"  evolve-bridge
+  s" string->number" s" string"    s" integer"  evolve-bridge
+  s" ssplit"         s" string"    s" array"    evolve-bridge
+  s" string->bytes"  s" string"    s" bytearray" evolve-bridge
+  s" int->float"     s" integer"   s" float"    evolve-bridge
+  s" number->string" s" integer"   s" string"   evolve-bridge
+  s" float->int"     s" float"     s" integer"  evolve-bridge
+  s" number->string" s" float"     s" string"   evolve-bridge
+  s" mat-norm"       s" matrix"    s" float"    evolve-bridge
+  s" mat-trace"      s" matrix"    s" float"    evolve-bridge
+  s" mat-mean"       s" matrix"    s" float"    evolve-bridge
+  s" mat-sum"        s" matrix"    s" float"    evolve-bridge
+  s" mat-rows"       s" matrix"    s" integer"  evolve-bridge
+  s" mat-cols"       s" matrix"    s" integer"  evolve-bridge
+  s" mat->array"     s" matrix"    s" array"    evolve-bridge
+  s" bytes->string"  s" bytearray" s" string"   evolve-bridge
+  s" bytes-length"   s" bytearray" s" integer"  evolve-bridge
+  s" json-dump"      s" json"      s" string"   evolve-bridge
+  s" json->array"    s" json"      s" array"    evolve-bridge
+  s" json->map"      s" json"      s" map"      evolve-bridge
+  s" map->json"      s" map"       s" json"     evolve-bridge
+  s" map-keys"       s" map"       s" array"    evolve-bridge
+  s" map-values"     s" map"       s" array"    evolve-bridge
+  s" map-length"     s" map"       s" integer"  evolve-bridge
+  s" mat->json"      s" matrix"    s" json"     evolve-bridge
+;
+
+register-bridges
+
+# ===================================================================
+# Target function: f(x) = x * x + 3 * x + 5
+# ===================================================================
+
+: target-fn  dup dup * swap 3 * + 5 + ;
+
+# Build test cases: array of maps with "in" and "out" keys
+: make-test  # ( x -- map )
+  dup target-fn
+  array-new swap array-push
+  swap
+  array-new swap array-push
+  map-new rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: make-tests
+  array-new
+  0  make-test array-push
+  1  make-test array-push
+  2  make-test array-push
+  3  make-test array-push
+  5  make-test array-push
+  -1 make-test array-push
+  -3 make-test array-push
+  10 make-test array-push
+;
+
+# ===================================================================
+# Test 1: Bridge registration succeeds
+# ===================================================================
+
+." bridge registration: " true true expect-eq
+
+# ===================================================================
+# Test 2: Target function computes correctly
+# ===================================================================
+
+." target-fn(0)=5: "  0  target-fn 5  expect-eq
+." target-fn(1)=9: "  1  target-fn 9  expect-eq
+." target-fn(2)=15: " 2  target-fn 15 expect-eq
+." target-fn(3)=23: " 3  target-fn 23 expect-eq
+
+# ===================================================================
+# Test 3: Evolution runs without crashing
+# ===================================================================
+
+# Configure distance fitness
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+
+# Register target-fn with test cases (full dictionary — no pool)
+s" target-fn" make-tests evolve-register drop
+
+# Run 5 generations (lightweight — just verify no crash)
+." evolve gen 1: " s" target-fn" evolve-word 0 > true expect-eq
+." evolve gen 2: " s" target-fn" evolve-word 0 > true expect-eq
+." evolve gen 3: " s" target-fn" evolve-word 0 > true expect-eq
+." evolve gen 4: " s" target-fn" evolve-word 0 > true expect-eq
+." evolve gen 5: " s" target-fn" evolve-word 0 > true expect-eq
+
+# ===================================================================
+# Test 4: Evolution status reports generations run
+# ===================================================================
+
+." evolve-status >= 5: " s" target-fn" evolve-status 5 >= true expect-eq

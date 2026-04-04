@@ -98,6 +98,10 @@ public:
     /// Whether the log file is currently open.
     bool is_open() const { return file_.is_open(); }
 
+    /// Access the underlying file stream (for redirecting error output).
+    /// Returns nullptr if the log file is not open.
+    std::ostream* stream() { return file_.is_open() ? &file_ : nullptr; }
+
 private:
     EvolveLogLevel level_ = EvolveLogLevel::Off;
     uint32_t categories_ = static_cast<uint32_t>(EvolveLogCategory::All);

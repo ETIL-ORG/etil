@@ -102,7 +102,22 @@ bool TypeRepair::repair_sequence(ASTNode& seq, const Dictionary& dict) {
                 // Mismatch! Search deeper for the needed type
                 int found = find_type_in_stack(type_stack, needed, stack_pos + 1);
                 if (found < 0) {
-                    // Needed type not on stack — unrepairable
+                    // Needed type not on stack — try bridge insertion
+                    if (bridge_map_ && actual != T::Unknown && needed != T::Unknown) {
+                        auto path = bridge_map_->find_path(actual, needed, 2);
+                        if (!path.empty()) {
+                            // Insert bridge word(s) before this WordCall
+                            for (const auto& bridge_word : path) {
+                                repaired_children.push_back(
+                                    ASTNode::make_word_call(bridge_word));
+                            }
+                            // Update type stack: bridge converts TOS type
+                            type_stack.back() = needed;
+                            // Continue checking remaining inputs
+                            continue;
+                        }
+                    }
+                    // No bridge available — unrepairable
                     return false;
                 }
 

@@ -243,3 +243,317 @@ TEST_F(CompileTimeInferenceTest, UserWordUsableInIndex) {
     }
     EXPECT_TRUE(found);
 }
+
+// --- Phase 0: Type signature backfill validation ---
+
+TEST_F(StackSimulatorTest, ComparisonOutputBoolean) {
+    // Comparisons must return Boolean, not Integer
+    auto impl = dict.lookup("=");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, ZeroComparisonOutputBoolean) {
+    auto impl = dict.lookup("0=");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, TrueFalseOutputBoolean) {
+    auto impl_t = dict.lookup("true");
+    ASSERT_TRUE(impl_t.has_value());
+    ASSERT_EQ((*impl_t)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_t)->signature().outputs[0], T::Boolean);
+
+    auto impl_f = dict.lookup("false");
+    ASSERT_TRUE(impl_f.has_value());
+    ASSERT_EQ((*impl_f)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_f)->signature().outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, NotBoolOutputBoolean) {
+    auto impl_not = dict.lookup("not");
+    ASSERT_TRUE(impl_not.has_value());
+    ASSERT_EQ((*impl_not)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_not)->signature().outputs[0], T::Boolean);
+
+    auto impl_bool = dict.lookup("bool");
+    ASSERT_TRUE(impl_bool.has_value());
+    ASSERT_EQ((*impl_bool)->signature().outputs.size(), 1u);
+    EXPECT_EQ((*impl_bool)->signature().outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, WithinOutputBoolean) {
+    auto impl = dict.lookup("within");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, TickOutputXt) {
+    auto impl = dict.lookup("'");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Xt);
+}
+
+TEST_F(StackSimulatorTest, ExecuteInputXt) {
+    auto impl = dict.lookup("execute");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Xt);
+}
+
+TEST_F(StackSimulatorTest, XtQueryInputXtOutputBoolean) {
+    auto impl = dict.lookup("xt?");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Xt);
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::Boolean);
+}
+
+TEST_F(StackSimulatorTest, XtBodyInputXtOutputDataRef) {
+    auto impl = dict.lookup("xt-body");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Xt);
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::DataRef);
+}
+
+TEST_F(StackSimulatorTest, AndOrXorRemainPolymorphic) {
+    // and/or/xor are dual-purpose (boolean + bitwise integer)
+    // They must remain Unknown for inputs and outputs
+    for (const char* word : {"and", "or", "xor"}) {
+        auto impl = dict.lookup(word);
+        ASSERT_TRUE(impl.has_value()) << word;
+        const auto& sig = (*impl)->signature();
+        for (const auto& t : sig.inputs) {
+            EXPECT_EQ(t, T::Unknown) << word << " input should be Unknown (polymorphic)";
+        }
+        for (const auto& t : sig.outputs) {
+            EXPECT_EQ(t, T::Unknown) << word << " output should be Unknown (polymorphic)";
+        }
+    }
+}
+
+TEST_F(StackSimulatorTest, ArithmeticInputsRemainPolymorphic) {
+    // Arithmetic words accept Integer and Float — must stay Unknown until
+    // a Numeric meta-type is added
+    for (const char* word : {"+", "-", "*", "/", "mod"}) {
+        auto impl = dict.lookup(word);
+        ASSERT_TRUE(impl.has_value()) << word;
+        const auto& sig = (*impl)->signature();
+        for (const auto& t : sig.inputs) {
+            EXPECT_EQ(t, T::Unknown) << word << " input should be Unknown (Int/Float polymorphic)";
+        }
+    }
+}
+
+// --- Input type inference for TIL-compiled words ---
+
+TEST_F(CompileTimeInferenceTest, InferStringInputFromSplus) {
+    // `: str-pair dup s+ ;` — s+ needs (String, String), so input must be String
+    interp.interpret_line(": str-pair dup s+ ;");
+    auto impl = dict.lookup("str-pair");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::String);
+}
+
+TEST_F(CompileTimeInferenceTest, InferUnknownInputFromAdd) {
+    // `: double dup + ;` — + takes Unknown (polymorphic), so input stays Unknown
+    interp.interpret_line(": my-dbl dup + ;");
+    auto impl = dict.lookup("my-dbl");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Unknown);
+}
+
+TEST_F(CompileTimeInferenceTest, InferArrayInputFromArrayLength) {
+    // `: len array-length ;` — array-length needs Array
+    interp.interpret_line(": len array-length ;");
+    auto impl = dict.lookup("len");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.inputs.size(), 1u);
+    EXPECT_EQ(sig.inputs[0], T::Array);
+}
+
+TEST_F(CompileTimeInferenceTest, InferOutputTypeFromBody) {
+    // `: to-str number->string ;` — output should be String
+    interp.interpret_line(": to-str number->string ;");
+    auto impl = dict.lookup("to-str");
+    ASSERT_TRUE(impl.has_value());
+    const auto& sig = (*impl)->signature();
+    ASSERT_EQ(sig.outputs.size(), 1u);
+    EXPECT_EQ(sig.outputs[0], T::String);
+}
+
+// --- Phase 3: types_at() — stack type state at each AST node ---
+
+class TypesAtTest : public ::testing::Test {
+protected:
+    Dictionary dict;
+    std::ostringstream out;
+    std::ostringstream err;
+    Interpreter interp{dict, out, err};
+    Decompiler decompiler;
+    StackSimulator simulator;
+
+    void SetUp() override {
+        register_primitives(dict);
+    }
+
+    ASTNode decompile_word(const std::string& name) {
+        auto impl = dict.lookup(name);
+        EXPECT_TRUE(impl.has_value());
+        return decompiler.decompile(*(*impl)->bytecode());
+    }
+};
+
+TEST_F(TypesAtTest, DupAddWithIntegerInput) {
+    // `: test dup + ;` with Integer input
+    // Before dup: stack = {Unknown} (input type unknown without inference)
+    // Before +: stack = {Unknown, Unknown} (dup duplicated)
+    interp.interpret_line(": test dup + ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    // AST is Sequence with children: [dup, +]
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 2u);
+
+    // Before dup: stack is empty (simulator starts with empty stack, inputs are implicit)
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());  // no values yet — input is external
+
+    // Before +: stack has 2 items (dup consumed 1 external, produced 2)
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    EXPECT_EQ(state1.stack_types.size(), 2u);
+}
+
+TEST_F(TypesAtTest, LiteralsThenAdd) {
+    // `: test 3 5 + ;` — all literals, no external inputs
+    interp.interpret_line(": test 3 5 + ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 3u);
+
+    // Before literal 3: empty stack
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());
+
+    // Before literal 5: stack = {Integer}
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    ASSERT_EQ(state1.stack_types.size(), 1u);
+    EXPECT_EQ(state1.stack_types[0], T::Integer);
+
+    // Before +: stack = {Integer, Integer}
+    auto state2 = simulator.types_at(&ast.children[2]);
+    EXPECT_TRUE(state2.valid);
+    ASSERT_EQ(state2.stack_types.size(), 2u);
+    EXPECT_EQ(state2.stack_types[0], T::Integer);
+    EXPECT_EQ(state2.stack_types[1], T::Integer);
+}
+
+TEST_F(TypesAtTest, UnknownInputTypes) {
+    // `: test + ;` — two Unknown inputs
+    interp.interpret_line(": test + ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 1u);
+
+    // Before +: stack is empty (two external inputs not on simulated stack)
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());
+}
+
+TEST_F(TypesAtTest, OpaqueWordInvalidatesState) {
+    // `: test execute ;` — opaque word makes state invalid
+    interp.interpret_line(": test execute ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 1u);
+
+    // The sequence node itself should have been snapshotted as valid before execute ran
+    auto seq_state = simulator.types_at(&ast);
+    EXPECT_TRUE(seq_state.valid);
+
+    // After execute, the effect is marked invalid
+    EXPECT_FALSE(ast.effect.valid);
+}
+
+TEST_F(TypesAtTest, MixedLiteralsAndWords) {
+    // `: test 3.14 dup * ;` — Float literal, dup, multiply
+    interp.interpret_line(": test 3.14e0 dup * ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 3u);
+
+    // Before 3.14: empty
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());
+
+    // Before dup: {Float}
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    ASSERT_EQ(state1.stack_types.size(), 1u);
+    EXPECT_EQ(state1.stack_types[0], T::Float);
+
+    // Before *: {Float, Float}
+    auto state2 = simulator.types_at(&ast.children[2]);
+    EXPECT_TRUE(state2.valid);
+    ASSERT_EQ(state2.stack_types.size(), 2u);
+    EXPECT_EQ(state2.stack_types[0], T::Float);
+    EXPECT_EQ(state2.stack_types[1], T::Float);
+}
+
+TEST_F(TypesAtTest, UnknownNodeReturnsInvalid) {
+    // Query a node that was never annotated
+    ASTNode dummy = ASTNode::make_word_call("nonexistent");
+    auto state = simulator.types_at(&dummy);
+    EXPECT_FALSE(state.valid);
+}
+
+TEST_F(TypesAtTest, StringLiteralType) {
+    // `: test "hello" slength ;` — String literal then slength
+    interp.interpret_line(": test s\" hello\" slength ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 2u);
+
+    // Before slength: stack should have String
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    ASSERT_GE(state1.stack_types.size(), 1u);
+    EXPECT_EQ(state1.stack_types.back(), T::String);
+}

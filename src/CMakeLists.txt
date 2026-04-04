@@ -44,6 +44,7 @@ set(ETIL_SELECTION_SOURCES
 
 set(ETIL_EVOLUTION_SOURCES
     evolution/ast.cpp
+    evolution/bridge_map.cpp
     evolution/decompiler.cpp
     evolution/ast_compiler.cpp
     evolution/stack_simulator.cpp
