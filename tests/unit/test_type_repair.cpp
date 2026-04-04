@@ -150,3 +150,129 @@ TEST_F(TypeRepairTest, RepairDoLoop) {
     auto result = execute_with(*new_bc, {5});
     EXPECT_EQ(result, std::vector<int64_t>{10});
 }
+
+// --- Phase 8: Bridge word insertion during repair ---
+
+class BridgeRepairTest : public ::testing::Test {
+protected:
+    Dictionary dict;
+    std::ostringstream out;
+    std::ostringstream err;
+    Interpreter interp{dict, out, err};
+    ASTCompiler compiler;
+    TypeRepair repair;
+    BridgeMap bridge_map;
+
+    void SetUp() override {
+        register_primitives(dict);
+
+        // Build a minimal bridge map for testing
+        using T = TypeSignature::Type;
+        bridge_map.add(T::Integer, T::Float,   "int->float");
+        bridge_map.add(T::Float,   T::Integer, "float->int");
+        bridge_map.add(T::Array,   T::Integer, "array-length");
+        bridge_map.add(T::Integer, T::String,  "number->string");
+        bridge_map.add(T::String,  T::Integer, "slength");
+        bridge_map.finalize();
+
+        repair.set_bridge_map(&bridge_map);
+    }
+};
+
+TEST_F(BridgeRepairTest, IntegerToFloatBridge) {
+    // Stack has Integer (from literal 42), word needs Float (int->float needed)
+    // Build AST: [push 42, int->float-needing-word]
+    // Use a word that needs Float input — we need to find one
+    // Actually, let's just test the repair with a manually constructed mismatch
+    // Push Integer, then call a word that needs Float input
+    // "float->int" needs Float input — so pushing Integer then float->int is a mismatch
+    ASTNode ast = ASTNode::make_sequence({
+        ASTNode::make_literal_int(42),
+        ASTNode::make_word_call("float->int")
+    });
+
+    bool ok = repair.repair(ast, dict);
+    EXPECT_TRUE(ok);
+
+    // Should have inserted int->float between the literal and float->int
+    ASSERT_GE(ast.children.size(), 3u);
+    EXPECT_EQ(ast.children[0].kind, ASTNodeKind::Literal);
+    EXPECT_EQ(ast.children[1].kind, ASTNodeKind::WordCall);
+    EXPECT_EQ(ast.children[1].word_name, "int->float");
+    EXPECT_EQ(ast.children[2].word_name, "float->int");
+}
+
+TEST_F(BridgeRepairTest, ArrayToIntegerBridge) {
+    // Stack has Array, word needs Integer — array-length bridge
+    // Push an array (use a word that produces Array), then call a word needing Integer
+    // Simpler: build AST manually where we know the types
+    // "ssplit" produces Array (String → Array), then array-length produces Integer
+    // But we need a simpler case. Let's use a literal-like approach.
+    // Actually, the repair simulates types. If we push a String then call ssplit (String→Array),
+    // then call int->float (Integer→Float), there's a mismatch: Array on stack, needs Integer.
+    // Bridge: array-length (Array→Integer), then int->float works.
+
+    // Build AST: [push "hello", ssplit, int->float]
+    // ssplit outputs Array. int->float needs Integer. Mismatch.
+    // Repair should insert array-length (Array→Integer) before int->float.
+    ASTNode ast = ASTNode::make_sequence({
+        ASTNode::make_literal_string("hello"),
+        ASTNode::make_word_call("ssplit"),
+        ASTNode::make_word_call("int->float")
+    });
+
+    bool ok = repair.repair(ast, dict);
+    EXPECT_TRUE(ok);
+
+    // Should have inserted array-length before int->float
+    ASSERT_GE(ast.children.size(), 4u);
+    EXPECT_EQ(ast.children[2].word_name, "array-length");
+    EXPECT_EQ(ast.children[3].word_name, "int->float");
+}
+
+TEST_F(BridgeRepairTest, NoRepairNeededTypeMatch) {
+    // Stack has Integer, word needs Integer — no bridge needed
+    ASTNode ast = ASTNode::make_sequence({
+        ASTNode::make_literal_int(42),
+        ASTNode::make_word_call("int->float")  // int->float needs Integer — match!
+    });
+
+    bool ok = repair.repair(ast, dict);
+    EXPECT_TRUE(ok);
+
+    // No bridge inserted — still 2 children
+    EXPECT_EQ(ast.children.size(), 2u);
+}
+
+TEST_F(BridgeRepairTest, NoBridgeAvailableUnrepairable) {
+    // No bridge map set — repair falls back to shuffle-only
+    TypeRepair no_bridge_repair;  // no bridge map
+
+    ASTNode ast = ASTNode::make_sequence({
+        ASTNode::make_literal_int(42),
+        ASTNode::make_word_call("float->int")  // needs Float, has Integer
+    });
+
+    bool ok = no_bridge_repair.repair(ast, dict);
+    // Without bridge map, Integer→Float mismatch is unrepairable (no Integer on deeper stack)
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(BridgeRepairTest, MultiHopBridge) {
+    // Stack has Array, word needs Float
+    // Path: Array → Integer (array-length) → Float (int->float) = 2 hops
+    ASTNode ast = ASTNode::make_sequence({
+        ASTNode::make_literal_string("hello"),
+        ASTNode::make_word_call("ssplit"),      // String → Array
+        ASTNode::make_word_call("float->int")   // needs Float
+    });
+
+    bool ok = repair.repair(ast, dict);
+    EXPECT_TRUE(ok);
+
+    // Should have inserted array-length + int->float before float->int
+    ASSERT_GE(ast.children.size(), 5u);
+    EXPECT_EQ(ast.children[2].word_name, "array-length");  // Array → Integer
+    EXPECT_EQ(ast.children[3].word_name, "int->float");    // Integer → Float
+    EXPECT_EQ(ast.children[4].word_name, "float->int");    // Float → Integer (original)
+}

@@ -20,6 +20,7 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
 {
     ast_genetic_ops_.set_logger(&logger_);
     ast_genetic_ops_.set_config(&config_);
+    ast_genetic_ops_.set_bridge_map(&bridge_map_);
 }
 
 void EvolutionEngine::register_tests(
