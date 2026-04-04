@@ -34,6 +34,10 @@ static const std::unordered_map<std::string, std::string>& inverse_bridges() {
     return pairs;
 }
 
+static bool is_bridge_word(const std::string& word) {
+    return inverse_bridges().count(word) > 0;
+}
+
 bool ASTGeneticOps::is_inverse_bridge(
     const ASTNode& seq, size_t position, const std::string& bridge_word) {
     const auto& inv = inverse_bridges();
@@ -193,6 +197,11 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
             + ", candidates: L1=" + std::to_string(l1)
             + " L2=" + std::to_string(l2)
             + " L3=" + std::to_string(l3) + ")" + pool_tag + type_tag);
+    }
+    if ((is_bridge_word(old_name) || is_bridge_word(chosen_name)) &&
+        logger_ && logger_->enabled(EvolveLogCategory::Bridge)) {
+        logger_->log(EvolveLogCategory::Bridge,
+            "substitute: '" + old_name + "' → '" + chosen_name + "'");
     }
     return true;
 }
@@ -461,10 +470,18 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
         for (int attempt = 0; attempt < 5; ++attempt) {
             chosen = candidates[word_dist(rng_)];
             if (!is_inverse_bridge(*target_seq, insert_pos, chosen)) break;
-            if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
-                logger_->log(EvolveLogCategory::Grow,
-                    "Cycle rejected: '" + chosen + "' at position "
-                    + std::to_string(insert_pos));
+            if (logger_ && logger_->enabled(EvolveLogCategory::Bridge)) {
+                // Find what the inverse is
+                std::string inverse_of;
+                if (insert_pos > 0 && insert_pos - 1 < target_seq->children.size() &&
+                    target_seq->children[insert_pos - 1].kind == ASTNodeKind::WordCall)
+                    inverse_of = target_seq->children[insert_pos - 1].word_name;
+                else if (insert_pos < target_seq->children.size() &&
+                         target_seq->children[insert_pos].kind == ASTNodeKind::WordCall)
+                    inverse_of = target_seq->children[insert_pos].word_name;
+                logger_->log(EvolveLogCategory::Bridge,
+                    "cycle: " + chosen + " rejected (inverse of "
+                    + inverse_of + " at position " + std::to_string(insert_pos) + ")");
             }
             chosen.clear();
         }
@@ -477,6 +494,12 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
                 "Inserted word '" + new_node.word_name
                 + "' at position " + std::to_string(insert_pos)
                 + " (" + std::to_string(count_nodes(ast)) + " nodes)" + type_tag);
+        }
+        if (is_bridge_word(new_node.word_name) &&
+            logger_ && logger_->enabled(EvolveLogCategory::Bridge)) {
+            logger_->log(EvolveLogCategory::Bridge,
+                "grow: " + new_node.word_name + " at position "
+                + std::to_string(insert_pos));
         }
     } else {
         // Grow-literal: random int [-10, 10] or float [-1.0, 1.0]
