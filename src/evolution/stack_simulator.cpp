@@ -9,10 +9,17 @@ using namespace etil::core;
 using T = TypeSignature::Type;
 
 bool StackSimulator::annotate(ASTNode& ast, const Dictionary& dict) {
+    type_states_.clear();
     SimState state;
     state.initial_depth = 0;
     simulate_node(ast, state, dict);
     return state.valid;
+}
+
+TypeState StackSimulator::types_at(const ASTNode* node) const {
+    auto it = type_states_.find(node);
+    if (it != type_states_.end()) return it->second;
+    return TypeState{{}, false};
 }
 
 void StackSimulator::infer_input_types(
@@ -224,6 +231,9 @@ void StackSimulator::apply_word_signature(const TypeSignature& sig, SimState& st
 
 void StackSimulator::simulate_node(
     ASTNode& node, SimState& state, const Dictionary& dict) {
+
+    // Snapshot the type state before this node executes
+    type_states_[&node] = TypeState{state.type_stack, state.valid};
 
     int initial_before = state.initial_depth;
 

@@ -401,3 +401,159 @@ TEST_F(CompileTimeInferenceTest, InferOutputTypeFromBody) {
     ASSERT_EQ(sig.outputs.size(), 1u);
     EXPECT_EQ(sig.outputs[0], T::String);
 }
+
+// --- Phase 3: types_at() — stack type state at each AST node ---
+
+class TypesAtTest : public ::testing::Test {
+protected:
+    Dictionary dict;
+    std::ostringstream out;
+    std::ostringstream err;
+    Interpreter interp{dict, out, err};
+    Decompiler decompiler;
+    StackSimulator simulator;
+
+    void SetUp() override {
+        register_primitives(dict);
+    }
+
+    ASTNode decompile_word(const std::string& name) {
+        auto impl = dict.lookup(name);
+        EXPECT_TRUE(impl.has_value());
+        return decompiler.decompile(*(*impl)->bytecode());
+    }
+};
+
+TEST_F(TypesAtTest, DupAddWithIntegerInput) {
+    // `: test dup + ;` with Integer input
+    // Before dup: stack = {Unknown} (input type unknown without inference)
+    // Before +: stack = {Unknown, Unknown} (dup duplicated)
+    interp.interpret_line(": test dup + ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    // AST is Sequence with children: [dup, +]
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 2u);
+
+    // Before dup: stack is empty (simulator starts with empty stack, inputs are implicit)
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());  // no values yet — input is external
+
+    // Before +: stack has 2 items (dup consumed 1 external, produced 2)
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    EXPECT_EQ(state1.stack_types.size(), 2u);
+}
+
+TEST_F(TypesAtTest, LiteralsThenAdd) {
+    // `: test 3 5 + ;` — all literals, no external inputs
+    interp.interpret_line(": test 3 5 + ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 3u);
+
+    // Before literal 3: empty stack
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());
+
+    // Before literal 5: stack = {Integer}
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    ASSERT_EQ(state1.stack_types.size(), 1u);
+    EXPECT_EQ(state1.stack_types[0], T::Integer);
+
+    // Before +: stack = {Integer, Integer}
+    auto state2 = simulator.types_at(&ast.children[2]);
+    EXPECT_TRUE(state2.valid);
+    ASSERT_EQ(state2.stack_types.size(), 2u);
+    EXPECT_EQ(state2.stack_types[0], T::Integer);
+    EXPECT_EQ(state2.stack_types[1], T::Integer);
+}
+
+TEST_F(TypesAtTest, UnknownInputTypes) {
+    // `: test + ;` — two Unknown inputs
+    interp.interpret_line(": test + ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 1u);
+
+    // Before +: stack is empty (two external inputs not on simulated stack)
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());
+}
+
+TEST_F(TypesAtTest, OpaqueWordInvalidatesState) {
+    // `: test execute ;` — opaque word makes state invalid
+    interp.interpret_line(": test execute ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 1u);
+
+    // The sequence node itself should have been snapshotted as valid before execute ran
+    auto seq_state = simulator.types_at(&ast);
+    EXPECT_TRUE(seq_state.valid);
+
+    // After execute, the effect is marked invalid
+    EXPECT_FALSE(ast.effect.valid);
+}
+
+TEST_F(TypesAtTest, MixedLiteralsAndWords) {
+    // `: test 3.14 dup * ;` — Float literal, dup, multiply
+    interp.interpret_line(": test 3.14e0 dup * ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 3u);
+
+    // Before 3.14: empty
+    auto state0 = simulator.types_at(&ast.children[0]);
+    EXPECT_TRUE(state0.valid);
+    EXPECT_TRUE(state0.stack_types.empty());
+
+    // Before dup: {Float}
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    ASSERT_EQ(state1.stack_types.size(), 1u);
+    EXPECT_EQ(state1.stack_types[0], T::Float);
+
+    // Before *: {Float, Float}
+    auto state2 = simulator.types_at(&ast.children[2]);
+    EXPECT_TRUE(state2.valid);
+    ASSERT_EQ(state2.stack_types.size(), 2u);
+    EXPECT_EQ(state2.stack_types[0], T::Float);
+    EXPECT_EQ(state2.stack_types[1], T::Float);
+}
+
+TEST_F(TypesAtTest, UnknownNodeReturnsInvalid) {
+    // Query a node that was never annotated
+    ASTNode dummy = ASTNode::make_word_call("nonexistent");
+    auto state = simulator.types_at(&dummy);
+    EXPECT_FALSE(state.valid);
+}
+
+TEST_F(TypesAtTest, StringLiteralType) {
+    // `: test "hello" slength ;` — String literal then slength
+    interp.interpret_line(": test s\" hello\" slength ;");
+    auto ast = decompile_word("test");
+    simulator.annotate(ast, dict);
+
+    ASSERT_EQ(ast.kind, ASTNodeKind::Sequence);
+    ASSERT_GE(ast.children.size(), 2u);
+
+    // Before slength: stack should have String
+    auto state1 = simulator.types_at(&ast.children[1]);
+    EXPECT_TRUE(state1.valid);
+    ASSERT_GE(state1.stack_types.size(), 1u);
+    EXPECT_EQ(state1.stack_types.back(), T::String);
+}
