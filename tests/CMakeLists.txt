@@ -184,6 +184,20 @@ target_link_libraries(etil_stack_simulator_tests
 etil_add_link_map(etil_stack_simulator_tests)
 gtest_discover_tests(etil_stack_simulator_tests)
 
+# Signature index unit tests
+add_executable(etil_signature_index_tests
+    unit/test_signature_index.cpp
+)
+
+target_link_libraries(etil_signature_index_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_signature_index_tests)
+gtest_discover_tests(etil_signature_index_tests)
+
 # Bridge map unit tests
 add_executable(etil_bridge_map_tests
     unit/test_bridge_map.cpp
