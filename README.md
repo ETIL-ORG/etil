@@ -2646,11 +2646,26 @@ When `evolve-word` is called, the engine:
 1. **Selects parents** from existing implementations (weighted by fitness)
 2. **Decompiles** the parent's bytecode to an AST (Abstract Syntax Tree)
 3. **Mutates** the AST using one of 6 weighted operators (substitute, perturb, move, control flow, grow, shrink)
-4. **Repairs** type mismatches by inserting stack shuffling (`swap`, `rot`, `roll`)
+4. **Repairs** type mismatches by inserting stack shuffling (`swap`, `rot`, `roll`) or bridge words from the BridgeMap
 5. **Compiles** the mutated AST back to bytecode with structure markers
 6. **Evaluates** the child against registered test cases (fitness = correctness + speed)
 7. **Updates weights** on all implementations based on fitness scores
 8. **Prunes** the weakest implementations if the population exceeds the limit
+
+### Type-Directed Bridges
+
+The **substitute** and **grow** mutation operators are type-aware. Before selecting a candidate word, the engine simulates the type stack at the mutation point and filters candidates using a promotion-aware compatibility matrix:
+
+- **Integer on stack, word wants Float**: compatible (widening promotion)
+- **Float on stack, word wants Integer**: incompatible (narrowing)
+- **Boolean on stack, word wants Integer**: incompatible (undefined)
+- **Unknown on either side**: always compatible (permissive)
+
+Bridge words registered via `evolve-bridge` (e.g., `int->float`, `array-length`) appear naturally as type-legal candidates. Adjacent inverse bridges (e.g., `int->float` followed by `float->int`) are detected and rejected to prevent no-op cycles.
+
+Type repair (step 4) can insert single-hop or multi-hop bridge words when a type mismatch can't be resolved by stack shuffling alone. For example, if the stack has `Array` but the next word needs `Float`, repair inserts `array-length` (Array→Integer) + `int->float` (Integer→Float).
+
+Fitness evaluation errors from mutated code are routed to the evolution log file, not stderr.
 
 ## Appendix U: Evolution Logging
 
@@ -2691,6 +2706,7 @@ Categories are independently enabled via the bitmask parameter to `evolve-log-st
 | 10 | 0x0400 | Repair | Type repair success/failure |
 | 11 | 0x0800 | Tag | Tag inference at `;` time |
 | 12 | 0x1000 | Pool | Pool-restricted candidate selection |
+| 13 | 0x2000 | Bridge | Bridge word insertion, cycle detection, substitute/grow bridge events |
 | 14 | 0x4000 | Diff | Side-by-side before/after mutation diff |
 | 15 | 0x8000 | ASTDump | Tree-format AST dumps |
 
