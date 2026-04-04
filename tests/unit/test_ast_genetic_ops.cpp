@@ -672,6 +672,72 @@ TEST_F(ASTGeneticOpsTest, TypeDirectedGrowBloatControl) {
 }
 
 // ===================================================================
+// Phase 6: Adjacent-inverse bridge cycle detection
+// ===================================================================
+
+TEST_F(ASTGeneticOpsTest, InverseBridgeAdjacentRejected) {
+    // Sequence: [int->float] — inserting float->int at position 1 (right after)
+    auto seq = ASTNode::make_sequence({ASTNode::make_word_call("int->float")});
+    EXPECT_TRUE(ASTGeneticOps::is_inverse_bridge(seq, 1, "float->int"));
+}
+
+TEST_F(ASTGeneticOpsTest, InverseBridgeBeforeRejected) {
+    // Sequence: [int->float] — inserting float->int at position 0 (right before)
+    auto seq = ASTNode::make_sequence({ASTNode::make_word_call("int->float")});
+    EXPECT_TRUE(ASTGeneticOps::is_inverse_bridge(seq, 0, "float->int"));
+}
+
+TEST_F(ASTGeneticOpsTest, NonInverseAllowed) {
+    // Sequence: [int->float] — inserting abs at position 1: allowed (not inverse)
+    auto seq = ASTNode::make_sequence({ASTNode::make_word_call("int->float")});
+    EXPECT_FALSE(ASTGeneticOps::is_inverse_bridge(seq, 1, "abs"));
+}
+
+TEST_F(ASTGeneticOpsTest, InverseBridgeNonAdjacentAllowed) {
+    // Sequence: [int->float, dup, abs] — inserting float->int at position 3: allowed (not adjacent)
+    auto seq = ASTNode::make_sequence({
+        ASTNode::make_word_call("int->float"),
+        ASTNode::make_word_call("dup"),
+        ASTNode::make_word_call("abs")
+    });
+    EXPECT_FALSE(ASTGeneticOps::is_inverse_bridge(seq, 3, "float->int"));
+}
+
+TEST_F(ASTGeneticOpsTest, NonBridgeWordNeverRejected) {
+    // Non-bridge words should never be rejected by cycle detection
+    auto seq = ASTNode::make_sequence({ASTNode::make_word_call("+")});
+    EXPECT_FALSE(ASTGeneticOps::is_inverse_bridge(seq, 0, "+"));
+    EXPECT_FALSE(ASTGeneticOps::is_inverse_bridge(seq, 1, "dup"));
+    EXPECT_FALSE(ASTGeneticOps::is_inverse_bridge(seq, 0, "slength"));
+}
+
+TEST_F(ASTGeneticOpsTest, AllInversePairsDetected) {
+    // Verify all defined inverse pairs are detected
+    std::vector<std::pair<std::string, std::string>> pairs = {
+        {"int->float",    "float->int"},
+        {"string->bytes", "bytes->string"},
+        {"ssplit",        "sjoin"},
+        {"map->json",     "json->map"},
+        {"array->mat",    "mat->array"},
+    };
+    for (const auto& [a, b] : pairs) {
+        auto seq = ASTNode::make_sequence({ASTNode::make_word_call(a)});
+        EXPECT_TRUE(ASTGeneticOps::is_inverse_bridge(seq, 1, b))
+            << a << " + " << b << " should be detected";
+        // Reverse direction too
+        auto seq2 = ASTNode::make_sequence({ASTNode::make_word_call(b)});
+        EXPECT_TRUE(ASTGeneticOps::is_inverse_bridge(seq2, 1, a))
+            << b << " + " << a << " should be detected";
+    }
+}
+
+TEST_F(ASTGeneticOpsTest, EmptySequenceSafe) {
+    // Edge case: empty sequence — no crash
+    auto seq = ASTNode::make_sequence({});
+    EXPECT_FALSE(ASTGeneticOps::is_inverse_bridge(seq, 0, "int->float"));
+}
+
+// ===================================================================
 // Tag tier substitution verification
 // ===================================================================
 

@@ -9,10 +9,52 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <unordered_map>
 
 namespace etil::evolution {
 
 using namespace etil::core;
+
+// --- Inverse bridge pairs (symmetric) ---
+// Inserting one next to its inverse creates a no-op cycle.
+
+static const std::unordered_map<std::string, std::string>& inverse_bridges() {
+    static const std::unordered_map<std::string, std::string> pairs = {
+        {"int->float",     "float->int"},
+        {"float->int",     "int->float"},
+        {"string->bytes",  "bytes->string"},
+        {"bytes->string",  "string->bytes"},
+        {"ssplit",         "sjoin"},
+        {"sjoin",          "ssplit"},
+        {"map->json",      "json->map"},
+        {"json->map",      "map->json"},
+        {"array->mat",     "mat->array"},
+        {"mat->array",     "array->mat"},
+    };
+    return pairs;
+}
+
+bool ASTGeneticOps::is_inverse_bridge(
+    const ASTNode& seq, size_t position, const std::string& bridge_word) {
+    const auto& inv = inverse_bridges();
+    auto it = inv.find(bridge_word);
+    if (it == inv.end()) return false;  // not a bridge word — no cycle possible
+    const auto& inverse = it->second;
+
+    // Check the node before the insertion point
+    if (position > 0 && position - 1 < seq.children.size()) {
+        const auto& prev = seq.children[position - 1];
+        if (prev.kind == ASTNodeKind::WordCall && prev.word_name == inverse)
+            return true;
+    }
+    // Check the node at the insertion point (will be pushed right after insert)
+    if (position < seq.children.size()) {
+        const auto& next = seq.children[position];
+        if (next.kind == ASTNodeKind::WordCall && next.word_name == inverse)
+            return true;
+    }
+    return false;
+}
 
 ASTGeneticOps::ASTGeneticOps(Dictionary& dict)
     : dict_(dict)
@@ -413,8 +455,21 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
         }
         if (candidates.empty()) return false;
 
+        // Select a word, rejecting inverse bridge cycles (try up to 5 times)
         std::uniform_int_distribution<size_t> word_dist(0, candidates.size() - 1);
-        new_node = ASTNode::make_word_call(candidates[word_dist(rng_)]);
+        std::string chosen;
+        for (int attempt = 0; attempt < 5; ++attempt) {
+            chosen = candidates[word_dist(rng_)];
+            if (!is_inverse_bridge(*target_seq, insert_pos, chosen)) break;
+            if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
+                logger_->log(EvolveLogCategory::Grow,
+                    "Cycle rejected: '" + chosen + "' at position "
+                    + std::to_string(insert_pos));
+            }
+            chosen.clear();
+        }
+        if (chosen.empty()) return false;
+        new_node = ASTNode::make_word_call(chosen);
 
         if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
             std::string type_tag = tos_type.empty() ? "" : " [typed]";

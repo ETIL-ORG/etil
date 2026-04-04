@@ -47,6 +47,11 @@ public:
     /// Rebuild the signature index (call when dictionary changes).
     void rebuild_index();
 
+    /// Check if inserting bridge_word at position in a Sequence creates
+    /// a no-op inverse pair with an adjacent node (e.g., int->float + float->int).
+    static bool is_inverse_bridge(const ASTNode& seq, size_t position,
+                                  const std::string& bridge_word);
+
 private:
     etil::core::Dictionary& dict_;
     Decompiler decompiler_;
@@ -67,6 +72,7 @@ private:
     bool grow_node(ASTNode& ast);
     bool shrink_node(ASTNode& ast);
     bool block_crossover(ASTNode& ast_a, const ASTNode& ast_b);
+
 };
 
 } // namespace etil::evolution
