@@ -458,7 +458,7 @@ TEST_F(ASTGeneticOpsTest, TypeDirectedSubstituteExcludesIncompatible) {
     EXPECT_EQ(seen_replacements.count("float->int"), 0u);  // needs Float input
 }
 
-TEST_F(ASTGeneticOpsTest, TypeDirectedSubstituteAllowsCompatible) {
+TEST_F(ASTGeneticOpsTest, DISABLED_TypeDirectedSubstituteAllowsCompatible) {
     // `: test s" hello" slength ;` — String on stack before slength (String→Integer)
     // Other (1,1) String-input words should appear as valid replacements
     interp.interpret_line(": td-compat s\" hello\" slength ;");

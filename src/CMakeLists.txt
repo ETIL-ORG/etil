@@ -21,6 +21,7 @@ set(ETIL_CORE_SOURCES
     core/observable_async.cpp
     core/observable_execution.cpp
     core/observable_primitives.cpp
+    core/sha256.cpp
     lvfs/lvfs.cpp
     lvfs/lvfs_primitives.cpp
 )

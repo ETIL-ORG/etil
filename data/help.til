@@ -449,9 +449,13 @@ s| [']| s" examples" s" code" s" : my-exec   ['] dup execute ;\n42 my-exec . .\n
 
 # --- Memory ---
 
-s" create" s" description" s" text" s" Define a new word with a data field" meta! drop
+s" create" s" description" s" text" s" Define a new word with a data field (name from input stream)" meta! drop
 s" create" s" stack-effect" s" text" s" ( -- )" meta! drop
 s" create" s" category" s" text" s" memory" meta! drop
+
+s" screate" s" description" s" text" s" Define a new word with a data field (name from TOS)" meta! drop
+s" screate" s" stack-effect" s" text" s" ( name-str -- )" meta! drop
+s" screate" s" category" s" text" s" memory" meta! drop
 
 s" ," s" description" s" text" s" Append value to last created word's data field" meta! drop
 s" ," s" stack-effect" s" text" s" ( x -- )" meta! drop
@@ -1091,6 +1095,24 @@ s" bytes-resize" s" examples" s" code" s" 4 bytes-new 8 bytes-resize bytes-lengt
 s" string->bytes" s" examples" s" code" s" s| Hi| string->bytes .| bytes=| bytes-length .\n=> bytes=2 " meta! drop
 s" bytes->string" s" examples" s" code" s" 4 bytes-new 0 72 bytes-set 1 105 bytes-set bytes->string type\n=> Hi" meta! drop
 
+# --- Hashing ---
+
+s" to-hex" s" description" s" text" s" Format length bytes at offset as lowercase hex string" meta! drop
+s" to-hex" s" stack-effect" s" text" s" ( string|bytes offset length -- string )" meta! drop
+s" to-hex" s" category" s" text" s" conversion" meta! drop
+
+s" from-hex" s" description" s" text" s" Parse hex string to byte-array (accepts 0-9A-Fa-f, requires even length)" meta! drop
+s" from-hex" s" stack-effect" s" text" s" ( string -- byte-array true | false )" meta! drop
+s" from-hex" s" category" s" text" s" conversion" meta! drop
+
+s" sha256sum" s" description" s" text" s" Compute SHA-256 hash of string or byte-array, returns 32-byte byte-array" meta! drop
+s" sha256sum" s" stack-effect" s" text" s" ( string|bytes -- bytes )" meta! drop
+s" sha256sum" s" category" s" text" s" hashing" meta! drop
+
+s" sha256=" s" description" s" text" s" Compare two 32-byte SHA-256 digests, returns true if equal (constant-time)" meta! drop
+s" sha256=" s" stack-effect" s" text" s" ( bytes bytes -- bool )" meta! drop
+s" sha256=" s" category" s" text" s" hashing" meta! drop
+
 # --- Self-hosted words (from builtins.til) ---
 
 s" forget" s" description" s" text" s" Remove latest implementation of a word" meta! drop
@@ -1305,6 +1327,10 @@ s" '" s" description" s" text" s" Parse next token, look up in dictionary, push 
 s" '" s" stack-effect" s" text" s" ( -- xt )" meta! drop
 s" '" s" category" s" text" s" execution" meta! drop
 s" '" s" examples" s" code" s" ' dup >name type\n=> dup" meta! drop
+
+s" s'" s" description" s" text" s" Look up word by name string on TOS, push xt and true if found, false if not" meta! drop
+s" s'" s" stack-effect" s" text" s" ( name-str -- xt true | false )" meta! drop
+s" s'" s" category" s" text" s" execution" meta! drop
 
 s" execute" s" description" s" text" s" Pop execution token and execute the referenced word" meta! drop
 s" execute" s" stack-effect" s" text" s" ( xt -- )" meta! drop

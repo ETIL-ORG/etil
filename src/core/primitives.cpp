@@ -20,6 +20,7 @@
 #include "etil/mcp/role_permissions.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/interpreter.hpp"
+#include "etil/core/sha256.hpp"
 #include "etil/selection/selection_engine.hpp"
 #include "etil/evolution/evolution_engine.hpp"
 #include "etil/core/metadata_json.hpp"
@@ -852,6 +853,32 @@ bool prim_create(ExecutionContext& ctx) {
     if (!is) return false;
     std::string create_name;
     if (!(*is >> create_name)) return false;
+
+    auto code = std::make_shared<ByteCode>();
+    Instruction push_ptr;
+    push_ptr.op = Instruction::Op::PushDataPtr;
+    code->append(std::move(push_ptr));
+
+    auto id = Dictionary::next_id();
+    auto* impl = new WordImpl(create_name, id);
+    impl->set_bytecode(code);
+    impl->set_weight(1.0);
+    impl->set_generation(0);
+    ctx.dictionary()->register_word(create_name, WordImplPtr(impl));
+    ctx.set_last_created(impl);
+    return true;
+}
+
+// screate ( string -- )
+// Like create, but takes the word name from TOS instead of the input stream.
+bool prim_screate(ExecutionContext& ctx) {
+    auto* hs = pop_string(ctx);
+    if (!hs) {
+        ctx.err() << "screate: expected string\n";
+        return false;
+    }
+    std::string create_name(hs->view());
+    hs->release();
 
     auto code = std::make_shared<ByteCode>();
     Instruction push_ptr;
@@ -2742,6 +2769,34 @@ bool prim_tick(ExecutionContext& ctx) {
     return true;
 }
 
+// s' ( string -- xt true | false )
+// Like ' (tick) but takes the word name from TOS. Conditional return convention.
+bool prim_s_tick(ExecutionContext& ctx) {
+    auto* hs = pop_string(ctx);
+    if (!hs) {
+        ctx.err() << "s': expected string\n";
+        return false;
+    }
+    std::string token(hs->view());
+    hs->release();
+
+    auto* dict = ctx.dictionary();
+    if (!dict) {
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+    auto result = dict->lookup(token);
+    if (!result) {
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+    auto* impl = result->get();
+    impl->add_ref();
+    ctx.data_stack().push(Value::from_xt(impl));
+    ctx.data_stack().push(Value(true));
+    return true;
+}
+
 bool prim_execute(ExecutionContext& ctx) {
     auto opt = ctx.data_stack().pop();
     if (!opt) return false;
@@ -2884,6 +2939,204 @@ bool prim_dot_s(ExecutionContext& ctx) {
         }
     }
     ctx.out() << "\n";
+    return true;
+}
+
+// --- SHA-256 ---
+
+// sha256sum ( string|byte-array -- byte-array )
+// Compute SHA-256 hash. Accepts string or byte-array input, returns 32-byte byte-array.
+bool prim_sha256sum(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+
+    std::array<uint8_t, 32> digest;
+
+    if (opt->type == Value::Type::String && opt->as_ptr) {
+        auto* hs = opt->as_string();
+        auto sv = hs->view();
+        digest = sha256(reinterpret_cast<const uint8_t*>(sv.data()),
+                        sv.size());
+        hs->release();
+    } else if (opt->type == Value::Type::ByteArray && opt->as_ptr) {
+        auto* ba = static_cast<HeapByteArray*>(opt->as_ptr);
+        digest = sha256(ba->data(), ba->length());
+        ba->release();
+    } else {
+        ctx.err() << "sha256sum: expected string or byte-array\n";
+        opt->release();
+        return false;
+    }
+
+    auto* result = new HeapByteArray(32);
+    for (size_t i = 0; i < 32; ++i) {
+        result->set(i, digest[i]);
+    }
+    ctx.data_stack().push(Value::from(result));
+    return true;
+}
+
+// to-hex ( string|bytes offset length -- string )
+// Format `length` bytes starting at `offset` as lowercase hex.
+// Offset/length are in characters for strings, bytes for byte-arrays.
+// Clamps to source length if offset+length exceeds it.
+bool prim_to_hex(ExecutionContext& ctx) {
+    auto opt_len = ctx.data_stack().pop();
+    if (!opt_len || opt_len->type != Value::Type::Integer) {
+        ctx.err() << "to-hex: length must be integer\n";
+        if (opt_len) opt_len->release();
+        return false;
+    }
+    auto opt_off = ctx.data_stack().pop();
+    if (!opt_off || opt_off->type != Value::Type::Integer) {
+        ctx.err() << "to-hex: offset must be integer\n";
+        ctx.data_stack().push(*opt_len);
+        if (opt_off) opt_off->release();
+        return false;
+    }
+    int64_t length = opt_len->as_int;
+    int64_t offset = opt_off->as_int;
+    if (offset < 0 || length < 0) {
+        ctx.err() << "to-hex: offset and length must be non-negative\n";
+        return false;
+    }
+
+    auto opt_src = ctx.data_stack().pop();
+    if (!opt_src) {
+        ctx.data_stack().push(*opt_off);
+        ctx.data_stack().push(*opt_len);
+        return false;
+    }
+
+    const uint8_t* data = nullptr;
+    size_t data_len = 0;
+
+    if (opt_src->type == Value::Type::String && opt_src->as_ptr) {
+        auto* hs = opt_src->as_string();
+        auto sv = hs->view();
+        data = reinterpret_cast<const uint8_t*>(sv.data());
+        data_len = sv.size();
+    } else if (opt_src->type == Value::Type::ByteArray && opt_src->as_ptr) {
+        auto* ba = static_cast<HeapByteArray*>(opt_src->as_ptr);
+        data = ba->data();
+        data_len = ba->length();
+    } else {
+        ctx.err() << "to-hex: expected string or byte-array\n";
+        opt_src->release();
+        return false;
+    }
+
+    // Clamp offset and length to source
+    size_t off = static_cast<size_t>(offset);
+    size_t len = static_cast<size_t>(length);
+    if (off > data_len) off = data_len;
+    if (off + len > data_len) len = data_len - off;
+
+    static const char hex_chars[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(len * 2);
+    for (size_t i = 0; i < len; ++i) {
+        uint8_t b = data[off + i];
+        result.push_back(hex_chars[b >> 4]);
+        result.push_back(hex_chars[b & 0x0F]);
+    }
+
+    opt_src->release();
+    auto* hs = HeapString::create(result);
+    ctx.data_stack().push(Value::from(hs));
+    return true;
+}
+
+// from-hex ( string -- byte-array true | false )
+// Parse hex string into byte-array. Conditional return:
+//   Success: byte-array + true
+//   Empty, odd length, or invalid char: false (no byte-array)
+// Aborts with error if input is not a string.
+bool prim_from_hex(ExecutionContext& ctx) {
+    auto* hs = pop_string(ctx);
+    if (!hs) {
+        ctx.err() << "from-hex: expected string\n";
+        return false;
+    }
+    auto sv = hs->view();
+
+    auto hex_val = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+        return -1;
+    };
+
+    // Empty or odd length -> false
+    if (sv.empty() || (sv.size() & 1)) {
+        hs->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Validate all characters
+    for (char c : sv) {
+        if (hex_val(c) < 0) {
+            hs->release();
+            ctx.data_stack().push(Value(false));
+            return true;
+        }
+    }
+
+    // Convert
+    size_t n = sv.size() / 2;
+    auto* ba = new HeapByteArray(n);
+    for (size_t i = 0; i < n; ++i) {
+        int hi = hex_val(sv[i * 2]);
+        int lo = hex_val(sv[i * 2 + 1]);
+        ba->set(i, static_cast<uint8_t>((hi << 4) | lo));
+    }
+    hs->release();
+    ctx.data_stack().push(Value::from(ba));
+    ctx.data_stack().push(Value(true));
+    return true;
+}
+
+// sha256= ( byte-array byte-array -- bool )
+// Constant-time comparison of two SHA-256 digests (32-byte byte-arrays).
+// Returns false if either array is not exactly 32 bytes.
+bool prim_sha256_eq(ExecutionContext& ctx) {
+    auto opt_b = ctx.data_stack().pop();
+    if (!opt_b) return false;
+    if (opt_b->type != Value::Type::ByteArray || !opt_b->as_ptr) {
+        ctx.err() << "sha256=: TOS is not a byte-array\n";
+        opt_b->release();
+        return false;
+    }
+
+    auto opt_a = ctx.data_stack().pop();
+    if (!opt_a) {
+        opt_b->release();
+        return false;
+    }
+    if (opt_a->type != Value::Type::ByteArray || !opt_a->as_ptr) {
+        ctx.err() << "sha256=: TOS-1 is not a byte-array\n";
+        opt_a->release();
+        opt_b->release();
+        return false;
+    }
+
+    auto* a = static_cast<HeapByteArray*>(opt_a->as_ptr);
+    auto* b = static_cast<HeapByteArray*>(opt_b->as_ptr);
+
+    bool equal = false;
+    if (a->length() == 32 && b->length() == 32) {
+        // Constant-time compare to avoid timing side channels
+        uint8_t diff = 0;
+        for (size_t i = 0; i < 32; ++i) {
+            diff |= a->data()[i] ^ b->data()[i];
+        }
+        equal = (diff == 0);
+    }
+
+    a->release();
+    b->release();
+    ctx.data_stack().push(Value(equal));
     return true;
 }
 
@@ -3157,6 +3410,7 @@ static const PrimEntry prim_table[] = {
     {"oct.",     prim_oct_dot, 1, 0, {T::Integer},                       {}},
     // Memory
     {"create",   prim_create,  0, 0, {},                                 {}},
+    {"screate",  prim_screate, 1, 0, {T::String},                        {}},
     {",",        prim_comma,   1, 0, {T::Unknown},                       {}},
     {"@",        prim_fetch,   1, 1, {T::Unknown},                       {T::Unknown}},
     {"!",        prim_store,   2, 0, {T::Unknown, T::Unknown},           {}},
@@ -3253,6 +3507,7 @@ static const PrimEntry prim_table[] = {
     {"see",     prim_see,     0, 0, {},                                 {}},
     // Execution tokens
     {"'",       prim_tick,        0, 1, {},          {T::Xt}},
+    {"s'",      prim_s_tick,      1, 2, {T::String}, {T::Unknown, T::Boolean}},
     {"execute", prim_execute,     1, 0, {T::Xt},     {}},
     {"xt?",     prim_xt_query,    1, 1, {T::Xt},     {T::Boolean}},
     {">name",   prim_xt_to_name,  1, 1, {T::Xt},     {T::String}},
@@ -3266,6 +3521,11 @@ static const PrimEntry prim_table[] = {
     {"float->int",     prim_float_to_int,     1, 1, {T::Float},   {T::Integer}},
     {"number->string", prim_number_to_string, 1, 1, {T::Unknown}, {T::String}},
     {"string->number", prim_string_to_number, 1, 0, {T::String},  {}},
+    // Hashing
+    {"to-hex",         prim_to_hex,          3, 1, {T::Unknown, T::Integer, T::Integer}, {T::String}},
+    {"from-hex",       prim_from_hex,        1, 2, {T::String}, {T::ByteArray, T::Boolean}},
+    {"sha256sum",      prim_sha256sum,       1, 1, {T::Unknown}, {T::ByteArray}},
+    {"sha256=",        prim_sha256_eq,       2, 1, {T::ByteArray, T::ByteArray}, {T::Boolean}},
 };
 // clang-format on
 

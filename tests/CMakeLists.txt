@@ -184,6 +184,20 @@ target_link_libraries(etil_stack_simulator_tests
 etil_add_link_map(etil_stack_simulator_tests)
 gtest_discover_tests(etil_stack_simulator_tests)
 
+# SHA-256 unit tests
+add_executable(etil_sha256_tests
+    unit/test_sha256.cpp
+)
+
+target_link_libraries(etil_sha256_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_sha256_tests)
+gtest_discover_tests(etil_sha256_tests)
+
 # Signature index unit tests
 add_executable(etil_signature_index_tests
     unit/test_signature_index.cpp

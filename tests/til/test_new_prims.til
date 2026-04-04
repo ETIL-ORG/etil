@@ -1,0 +1,114 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# test_new_prims.til -- Tests for sha256sum, sha256=, to-hex, screate, s'
+
+include tests/til/harness.til
+
+# ===================================================================
+# to-hex
+# ===================================================================
+
+." to-hex ABC: "
+s" ABC" 0 3 to-hex s" 414243" s= true expect-eq
+
+." to-hex offset: "
+s" ABCDEF" 2 2 to-hex s" 4344" s= true expect-eq
+
+." to-hex clamps length: "
+s" AB" 0 10 to-hex s" 4142" s= true expect-eq
+
+." to-hex empty: "
+s" " 0 0 to-hex s" " s= true expect-eq
+
+# ===================================================================
+# from-hex
+# ===================================================================
+
+: from-hex-ok? from-hex if drop true else false then ;
+
+." from-hex valid: "
+s" 414243" from-hex-ok? true expect-eq
+
+." from-hex uppercase: "
+s" ABCDEF" from-hex-ok? true expect-eq
+
+." from-hex empty: "
+s" " from-hex-ok? false expect-eq
+
+." from-hex odd length: "
+s" abc" from-hex-ok? false expect-eq
+
+." from-hex invalid char: "
+s" abcg" from-hex-ok? false expect-eq
+
+: round-trip-hex  # ( hex-str -- hex-str )
+  from-hex drop bytes-length
+  swap 0 swap to-hex ;
+
+." from-hex round-trip: "
+s" deadbeef" from-hex drop 0 4 to-hex s" deadbeef" s= true expect-eq
+
+# ===================================================================
+# sha256sum -- validate against known vectors
+# ===================================================================
+
+." sha256 of empty string: "
+s" " sha256sum 0 32 to-hex
+s" e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+s= true expect-eq
+
+." sha256 of 'abc': "
+s" abc" sha256sum 0 32 to-hex
+s" ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+s= true expect-eq
+
+." sha256 of 'hello': "
+s" hello" sha256sum 0 32 to-hex
+s" 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+s= true expect-eq
+
+." sha256 of 64 x's: "
+s" xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" sha256sum 0 32 to-hex
+s" 7ce100971f64e7001e8fe5a51973ecdfe1ced42befe7ee8d5fd6219506b5393c"
+s= true expect-eq
+
+." sha256sum returns 32 bytes: "
+s" any-string" sha256sum bytes-length 32 expect-eq
+drop
+
+# ===================================================================
+# sha256= -- byte-array equality
+# ===================================================================
+
+." sha256= equal: "
+s" hello" sha256sum s" hello" sha256sum sha256= true expect-eq
+
+." sha256= unequal: "
+s" hello" sha256sum s" world" sha256sum sha256= false expect-eq
+
+." sha256= wrong length: "
+4 bytes-new 4 bytes-new sha256= false expect-eq
+
+# ===================================================================
+# screate + @ pattern
+# ===================================================================
+
+." screate makes new word: "
+s" my-var" screate 99 , my-var @ 99 expect-eq
+
+# ===================================================================
+# s' -- conditional lookup
+# ===================================================================
+
+: s-tick-found? s' if drop true else false then ;
+: s-tick-exec s' if 42 swap execute + else drop 0 then ;
+
+." s' found: "
+s" dup" s-tick-found? true expect-eq
+
+." s' not found: "
+s" nonexistent-word-xyz" s-tick-found? false expect-eq
+
+." s' returns working xt: "
+s" dup" s-tick-exec 84 expect-eq
