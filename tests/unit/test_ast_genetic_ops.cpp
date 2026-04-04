@@ -419,6 +419,139 @@ TEST_F(ASTGeneticOpsTest, DISABLED_EndToEndEvolution) {
 }
 
 // ===================================================================
+// Phase 4: Type-directed substitute_call()
+// ===================================================================
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedSubstituteExcludesIncompatible) {
+    // `: test s" hello" slength ;` — String on stack before slength
+    // When substitute picks slength, type filtering should exclude words
+    // with concrete non-String input types.
+    interp.interpret_line(": td-sub s\" hello\" slength ;");
+    auto impl = dict.lookup("td-sub");
+    ASSERT_TRUE(impl.has_value());
+
+    // Force substitute-only via weights
+    EvolutionConfig config;
+    config.mutation_weights = {100.0, 0.0, 0.0, 0.0, 0.0, 0.0};  // substitute only
+    config.max_ast_nodes = 30;
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+
+    // Collect all replacement word names over many mutations
+    std::set<std::string> seen_replacements;
+    for (int i = 0; i < 100; ++i) {
+        auto child = ops.mutate(**impl);
+        if (!child || !child->bytecode()) continue;
+        Decompiler dec;
+        auto ast = dec.decompile(*child->bytecode());
+        for (const auto& node : ast.children) {
+            if (node.kind == ASTNodeKind::WordCall) {
+                seen_replacements.insert(node.word_name);
+            }
+        }
+    }
+
+    // slength is (1,1) with String on the stack. Words with concrete
+    // non-String input types should be excluded by type filtering:
+    EXPECT_EQ(seen_replacements.count("int->float"), 0u);  // needs Integer input
+    EXPECT_EQ(seen_replacements.count("float->int"), 0u);  // needs Float input
+}
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedSubstituteAllowsCompatible) {
+    // `: test s" hello" slength ;` — String on stack before slength (String→Integer)
+    // Other (1,1) String-input words should appear as valid replacements
+    interp.interpret_line(": td-compat s\" hello\" slength ;");
+    auto impl = dict.lookup("td-compat");
+    ASSERT_TRUE(impl.has_value());
+
+    EvolutionConfig config;
+    config.mutation_weights = {100.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    config.max_ast_nodes = 30;
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+
+    std::set<std::string> seen;
+    for (int i = 0; i < 200; ++i) {
+        auto child = ops.mutate(**impl);
+        if (!child || !child->bytecode()) continue;
+        Decompiler dec;
+        auto ast = dec.decompile(*child->bytecode());
+        for (const auto& node : ast.children) {
+            if (node.kind == ASTNodeKind::WordCall) {
+                seen.insert(node.word_name);
+            }
+        }
+    }
+
+    // staint is (String → Integer) — same depth as slength, String-compatible
+    // It should appear as a valid substitution candidate
+    EXPECT_GT(seen.count("staint"), 0u);
+}
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedSubstituteUnknownFallback) {
+    // `: test dup + ;` — Unknown types on stack (polymorphic arithmetic)
+    // Type-directed filtering should fall back to depth-only matching
+    // and still produce valid mutations (existing behavior preserved)
+    interp.interpret_line(": td-unknown dup + ;");
+    auto impl = dict.lookup("td-unknown");
+    ASSERT_TRUE(impl.has_value());
+
+    EvolutionConfig config;
+    config.mutation_weights = {100.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    config.max_ast_nodes = 30;
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+
+    int produced = 0;
+    for (int i = 0; i < 30; ++i) {
+        auto child = ops.mutate(**impl);
+        if (child && child->bytecode()) produced++;
+    }
+    // Should still produce mutations (Unknown = permissive = all candidates)
+    EXPECT_GT(produced, 0);
+}
+
+TEST_F(ASTGeneticOpsTest, TypeDirectedSubstituteWithPool) {
+    // Pool-restricted substitution with type filtering
+    // slength is (String → Integer) = (1,1)
+    interp.interpret_line(": td-pool s\" test\" slength ;");
+    auto impl = dict.lookup("td-pool");
+    ASSERT_TRUE(impl.has_value());
+
+    EvolutionConfig config;
+    config.mutation_weights = {100.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    config.max_ast_nodes = 30;
+
+    // Pool: staint (String→Integer, compatible), array-length (Array→Integer, incompatible)
+    std::vector<std::string> pool = {"slength", "staint", "array-length"};
+
+    ASTGeneticOps ops(dict);
+    ops.set_config(&config);
+    ops.set_word_pool(&pool);
+
+    std::set<std::string> seen;
+    for (int i = 0; i < 100; ++i) {
+        auto child = ops.mutate(**impl);
+        if (!child || !child->bytecode()) continue;
+        Decompiler dec;
+        auto ast = dec.decompile(*child->bytecode());
+        for (const auto& node : ast.children) {
+            if (node.kind == ASTNodeKind::WordCall) {
+                seen.insert(node.word_name);
+            }
+        }
+    }
+
+    // staint should appear (String-compatible, in pool, same depth)
+    EXPECT_GT(seen.count("staint"), 0u);
+    // array-length should NOT appear (needs Array, not String)
+    EXPECT_EQ(seen.count("array-length"), 0u);
+}
+
+// ===================================================================
 // Tag tier substitution verification
 // ===================================================================
 
