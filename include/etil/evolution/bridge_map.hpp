@@ -16,6 +16,11 @@ struct BridgeEdge {
     core::TypeSignature::Type from;
     core::TypeSignature::Type to;
     std::string word;  // the conversion word (e.g., "int->float")
+
+    // TBBP state (per-session, reset on BridgeMap construction)
+    double weight = 1.0;       // current EMA weight
+    uint64_t selections = 0;   // total times selected
+    uint64_t successes = 0;    // selections that led to child fitness > parent
 };
 
 /// Directed graph of type conversions built from evolve-bridge calls.
@@ -58,10 +63,19 @@ public:
     /// Convert TypeSignature::Type to a display string.
     static const char* type_name(T t);
 
+    // --- TBBP runtime toggle ---
+
+    /// Enable or disable Type Bridge Back Propagation (TBBP).
+    /// When disabled, select_path/record_usage/end_mutation are no-ops and
+    /// weights remain at 1.0. Default: true.
+    void set_tbbp_enabled(bool e) { tbbp_enabled_ = e; }
+    bool tbbp_enabled() const { return tbbp_enabled_; }
+
 private:
     std::unordered_map<int, std::vector<BridgeEdge>> graph_;
     size_t edge_count_ = 0;
     bool finalized_ = false;
+    bool tbbp_enabled_ = true;
 
     static const std::vector<BridgeEdge> empty_edges_;
 };

@@ -159,3 +159,42 @@ TEST_F(BridgeMapTest, TypeNameRoundTrip) {
     EXPECT_STREQ(BridgeMap::type_name(T::Unknown),  "Unknown");
 }
 
+// --- Phase 0: TBBP state initialization ---
+
+TEST_F(BridgeMapTest, NewEdgeHasDefaultWeight) {
+    const auto& edges = map.conversions_from(T::Integer);
+    ASSERT_FALSE(edges.empty());
+    for (const auto& e : edges) {
+        EXPECT_DOUBLE_EQ(e.weight, 1.0);
+        EXPECT_EQ(e.selections, 0u);
+        EXPECT_EQ(e.successes, 0u);
+    }
+}
+
+TEST_F(BridgeMapTest, AllEdgesHaveDefaultWeight) {
+    // Check every edge in the graph has weight 1.0 and zero counters
+    using Type = etil::core::TypeSignature::Type;
+    for (int t = 0; t < static_cast<int>(Type::Custom); ++t) {
+        auto from = static_cast<Type>(t);
+        const auto& edges = map.conversions_from(from);
+        for (const auto& e : edges) {
+            EXPECT_DOUBLE_EQ(e.weight, 1.0);
+            EXPECT_EQ(e.selections, 0u);
+            EXPECT_EQ(e.successes, 0u);
+        }
+    }
+}
+
+TEST_F(BridgeMapTest, TbbpEnabledDefaultTrue) {
+    BridgeMap fresh;
+    EXPECT_TRUE(fresh.tbbp_enabled());
+}
+
+TEST_F(BridgeMapTest, TbbpEnabledRoundTrip) {
+    BridgeMap fresh;
+    fresh.set_tbbp_enabled(false);
+    EXPECT_FALSE(fresh.tbbp_enabled());
+    fresh.set_tbbp_enabled(true);
+    EXPECT_TRUE(fresh.tbbp_enabled());
+}
+
