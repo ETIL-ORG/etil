@@ -21,6 +21,10 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
     ast_genetic_ops_.set_logger(&logger_);
     ast_genetic_ops_.set_config(&config_);
     ast_genetic_ops_.set_bridge_map(&bridge_map_);
+    // Apply TBBP configuration
+    bridge_map_.set_tbbp_enabled(config_.tbbp_enabled);
+    bridge_map_.set_alpha(config_.tbbp_alpha);
+    bridge_map_.set_min_weight(config_.tbbp_min_weight);
     // Fitness error stream is wired lazily in evolve_word() after logging starts
 }
 
@@ -114,11 +118,19 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
 
     for (size_t i = 0; i < config_.generation_size; ++i) {
         WordImplPtr child;
+        double parent_fitness = 0.0;
+        bool is_mutation = false;
 
         if (coin(local_rng) < config_.mutation_rate || evolvable.size() < 2) {
             // Mutation
             auto* parent = parent_selector_.select(evolvable);
             if (!parent) continue;
+            is_mutation = true;
+
+            // Look up parent's baseline fitness from the results vector
+            for (const auto& [impl, fr] : results) {
+                if (impl.get() == parent) { parent_fitness = fr.fitness; break; }
+            }
 
             if (logger_.enabled(EvolveLogCategory::Engine)) {
                 logger_.log(EvolveLogCategory::Engine,
@@ -127,6 +139,9 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
                     + " (gen " + std::to_string(parent->generation())
                     + ", weight " + std::to_string(parent->weight()) + ")");
             }
+
+            // Begin TBBP tracking for this mutation
+            bridge_map_.begin_mutation();
 
             if (config_.use_ast_ops) {
                 child = ast_genetic_ops_.mutate(*parent);
@@ -139,6 +154,8 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
                 }
             }
             if (!child) {
+                // Mutation failed — punish any bridges used during the attempt
+                bridge_map_.end_mutation(0.0);
                 if (logger_.enabled(EvolveLogCategory::Engine)) {
                     logger_.log(EvolveLogCategory::Engine,
                         "Child " + std::to_string(i) + ": mutation failed");
@@ -176,6 +193,13 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
 
         // Evaluate child
         auto fr = fitness_.evaluate(*child, tests, dict_, config_.instruction_budget, config_.fitness_mode, config_.distance_alpha);
+
+        // TBBP: apply weight update based on fitness delta
+        if (is_mutation) {
+            double reward = (fr.fitness > parent_fitness) ? 1.0 : 0.0;
+            bridge_map_.end_mutation(reward);
+        }
+
         child->set_weight(std::max(fr.fitness, config_.prune_threshold));
         results.push_back({child, fr});
 
