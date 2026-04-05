@@ -314,3 +314,169 @@ TEST_F(BridgeMapTest, SelectPathSameTypeEmpty) {
     EXPECT_TRUE(r.empty());
 }
 
+// --- Phase 2: Per-mutation tracking and EMA update ---
+
+// Helper: get the weight of a specific edge
+static double weight_of(const BridgeMap& m, T from, T to, const std::string& word) {
+    const auto& edges = m.conversions_from(from);
+    for (const auto& e : edges) {
+        if (e.to == to && e.word == word) return e.weight;
+    }
+    return -1.0;
+}
+
+// Helper: get the selections count of a specific edge
+static uint64_t selections_of(const BridgeMap& m, T from, T to, const std::string& word) {
+    const auto& edges = m.conversions_from(from);
+    for (const auto& e : edges) {
+        if (e.to == to && e.word == word) return e.selections;
+    }
+    return 0;
+}
+
+TEST_F(BridgeMapTest, SelectionsIncrementedOnSelectPath) {
+    map.set_rng_seed(42);
+    // Integer → Float has one edge (int->float)
+    EXPECT_EQ(selections_of(map, T::Integer, T::Float, "int->float"), 0u);
+    map.select_path(T::Integer, T::Float);
+    EXPECT_EQ(selections_of(map, T::Integer, T::Float, "int->float"), 1u);
+    map.select_path(T::Integer, T::Float);
+    EXPECT_EQ(selections_of(map, T::Integer, T::Float, "int->float"), 2u);
+}
+
+TEST_F(BridgeMapTest, EndMutationRewardRaisesWeight) {
+    double initial = weight_of(map, T::Integer, T::Float, "int->float");
+    EXPECT_DOUBLE_EQ(initial, 1.0);
+
+    map.begin_mutation();
+    map.select_path(T::Integer, T::Float);
+    map.end_mutation(1.0);  // positive reward
+
+    double after = weight_of(map, T::Integer, T::Float, "int->float");
+    // EMA: (1-0.1)*1.0 + 0.1*1.0 = 1.0 → no change (already at 1.0)
+    EXPECT_DOUBLE_EQ(after, 1.0);
+}
+
+TEST_F(BridgeMapTest, EndMutationNoRewardLowersWeight) {
+    map.begin_mutation();
+    map.select_path(T::Integer, T::Float);
+    map.end_mutation(0.0);  // no reward
+
+    double after = weight_of(map, T::Integer, T::Float, "int->float");
+    // EMA: (1-0.1)*1.0 + 0.1*0.0 = 0.9
+    EXPECT_NEAR(after, 0.9, 1e-9);
+}
+
+TEST_F(BridgeMapTest, EMAConvergesTowardReward) {
+    // Repeatedly reward=1.0 → weight converges toward 1.0
+    // Starting from floor-ish weight
+    map.set_edge_weight(T::Integer, T::Float, "int->float", 0.1);
+    for (int i = 0; i < 50; ++i) {
+        map.begin_mutation();
+        map.select_path(T::Integer, T::Float);
+        map.end_mutation(1.0);
+    }
+    double final = weight_of(map, T::Integer, T::Float, "int->float");
+    EXPECT_GT(final, 0.9);  // should have climbed close to 1.0
+}
+
+TEST_F(BridgeMapTest, WeightFloorEnforced) {
+    // Repeatedly reward=0.0 → weight should bottom out at min_weight (0.05)
+    for (int i = 0; i < 200; ++i) {
+        map.begin_mutation();
+        map.select_path(T::Integer, T::Float);
+        map.end_mutation(0.0);
+    }
+    double final = weight_of(map, T::Integer, T::Float, "int->float");
+    EXPECT_DOUBLE_EQ(final, 0.05);  // exactly at floor
+}
+
+TEST_F(BridgeMapTest, SuccessesCounterIncrements) {
+    map.begin_mutation();
+    map.select_path(T::Integer, T::Float);
+    map.end_mutation(1.0);
+    map.begin_mutation();
+    map.select_path(T::Integer, T::Float);
+    map.end_mutation(0.0);
+    map.begin_mutation();
+    map.select_path(T::Integer, T::Float);
+    map.end_mutation(1.0);
+
+    const auto& edges = map.conversions_from(T::Integer);
+    for (const auto& e : edges) {
+        if (e.to == T::Float && e.word == "int->float") {
+            EXPECT_EQ(e.successes, 2u);  // 2 rewards of 1.0
+            EXPECT_EQ(e.selections, 3u);
+            return;
+        }
+    }
+    FAIL();
+}
+
+TEST_F(BridgeMapTest, EndMutationWithoutBeginIsSafe) {
+    // Calling end_mutation without begin_mutation should be a no-op
+    map.end_mutation(1.0);
+    double w = weight_of(map, T::Integer, T::Float, "int->float");
+    EXPECT_DOUBLE_EQ(w, 1.0);
+}
+
+TEST_F(BridgeMapTest, BeginMutationClearsPreviousUsages) {
+    map.select_path(T::Integer, T::Float);  // usage recorded implicitly
+    map.begin_mutation();  // should clear
+    // end_mutation with reward=1.0 should not affect any edge since nothing
+    // was recorded after begin_mutation
+    map.end_mutation(0.0);
+    double w = weight_of(map, T::Integer, T::Float, "int->float");
+    EXPECT_DOUBLE_EQ(w, 1.0);  // unchanged
+}
+
+TEST_F(BridgeMapTest, TwoHopEndMutationUpdatesBothEdges) {
+    // Array → Float via 2 hops; both edges should be updated
+    map.begin_mutation();
+    auto r = map.select_path(T::Array, T::Float);
+    ASSERT_EQ(r.size(), 2u);
+    map.end_mutation(0.0);
+
+    // The two edges in the path should have weight 0.9 now
+    double w1 = weight_of(map, T::Array, r[0] == "array-length" ? T::Integer : T::Matrix, r[0]);
+    // Second edge: its "from" is the first edge's "to"
+    T mid = (r[0] == "array-length") ? T::Integer : T::Matrix;
+    double w2 = weight_of(map, mid, T::Float, r[1]);
+    EXPECT_NEAR(w1, 0.9, 1e-9);
+    EXPECT_NEAR(w2, 0.9, 1e-9);
+}
+
+TEST_F(BridgeMapTest, CustomAlphaConfigured) {
+    map.set_alpha(0.5);
+    EXPECT_DOUBLE_EQ(map.alpha(), 0.5);
+    map.begin_mutation();
+    map.select_path(T::Integer, T::Float);
+    map.end_mutation(0.0);
+    // (1-0.5)*1.0 + 0.5*0.0 = 0.5
+    double after = weight_of(map, T::Integer, T::Float, "int->float");
+    EXPECT_NEAR(after, 0.5, 1e-9);
+}
+
+TEST_F(BridgeMapTest, CustomMinWeightConfigured) {
+    map.set_min_weight(0.2);
+    EXPECT_DOUBLE_EQ(map.min_weight(), 0.2);
+    for (int i = 0; i < 200; ++i) {
+        map.begin_mutation();
+        map.select_path(T::Integer, T::Float);
+        map.end_mutation(0.0);
+    }
+    EXPECT_DOUBLE_EQ(weight_of(map, T::Integer, T::Float, "int->float"), 0.2);
+}
+
+TEST_F(BridgeMapTest, TbbpDisabledNoStateChange) {
+    map.set_tbbp_enabled(false);
+    for (int i = 0; i < 50; ++i) {
+        map.begin_mutation();
+        map.select_path(T::Integer, T::Float);
+        map.end_mutation(0.0);
+    }
+    // Weight unchanged, counters unchanged
+    EXPECT_DOUBLE_EQ(weight_of(map, T::Integer, T::Float, "int->float"), 1.0);
+    EXPECT_EQ(selections_of(map, T::Integer, T::Float, "int->float"), 0u);
+}
+

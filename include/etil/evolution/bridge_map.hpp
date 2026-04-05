@@ -58,6 +58,31 @@ public:
     /// Used for testing and manual tuning.
     bool set_edge_weight(T from, T to, const std::string& word, double weight);
 
+    // --- TBBP per-mutation tracking and EMA update ---
+
+    /// EMA learning rate (0 < alpha < 1). Default 0.1.
+    void set_alpha(double a) { alpha_ = a; }
+    double alpha() const { return alpha_; }
+
+    /// Minimum weight floor to preserve exploration. Default 0.05.
+    void set_min_weight(double m) { min_weight_ = m; }
+    double min_weight() const { return min_weight_; }
+
+    /// Start recording bridge usages for the current mutation.
+    /// Subsequent calls to select_path or record_usage are tracked until
+    /// end_mutation is called. No-op when tbbp_enabled is false.
+    void begin_mutation();
+
+    /// Record that an edge was selected for use in the current mutation.
+    /// Called automatically by select_path; can be called manually.
+    /// Increments the edge's selections counter. No-op when tbbp_enabled is false.
+    void record_usage(T from, T to, const std::string& word);
+
+    /// Apply EMA weight update to all edges recorded since begin_mutation.
+    /// reward should be 1.0 if child_fitness > parent_fitness, 0.0 otherwise.
+    /// Clears the current-mutation usage list. No-op when tbbp_enabled is false.
+    void end_mutation(double reward);
+
     /// Is there any conversion from this type?
     bool has_conversions(T from) const;
 
@@ -86,11 +111,24 @@ public:
     bool tbbp_enabled() const { return tbbp_enabled_; }
 
 private:
+    struct EdgeRef {
+        T from;
+        T to;
+        std::string word;
+    };
+
+    BridgeEdge* find_edge_mut(T from, T to, const std::string& word);
+
     std::unordered_map<int, std::vector<BridgeEdge>> graph_;
     size_t edge_count_ = 0;
     bool finalized_ = false;
     bool tbbp_enabled_ = true;
     std::mt19937_64 rng_{std::random_device{}()};
+
+    // TBBP per-mutation tracking
+    std::vector<EdgeRef> current_mutation_usages_;
+    double alpha_ = 0.1;
+    double min_weight_ = 0.05;
 
     static const std::vector<BridgeEdge> empty_edges_;
 };

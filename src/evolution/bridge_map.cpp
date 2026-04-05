@@ -90,10 +90,12 @@ std::vector<std::string> BridgeMap::select_path(T from, T to, size_t max_hops) {
 
     if (from == to) return {};
 
-    // Enumerate all 1-hop direct edges from → to
+    // Candidate path tracks both the word sequence and the edges traversed,
+    // so we can record usages after selection.
     struct Candidate {
         double weight;
         std::vector<std::string> words;
+        std::vector<EdgeRef> edges;
     };
     std::vector<Candidate> candidates;
 
@@ -101,22 +103,27 @@ std::vector<std::string> BridgeMap::select_path(T from, T to, size_t max_hops) {
     if (it_from != graph_.end()) {
         for (const auto& edge : it_from->second) {
             if (edge.to == to) {
-                candidates.push_back({edge.weight, {edge.word}});
+                candidates.push_back({
+                    edge.weight,
+                    {edge.word},
+                    {{edge.from, edge.to, edge.word}}
+                });
             }
         }
     }
 
-    // If no direct edges and multi-hop allowed, enumerate 2-hop paths
     if (candidates.empty() && max_hops >= 2 && it_from != graph_.end()) {
         for (const auto& edge1 : it_from->second) {
-            if (edge1.to == to) continue;  // already handled
+            if (edge1.to == to) continue;
             auto it_mid = graph_.find(static_cast<int>(edge1.to));
             if (it_mid == graph_.end()) continue;
             for (const auto& edge2 : it_mid->second) {
                 if (edge2.to == to) {
                     candidates.push_back({
                         edge1.weight * edge2.weight,
-                        {edge1.word, edge2.word}
+                        {edge1.word, edge2.word},
+                        {{edge1.from, edge1.to, edge1.word},
+                         {edge2.from, edge2.to, edge2.word}}
                     });
                 }
             }
@@ -124,28 +131,67 @@ std::vector<std::string> BridgeMap::select_path(T from, T to, size_t max_hops) {
     }
 
     if (candidates.empty()) return {};
-    if (candidates.size() == 1) return candidates[0].words;
 
-    // Weighted-random selection via discrete_distribution
-    std::vector<double> weights;
-    weights.reserve(candidates.size());
-    for (const auto& c : candidates) weights.push_back(c.weight);
+    size_t chosen_idx = 0;
+    if (candidates.size() > 1) {
+        std::vector<double> weights;
+        weights.reserve(candidates.size());
+        for (const auto& c : candidates) weights.push_back(c.weight);
+        std::discrete_distribution<size_t> dist(weights.begin(), weights.end());
+        chosen_idx = dist(rng_);
+    }
 
-    std::discrete_distribution<size_t> dist(weights.begin(), weights.end());
-    size_t chosen = dist(rng_);
-    return candidates[chosen].words;
+    // Record usage of every edge in the chosen path
+    for (const auto& e : candidates[chosen_idx].edges) {
+        record_usage(e.from, e.to, e.word);
+    }
+
+    return candidates[chosen_idx].words;
 }
 
 bool BridgeMap::set_edge_weight(T from, T to, const std::string& word, double weight) {
+    auto* edge = find_edge_mut(from, to, word);
+    if (!edge) return false;
+    edge->weight = weight;
+    return true;
+}
+
+BridgeEdge* BridgeMap::find_edge_mut(T from, T to, const std::string& word) {
     auto it = graph_.find(static_cast<int>(from));
-    if (it == graph_.end()) return false;
+    if (it == graph_.end()) return nullptr;
     for (auto& edge : it->second) {
         if (edge.to == to && edge.word == word) {
-            edge.weight = weight;
-            return true;
+            return &edge;
         }
     }
-    return false;
+    return nullptr;
+}
+
+// --- TBBP per-mutation tracking ---
+
+void BridgeMap::begin_mutation() {
+    if (!tbbp_enabled_) return;
+    current_mutation_usages_.clear();
+}
+
+void BridgeMap::record_usage(T from, T to, const std::string& word) {
+    if (!tbbp_enabled_) return;
+    current_mutation_usages_.push_back({from, to, word});
+    auto* edge = find_edge_mut(from, to, word);
+    if (edge) edge->selections++;
+}
+
+void BridgeMap::end_mutation(double reward) {
+    if (!tbbp_enabled_) return;
+    for (const auto& ref : current_mutation_usages_) {
+        auto* edge = find_edge_mut(ref.from, ref.to, ref.word);
+        if (!edge) continue;
+        double updated = (1.0 - alpha_) * edge->weight + alpha_ * reward;
+        if (updated < min_weight_) updated = min_weight_;
+        edge->weight = updated;
+        if (reward > 0.5) edge->successes++;
+    }
+    current_mutation_usages_.clear();
 }
 
 bool BridgeMap::has_conversions(T from) const {
