@@ -931,7 +931,7 @@ s" sjoin" s" stack-effect" s" text" s" ( array delim -- str )" meta! drop
 s" sjoin" s" category" s" text" s" string" meta! drop
 
 s" sregex-find" s" description" s" text" s" Find first regex match" meta! drop
-s" sregex-find" s" stack-effect" s" text" s" ( str pattern -- match flag )" meta! drop
+s" sregex-find" s" stack-effect" s" text" s" ( str pattern -- index )" meta! drop
 s" sregex-find" s" category" s" text" s" string" meta! drop
 
 s" sregex-replace" s" description" s" text" s" Replace regex matches" meta! drop
@@ -939,11 +939,11 @@ s" sregex-replace" s" stack-effect" s" text" s" ( str pattern replacement -- res
 s" sregex-replace" s" category" s" text" s" string" meta! drop
 
 s" sregex-search" s" description" s" text" s" Find first regex match anywhere in string, returning capture groups as array" meta! drop
-s" sregex-search" s" stack-effect" s" text" s" ( str pattern -- match-array -1 | 0 )" meta! drop
+s" sregex-search" s" stack-effect" s" text" s" ( str pattern -- match-array true | false )" meta! drop
 s" sregex-search" s" category" s" text" s" string" meta! drop
 
 s" sregex-match" s" description" s" text" s" Test if entire string matches regex pattern, returning capture groups as array" meta! drop
-s" sregex-match" s" stack-effect" s" text" s" ( str pattern -- match-array -1 | 0 )" meta! drop
+s" sregex-match" s" stack-effect" s" text" s" ( str pattern -- match-array true | false )" meta! drop
 s" sregex-match" s" category" s" text" s" string" meta! drop
 
 s" type" s" examples" s" code" s" s| hello| type\n=> hello" meta! drop
@@ -1387,10 +1387,10 @@ s" number->string" s" stack-effect" s" text" s" ( n -- str )" meta! drop
 s" number->string" s" category" s" text" s" conversion" meta! drop
 s" number->string" s" examples" s" code" s" 42 number->string type\n=> 42" meta! drop
 
-s" string->number" s" description" s" text" s" Parse a string as a number. On success push value and -1 (true). On failure push 0 (false)" meta! drop
-s" string->number" s" stack-effect" s" text" s" ( str -- value -1 | 0 )" meta! drop
+s" string->number" s" description" s" text" s" Parse a string as a number. On success push value and true. On failure push false only." meta! drop
+s" string->number" s" stack-effect" s" text" s" ( str -- value true | false )" meta! drop
 s" string->number" s" category" s" text" s" conversion" meta! drop
-s" string->number" s" examples" s" code" s| s" 42" string->number . .\n=> -1 42| meta! drop
+s" string->number" s" examples" s" code" s| s" 42" string->number . .\n=> true 42| meta! drop
 
 # --- LVFS (Little Virtual File System) ---
 
@@ -1754,13 +1754,7 @@ s" mat->array" s" stack-effect" s" text" s" ( mat -- array )" meta! drop
 s" mat->array" s" category" s" text" s" matrix" meta! drop
 s" mat->array" s" examples" s" code" s" array-new array-new 1.0 array-push 2.0 array-push array-push array-new 3.0 array-push 4.0 array-push array-push array->mat mat->array dump drop" meta! drop
 
-: mat-xavier over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;
-: mat-he over over mat-randn -rot drop int->float sqrt 2.0 swap / mat-scale ;
-: mat-mse mat- dup mat-hadamard mat-mean ;
-
-s" mat-randn" s" examples" s" code" s" 42 random-seed  : mat-xavier over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;  3 2 mat-xavier mat." meta! drop
-
-s" mat-cross-entropy" s" examples" s" code" s" : mat-mse mat- dup mat-hadamard mat-mean ;" meta! drop
+s" mat-randn" s" examples" s" code" s" 42 random-seed  3 2 mat-randn mat." meta! drop
 
 # --- Observable ---
 

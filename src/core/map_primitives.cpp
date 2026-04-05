@@ -206,21 +206,21 @@ void register_map_primitives(Dictionary& dict) {
 
 
     dict.register_word("map-new", make_primitive("map-new", prim_map_new,
-        {}, {T::Unknown}));
+        {}, {T::Map}));
     dict.register_word("map-set", make_primitive("map-set", prim_map_set,
-        {T::Unknown, T::String, T::Unknown}, {T::Unknown}));
+        {T::Map, T::String, T::Unknown}, {T::Map}));
     dict.register_word("map-get", make_primitive("map-get", prim_map_get,
-        {T::Unknown, T::String}, {T::Unknown}));
+        {T::Map, T::String}, {T::Unknown}));
     dict.register_word("map-remove", make_primitive("map-remove", prim_map_remove,
-        {T::Unknown, T::String}, {T::Unknown}));
+        {T::Map, T::String}, {T::Map}));
     dict.register_word("map-length", make_primitive("map-length", prim_map_length,
-        {T::Unknown}, {T::Integer}));
+        {T::Map}, {T::Integer}));
     dict.register_word("map-keys", make_primitive("map-keys", prim_map_keys,
-        {T::Unknown}, {T::Array}));
+        {T::Map}, {T::Array}));
     dict.register_word("map-values", make_primitive("map-values", prim_map_values,
-        {T::Unknown}, {T::Array}));
+        {T::Map}, {T::Array}));
     dict.register_word("map-has?", make_primitive("map-has?", prim_map_has,
-        {T::Unknown, T::String}, {T::Integer}));
+        {T::Map, T::String}, {T::Boolean}));
 }
 
 } // namespace etil::core

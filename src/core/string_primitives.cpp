@@ -956,15 +956,15 @@ void register_string_primitives(Dictionary& dict) {
     dict.register_word("sregex-replace", make_primitive("sregex-replace", prim_sregex_replace,
         {T::String, T::String, T::String}, {T::String}));
     dict.register_word("sregex-search", make_primitive("sregex-search", prim_sregex_search,
-        {T::String, T::String}, {T::Array, T::Integer}));
+        {T::String, T::String}, {T::Array, T::Boolean}, true));
     dict.register_word("sregex-match", make_primitive("sregex-match", prim_sregex_match,
-        {T::String, T::String}, {T::Array, T::Integer}));
+        {T::String, T::String}, {T::Array, T::Boolean}, true));
     dict.register_word("s.", make_primitive("s.", prim_sdot,
         {T::String}, {}));
     dict.register_word("sprintf", make_primitive("sprintf", prim_sprintf,
         {T::String}, {T::String}));
     dict.register_word("staint", make_primitive("staint", prim_staint,
-        {T::String}, {T::Integer}));
+        {T::String}, {T::Boolean}));
     dict.register_word("s>upper", make_primitive("s>upper", prim_s_upper,
         {T::String}, {T::String}));
     dict.register_word("s>lower", make_primitive("s>lower", prim_s_lower,

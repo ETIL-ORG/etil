@@ -691,55 +691,55 @@ void register_async_file_io_primitives(etil::core::Dictionary& dict) {
 
     dict.register_word("exists?",
         make_primitive("exists?", prim_exists,
-            {T::String}, {T::Integer}));
+            {T::String}, {T::Boolean}));
 
     dict.register_word("read-file",
         make_primitive("read-file", prim_read_file,
-            {T::String}, {T::String, T::Integer}));
+            {T::String}, {T::String, T::Boolean}, true));
 
     dict.register_word("write-file",
         make_primitive("write-file", prim_write_file,
-            {T::String, T::String}, {T::Integer}));
+            {T::String, T::String}, {T::Boolean}));
 
     dict.register_word("append-file",
         make_primitive("append-file", prim_append_file,
-            {T::String, T::String}, {T::Integer}));
+            {T::String, T::String}, {T::Boolean}));
 
     dict.register_word("copy-file",
         make_primitive("copy-file", prim_copy_file,
-            {T::String, T::String}, {T::Integer}));
+            {T::String, T::String}, {T::Boolean}));
 
     dict.register_word("rename-file",
         make_primitive("rename-file", prim_rename_file,
-            {T::String, T::String}, {T::Integer}));
+            {T::String, T::String}, {T::Boolean}));
 
     dict.register_word("lstat",
         make_primitive("lstat", prim_lstat,
-            {T::String}, {T::Array, T::Integer}));
+            {T::String}, {T::Array, T::Boolean}, true));
 
     dict.register_word("readdir",
         make_primitive("readdir", prim_readdir,
-            {T::String}, {T::Array, T::Integer}));
+            {T::String}, {T::Array, T::Boolean}, true));
 
     dict.register_word("mkdir",
         make_primitive("mkdir", prim_mkdir,
-            {T::String}, {T::Integer}));
+            {T::String}, {T::Boolean}));
 
     dict.register_word("mkdir-tmp",
         make_primitive("mkdir-tmp", prim_mkdir_tmp,
-            {T::String}, {T::String, T::Integer}));
+            {T::String}, {T::String, T::Boolean}, true));
 
     dict.register_word("rmdir",
         make_primitive("rmdir", prim_rmdir,
-            {T::String}, {T::Integer}));
+            {T::String}, {T::Boolean}));
 
     dict.register_word("rm",
         make_primitive("rm", prim_rm,
-            {T::String}, {T::Integer}));
+            {T::String}, {T::Boolean}));
 
     dict.register_word("truncate",
         make_primitive("truncate", prim_truncate,
-            {T::String}, {T::Integer}));
+            {T::String}, {T::Boolean}));
 }
 
 } // namespace etil::fileio

@@ -1101,111 +1101,111 @@ void register_matrix_primitives(Dictionary& dict) {
 
     // Constructors
     dict.register_word("mat-new", make_primitive("mat-new", prim_mat_new,
-        {T::Integer, T::Integer}, {T::Unknown}));
+        {T::Integer, T::Integer}, {T::Matrix}));
     dict.register_word("mat-eye", make_primitive("mat-eye", prim_mat_eye,
-        {T::Integer}, {T::Unknown}));
+        {T::Integer}, {T::Matrix}));
     dict.register_word("array->mat", make_primitive("array->mat", prim_array_to_mat,
-        {T::Array}, {T::Unknown}));
+        {T::Array}, {T::Matrix}));
     dict.register_word("mat->array", make_primitive("mat->array", prim_mat_to_array,
-        {T::Unknown}, {T::Array}));
+        {T::Matrix}, {T::Array}));
     dict.register_word("mat-diag", make_primitive("mat-diag", prim_mat_diag,
-        {T::Array}, {T::Unknown}));
+        {T::Array}, {T::Matrix}));
     dict.register_word("mat-rand", make_primitive("mat-rand", prim_mat_rand,
-        {T::Integer, T::Integer}, {T::Unknown}));
+        {T::Integer, T::Integer}, {T::Matrix}));
 
     // Accessors
     dict.register_word("mat-get", make_primitive("mat-get", prim_mat_get,
-        {T::Unknown, T::Integer, T::Integer}, {T::Float}));
+        {T::Matrix, T::Integer, T::Integer}, {T::Float}));
     dict.register_word("mat-set", make_primitive("mat-set", prim_mat_set,
-        {T::Unknown, T::Integer, T::Integer, T::Float}, {T::Unknown}));
+        {T::Matrix, T::Integer, T::Integer, T::Float}, {T::Matrix}));
     dict.register_word("mat-rows", make_primitive("mat-rows", prim_mat_rows,
-        {T::Unknown}, {T::Integer}));
+        {T::Matrix}, {T::Integer}));
     dict.register_word("mat-cols", make_primitive("mat-cols", prim_mat_cols,
-        {T::Unknown}, {T::Integer}));
+        {T::Matrix}, {T::Integer}));
     dict.register_word("mat-row", make_primitive("mat-row", prim_mat_row,
-        {T::Unknown, T::Integer}, {T::Array}));
+        {T::Matrix, T::Integer}, {T::Array}));
     dict.register_word("mat-col", make_primitive("mat-col", prim_mat_col,
-        {T::Unknown, T::Integer}, {T::Array}));
+        {T::Matrix, T::Integer}, {T::Array}));
     dict.register_word("mat-col-vec", make_primitive("mat-col-vec", prim_mat_col_vec,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Matrix, T::Integer}, {T::Matrix}));
 
     // Arithmetic
     dict.register_word("mat*", make_primitive("mat*", prim_mat_mul,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Matrix, T::Matrix}, {T::Matrix}));
     dict.register_word("mat+", make_primitive("mat+", prim_mat_add,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Matrix, T::Matrix}, {T::Matrix}));
     dict.register_word("mat-", make_primitive("mat-", prim_mat_sub,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Matrix, T::Matrix}, {T::Matrix}));
     dict.register_word("mat-scale", make_primitive("mat-scale", prim_mat_scale,
-        {T::Unknown, T::Float}, {T::Unknown}));
+        {T::Matrix, T::Float}, {T::Matrix}));
     dict.register_word("mat-transpose", make_primitive("mat-transpose", prim_mat_transpose,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
 
-    // Solvers
+    // Solvers (conditional return: success pushes values+true, failure pushes false only)
     dict.register_word("mat-solve", make_primitive("mat-solve", prim_mat_solve,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
+        {T::Matrix, T::Matrix}, {T::Matrix, T::Boolean}, true));
     dict.register_word("mat-inv", make_primitive("mat-inv", prim_mat_inv,
-        {T::Unknown}, {T::Unknown, T::Unknown}));
+        {T::Matrix}, {T::Matrix, T::Boolean}, true));
     dict.register_word("mat-det", make_primitive("mat-det", prim_mat_det,
-        {T::Unknown}, {T::Float, T::Unknown}));
+        {T::Matrix}, {T::Float, T::Boolean}, true));
 
-    // Decompositions
+    // Decompositions (conditional return)
     dict.register_word("mat-eigen", make_primitive("mat-eigen", prim_mat_eigen,
-        {T::Unknown}, {T::Unknown, T::Unknown, T::Unknown}));
+        {T::Matrix}, {T::Matrix, T::Matrix, T::Boolean}, true));
     dict.register_word("mat-svd", make_primitive("mat-svd", prim_mat_svd,
-        {T::Unknown}, {T::Unknown, T::Unknown, T::Unknown, T::Unknown}));
+        {T::Matrix}, {T::Matrix, T::Matrix, T::Matrix, T::Boolean}, true));
     dict.register_word("mat-lstsq", make_primitive("mat-lstsq", prim_mat_lstsq,
-        {T::Unknown, T::Unknown}, {T::Unknown, T::Unknown}));
+        {T::Matrix, T::Matrix}, {T::Matrix, T::Boolean}, true));
 
     // Utilities
     dict.register_word("mat-norm", make_primitive("mat-norm", prim_mat_norm,
-        {T::Unknown}, {T::Float}));
+        {T::Matrix}, {T::Float}));
     dict.register_word("mat-trace", make_primitive("mat-trace", prim_mat_trace,
-        {T::Unknown}, {T::Float}));
+        {T::Matrix}, {T::Float}));
     dict.register_word("mat.", make_primitive("mat.", prim_mat_print,
-        {T::Unknown}, {}));
+        {T::Matrix}, {}));
 
     // Neural Network — Activation Functions
     dict.register_word("mat-relu", make_primitive("mat-relu", prim_mat_relu,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
     dict.register_word("mat-sigmoid", make_primitive("mat-sigmoid", prim_mat_sigmoid,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
     dict.register_word("mat-tanh", make_primitive("mat-tanh", prim_mat_tanh,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
     dict.register_word("mat-relu'", make_primitive("mat-relu'", prim_mat_relu_prime,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
     dict.register_word("mat-sigmoid'", make_primitive("mat-sigmoid'", prim_mat_sigmoid_prime,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
     dict.register_word("mat-tanh'", make_primitive("mat-tanh'", prim_mat_tanh_prime,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
 
     // Neural Network — Element-wise and Broadcasting
     dict.register_word("mat-hadamard", make_primitive("mat-hadamard", prim_mat_hadamard,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Matrix, T::Matrix}, {T::Matrix}));
     dict.register_word("mat-add-col", make_primitive("mat-add-col", prim_mat_add_col,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Matrix, T::Matrix}, {T::Matrix}));
     dict.register_word("mat-clip", make_primitive("mat-clip", prim_mat_clip,
-        {T::Unknown, T::Float, T::Float}, {T::Unknown}));
+        {T::Matrix, T::Float, T::Float}, {T::Matrix}));
 
     // Neural Network — Random Initialization
     dict.register_word("mat-randn", make_primitive("mat-randn", prim_mat_randn,
-        {T::Integer, T::Integer}, {T::Unknown}));
+        {T::Integer, T::Integer}, {T::Matrix}));
 
     // Neural Network — Reduction Operations
     dict.register_word("mat-sum", make_primitive("mat-sum", prim_mat_sum,
-        {T::Unknown}, {T::Float}));
+        {T::Matrix}, {T::Float}));
     dict.register_word("mat-col-sum", make_primitive("mat-col-sum", prim_mat_col_sum,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
     dict.register_word("mat-mean", make_primitive("mat-mean", prim_mat_mean,
-        {T::Unknown}, {T::Float}));
+        {T::Matrix}, {T::Float}));
 
     // Neural Network — Classification
     dict.register_word("mat-softmax", make_primitive("mat-softmax", prim_mat_softmax,
-        {T::Unknown}, {T::Unknown}));
+        {T::Matrix}, {T::Matrix}));
     dict.register_word("mat-cross-entropy", make_primitive("mat-cross-entropy", prim_mat_cross_entropy,
-        {T::Unknown, T::Unknown}, {T::Float}));
+        {T::Matrix, T::Matrix}, {T::Float}));
     dict.register_word("mat-apply", make_primitive("mat-apply", prim_mat_apply,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Matrix, T::Xt}, {T::Matrix}));
 }
 
 } // namespace etil::core

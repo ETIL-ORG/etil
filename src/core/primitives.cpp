@@ -3347,6 +3347,24 @@ WordImplPtr make_primitive(const char* name, WordImpl::FunctionPtr fn,
     return WordImplPtr(impl);
 }
 
+WordImplPtr make_primitive(const char* name, WordImpl::FunctionPtr fn,
+                           std::vector<TypeSignature::Type> inputs,
+                           std::vector<TypeSignature::Type> outputs,
+                           bool variable_outputs) {
+    auto id = Dictionary::next_id();
+    auto* impl = new WordImpl(name, id);
+    impl->set_native_code(fn);
+    impl->set_weight(1.0);
+    impl->set_generation(0);
+    TypeSignature sig;
+    sig.inputs = std::move(inputs);
+    sig.outputs = std::move(outputs);
+    sig.variable_outputs = variable_outputs;
+    impl->set_signature(std::move(sig));
+    impl->mark_as_primitive();
+    return WordImplPtr(impl);
+}
+
 // --- Table-driven primitive registration ---
 
 using T = TypeSignature::Type;
@@ -3361,6 +3379,7 @@ struct PrimEntry {
     uint8_t n_out;
     T in[6];
     T out[3];
+    bool variable_outputs = false;  // true for conditional-return words (see CLAUDE.md)
 };
 
 // clang-format off
@@ -3498,9 +3517,9 @@ static const PrimEntry prim_table[] = {
     {"mjd->us",    prim_mjd_to_us,   1, 1, {T::Float},  {T::Integer}},
     {"sleep",      prim_sleep,       1, 0, {T::Integer},{}},
     {"elapsed",    prim_elapsed,     1, 1, {T::Unknown},{T::Integer}},
-    // Input-reading
-    {"word-read",        prim_word_read,        0, 2, {},          {T::String, T::Boolean}},
-    {"string-read-delim",prim_string_read_delim,1, 2, {T::Integer},{T::String, T::Boolean}},
+    // Input-reading (conditional return)
+    {"word-read",        prim_word_read,        0, 2, {},          {T::String, T::Boolean}, true},
+    {"string-read-delim",prim_string_read_delim,1, 2, {T::Integer},{T::String, T::Boolean}, true},
     // Dictionary operations
     {"dict-forget",     prim_dict_forget,     1, 1, {T::String},  {T::Boolean}},
     {"dict-forget-all", prim_dict_forget_all, 1, 1, {T::String},  {T::Boolean}},
@@ -3510,20 +3529,20 @@ static const PrimEntry prim_table[] = {
     {"evaluate",        prim_evaluate,        1, 0, {T::String},   {}},
     {"marker",          prim_marker,          0, 0, {},            {}},
     {"marker-restore",  prim_marker_restore,  1, 0, {T::String},   {}},
-    // Metadata (stack-based)
+    // Metadata (stack-based; *-get and *-keys are conditional-return)
     {"dict-meta-set",  prim_dict_meta_set,  4, 1, {T::String, T::String, T::Unknown, T::Unknown},{T::Boolean}},
-    {"dict-meta-get",  prim_dict_meta_get,  2, 2, {T::String, T::String},             {T::Unknown, T::Boolean}},
+    {"dict-meta-get",  prim_dict_meta_get,  2, 2, {T::String, T::String},             {T::Unknown, T::Boolean}, true},
     {"dict-meta-del",  prim_dict_meta_del,  2, 1, {T::String, T::String},             {T::Boolean}},
-    {"dict-meta-keys", prim_dict_meta_keys, 1, 2, {T::String},                        {T::Array, T::Boolean}},
+    {"dict-meta-keys", prim_dict_meta_keys, 1, 2, {T::String},                        {T::Array, T::Boolean}, true},
     {"impl-meta-set",  prim_impl_meta_set,  4, 1, {T::String, T::String, T::Unknown, T::Unknown},{T::Boolean}},
-    {"impl-meta-get",  prim_impl_meta_get,  2, 2, {T::String, T::String},             {T::Unknown, T::Boolean}},
+    {"impl-meta-get",  prim_impl_meta_get,  2, 2, {T::String, T::String},             {T::Unknown, T::Boolean}, true},
     // Help & Debug
     {"help",    prim_help,    0, 0, {},                                 {}},
     {"dump",    prim_dump,    1, 1, {T::Unknown},                       {T::Unknown}},
     {"see",     prim_see,     0, 0, {},                                 {}},
     // Execution tokens
     {"'",       prim_tick,        0, 1, {},          {T::Xt}},
-    {"s'",      prim_s_tick,      1, 2, {T::String}, {T::Unknown, T::Boolean}},
+    {"s'",      prim_s_tick,      1, 2, {T::String}, {T::Xt, T::Boolean}, true},
     {"execute", prim_execute,     1, 0, {T::Xt},     {}},
     {"xt?",     prim_xt_query,    1, 1, {T::Xt},     {T::Boolean}},
     {">name",   prim_xt_to_name,  1, 1, {T::Xt},     {T::String}},
@@ -3536,10 +3555,10 @@ static const PrimEntry prim_table[] = {
     {"int->float",     prim_int_to_float,     1, 1, {T::Integer}, {T::Float}},
     {"float->int",     prim_float_to_int,     1, 1, {T::Float},   {T::Integer}},
     {"number->string", prim_number_to_string, 1, 1, {T::Unknown}, {T::String}},
-    {"string->number", prim_string_to_number, 1, 0, {T::String},  {}},
+    {"string->number", prim_string_to_number, 1, 2, {T::String},  {T::Unknown, T::Boolean}, true},
     // Hashing
     {"to-hex",         prim_to_hex,          3, 1, {T::Unknown, T::Integer, T::Integer}, {T::String}},
-    {"from-hex",       prim_from_hex,        1, 2, {T::String}, {T::ByteArray, T::Boolean}},
+    {"from-hex",       prim_from_hex,        1, 2, {T::String}, {T::ByteArray, T::Boolean}, true},
     {"sha256sum",      prim_sha256sum,       1, 1, {T::Unknown}, {T::ByteArray}},
     {"sha256=",        prim_sha256_eq,       2, 1, {T::ByteArray, T::ByteArray}, {T::Boolean}},
 };
@@ -3551,7 +3570,7 @@ void register_primitives(Dictionary& dict) {
         std::vector<T> in(e.in, e.in + e.n_in);
         std::vector<T> out(e.out, e.out + e.n_out);
         dict.register_word(e.word_name,
-            make_primitive(e.word_name, e.fn, std::move(in), std::move(out)));
+            make_primitive(e.word_name, e.fn, std::move(in), std::move(out), e.variable_outputs));
     }
 
     // Register sub-module primitives

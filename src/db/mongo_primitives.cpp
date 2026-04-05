@@ -525,24 +525,24 @@ void register_mongo_primitives(etil::core::Dictionary& dict) {
 
     dict.register_word("mongo-find",
         make_primitive("prim_mongo_find", prim_mongo_find,
-            {T::String, T::String, T::String}, {T::String, T::Integer}));
+            {T::String, T::String, T::String}, {T::Json, T::Boolean}, true));
 
     dict.register_word("mongo-count",
         make_primitive("prim_mongo_count", prim_mongo_count,
-            {T::String, T::String, T::String}, {T::Integer, T::Integer}));
+            {T::String, T::String, T::String}, {T::Integer, T::Boolean}, true));
 
     dict.register_word("mongo-insert",
         make_primitive("prim_mongo_insert", prim_mongo_insert,
-            {T::String, T::String}, {T::String, T::Integer}));
+            {T::String, T::String}, {T::String, T::Boolean}, true));
 
     dict.register_word("mongo-update",
         make_primitive("prim_mongo_update", prim_mongo_update,
             {T::String, T::String, T::String, T::String},
-            {T::Integer, T::Integer}));
+            {T::Integer, T::Boolean}, true));
 
     dict.register_word("mongo-delete",
         make_primitive("prim_mongo_delete", prim_mongo_delete,
-            {T::String, T::String, T::String}, {T::Integer, T::Integer}));
+            {T::String, T::String, T::String}, {T::Integer, T::Boolean}, true));
 }
 
 } // namespace etil::db

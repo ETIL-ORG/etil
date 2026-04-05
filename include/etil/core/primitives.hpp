@@ -17,6 +17,14 @@ WordImplPtr make_primitive(const char* name, WordImpl::FunctionPtr fn,
                            std::vector<TypeSignature::Type> inputs,
                            std::vector<TypeSignature::Type> outputs);
 
+/// Overload: allows declaring variable_outputs=true for conditional-return words.
+/// Use for words that follow the "Boolean-flag-at-TOS" convention where success
+/// pushes (values..., true) and failure pushes only (false).
+WordImplPtr make_primitive(const char* name, WordImpl::FunctionPtr fn,
+                           std::vector<TypeSignature::Type> inputs,
+                           std::vector<TypeSignature::Type> outputs,
+                           bool variable_outputs);
+
 /// Register all built-in primitive words into the dictionary.
 void register_primitives(Dictionary& dict);
 

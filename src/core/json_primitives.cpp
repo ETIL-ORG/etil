@@ -476,59 +476,59 @@ void register_json_primitives(Dictionary& dict) {
 
     dict.register_word("json-parse",
         make_primitive("prim_json_parse", prim_json_parse,
-            {T::String}, {T::Custom}));
+            {T::String}, {T::Json}));
 
     dict.register_word("json-dump",
         make_primitive("prim_json_dump", prim_json_dump,
-            {T::Custom}, {T::String}));
+            {T::Json}, {T::String}));
 
     dict.register_word("json-pretty",
         make_primitive("prim_json_pretty", prim_json_pretty,
-            {T::Custom}, {T::String}));
+            {T::Json}, {T::String}));
 
     dict.register_word("json-get",
         make_primitive("prim_json_get", prim_json_get,
-            {T::Custom, T::String}, {T::Custom}));
+            {T::Json, T::Unknown}, {T::Json}));
 
     dict.register_word("json-length",
         make_primitive("prim_json_length", prim_json_length,
-            {T::Custom}, {T::Integer}));
+            {T::Json}, {T::Integer}));
 
     dict.register_word("json-type",
         make_primitive("prim_json_type", prim_json_type,
-            {T::Custom}, {T::String}));
+            {T::Json}, {T::String}));
 
     dict.register_word("json-keys",
         make_primitive("prim_json_keys", prim_json_keys,
-            {T::Custom}, {T::Custom}));
+            {T::Json}, {T::Array}));
 
     dict.register_word("json->map",
         make_primitive("prim_json_to_map", prim_json_to_map,
-            {T::Custom}, {T::Custom}));
+            {T::Json}, {T::Map}));
 
     dict.register_word("json->array",
         make_primitive("prim_json_to_array", prim_json_to_array,
-            {T::Custom}, {T::Custom}));
+            {T::Json}, {T::Array}));
 
     dict.register_word("map->json",
         make_primitive("prim_map_to_json", prim_map_to_json,
-            {T::Custom}, {T::Custom}));
+            {T::Map}, {T::Json}));
 
     dict.register_word("array->json",
         make_primitive("prim_array_to_json", prim_array_to_json,
-            {T::Custom}, {T::Custom}));
+            {T::Array}, {T::Json}));
 
     dict.register_word("json->value",
         make_primitive("prim_json_to_value", prim_json_to_value,
-            {T::Custom}, {T::Custom}));
+            {T::Json}, {T::Unknown}));
 
     dict.register_word("mat->json",
         make_primitive("prim_mat_to_json", prim_mat_to_json,
-            {T::Custom}, {T::Custom}));
+            {T::Matrix}, {T::Json}));
 
     dict.register_word("json->mat",
         make_primitive("prim_json_to_mat", prim_json_to_mat,
-            {T::Custom}, {T::Custom}));
+            {T::Json}, {T::Matrix}));
 }
 
 } // namespace etil::core

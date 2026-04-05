@@ -60,6 +60,24 @@ variable _tn-net
 variable _tn-lr
 
 # ===================================================================
+# Weight Initialization & Loss Functions
+# ===================================================================
+
+# mat-xavier ( rows cols -- mat )
+# Xavier/Glorot initialization: random weights scaled by 1/sqrt(fan_in + fan_out).
+# Good default for tanh/sigmoid activations.
+: mat-xavier  over over mat-randn -rot + int->float sqrt 1.0 swap / mat-scale ;
+
+# mat-he ( rows cols -- mat )
+# He initialization: random weights scaled by sqrt(2/fan_in).
+# Better default for ReLU activations.
+: mat-he  over over mat-randn -rot drop int->float sqrt 2.0 swap / mat-scale ;
+
+# mat-mse ( Y_hat Y -- loss )
+# Mean squared error loss: mean((Y_hat - Y)^2).
+: mat-mse  mat- dup mat-hadamard mat-mean ;
+
+# ===================================================================
 # Layer Construction
 # ===================================================================
 
@@ -273,3 +291,74 @@ variable _tn-lr
 
 # predict ( X network -- Y )
 : predict forward ;
+
+# ===================================================================
+# Metadata (queryable via `help <word>` after include)
+# ===================================================================
+
+# --- Weight Initialization & Loss ---
+s" mat-xavier" s" description" s" text" s" Xavier/Glorot weight init: rows cols mat-randn * 1/sqrt(rows+cols). Good for tanh/sigmoid." meta! drop
+s" mat-xavier" s" stack-effect" s" text" s" ( rows cols -- mat )" meta! drop
+s" mat-xavier" s" category" s" text" s" mlp" meta! drop
+
+s" mat-he" s" description" s" text" s" He weight init: rows cols mat-randn * sqrt(2/rows). Better for ReLU networks." meta! drop
+s" mat-he" s" stack-effect" s" text" s" ( rows cols -- mat )" meta! drop
+s" mat-he" s" category" s" text" s" mlp" meta! drop
+
+s" mat-mse" s" description" s" text" s" Mean squared error loss: mean((Y_hat - Y)^2)." meta! drop
+s" mat-mse" s" stack-effect" s" text" s" ( Y_hat Y -- loss )" meta! drop
+s" mat-mse" s" category" s" text" s" mlp" meta! drop
+
+# --- Layer Construction ---
+s" make-layer" s" description" s" text" s" Create a layer with Xavier-initialized W and zero bias. W is (fan_out x fan_in), b is (fan_out x 1)." meta! drop
+s" make-layer" s" stack-effect" s" text" s" ( fan_in fan_out act-xt act'-xt -- layer )" meta! drop
+s" make-layer" s" category" s" text" s" mlp" meta! drop
+
+s" make-network" s" description" s" text" s" Collect N layers from the stack into a network array (in definition order)." meta! drop
+s" make-network" s" stack-effect" s" text" s" ( layer1 layer2 ... layerN n -- network )" meta! drop
+s" make-network" s" category" s" text" s" mlp" meta! drop
+
+# --- Forward Pass ---
+s" layer-forward" s" description" s" text" s" Single layer forward pass: A = act(W * A_prev + b)." meta! drop
+s" layer-forward" s" stack-effect" s" text" s" ( A_prev layer -- A )" meta! drop
+s" layer-forward" s" category" s" text" s" mlp" meta! drop
+
+s" forward" s" description" s" text" s" Full network forward pass: run X through all layers, return final output Y." meta! drop
+s" forward" s" stack-effect" s" text" s" ( X network -- Y )" meta! drop
+s" forward" s" category" s" text" s" mlp" meta! drop
+
+s" layer-forward-cache" s" description" s" text" s" Single layer forward pass that caches Z (pre-act) and A (post-act) as a map for backprop." meta! drop
+s" layer-forward-cache" s" stack-effect" s" text" s" ( A_prev layer -- A cache-entry )" meta! drop
+s" layer-forward-cache" s" category" s" text" s" mlp" meta! drop
+
+s" forward-cache" s" description" s" text" s" Full forward pass that saves per-layer Z/A values for backprop. Returns Y and cache array." meta! drop
+s" forward-cache" s" stack-effect" s" text" s" ( X network -- Y cache )" meta! drop
+s" forward-cache" s" category" s" text" s" mlp" meta! drop
+
+# --- Backward Pass ---
+s" layer-backward" s" description" s" text" s" Single layer backprop: compute dA_prev, dW, db from upstream gradient dA and cached values." meta! drop
+s" layer-backward" s" stack-effect" s" text" s" ( dA Z A_prev W act'-xt -- dA_prev dW db )" meta! drop
+s" layer-backward" s" category" s" text" s" mlp" meta! drop
+
+s" backward" s" description" s" text" s" Full backward pass from MSE loss. Returns array of per-layer gradient maps {dW, db} in forward order." meta! drop
+s" backward" s" stack-effect" s" text" s" ( Y_hat Y network cache -- grads )" meta! drop
+s" backward" s" category" s" text" s" mlp" meta! drop
+
+# --- Parameter Update ---
+s" sgd-update" s" description" s" text" s" SGD parameter update: W' = W - lr*dW, b' = b - lr*db for each layer. Mutates layer maps in place." meta! drop
+s" sgd-update" s" stack-effect" s" text" s" ( network grads lr -- network )" meta! drop
+s" sgd-update" s" category" s" text" s" mlp" meta! drop
+
+# --- Training ---
+s" train-step" s" description" s" text" s" One forward-backward-update cycle. Returns updated network and batch loss." meta! drop
+s" train-step" s" stack-effect" s" text" s" ( X Y network lr -- network loss )" meta! drop
+s" train-step" s" category" s" text" s" mlp" meta! drop
+
+s" train" s" description" s" text" s" Train for N epochs with SGD. Prints loss every 500 epochs. Returns the trained network." meta! drop
+s" train" s" stack-effect" s" text" s" ( X Y network lr epochs -- network )" meta! drop
+s" train" s" category" s" text" s" mlp" meta! drop
+
+# --- Inference ---
+s" predict" s" description" s" text" s" Run inference on input X through the trained network. Alias for forward." meta! drop
+s" predict" s" stack-effect" s" text" s" ( X network -- Y )" meta! drop
+s" predict" s" category" s" text" s" mlp" meta! drop

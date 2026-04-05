@@ -99,7 +99,7 @@ Seven heap-allocated, reference-counted types — all interoperable on the stack
 |------|---------|---------|
 | **String** | `s" hello"` | `s" hello" s" world" s+ type` → `helloworld` |
 | **Array** | `array-new` | `array-new 1 array-push 2 array-push array-length .` → `2` |
-| **ByteArray** | `bytes-new` | `16 bytes-new 255 0 bytes-set` |
+| **ByteArray** | `bytes-new` | `16 bytes-new 0 255 bytes-set` |
 | **Map** | `map-new` | `map-new s" x" 42 map-set s" x" map-get .` → `42` |
 | **JSON** | `j\| ... \|` | `j\| {"a":1} \| s" a" json-get .` → `1` |
 | **Matrix** | `mat-new` | `3 3 mat-eye mat.` (prints 3×3 identity) |
@@ -182,9 +182,9 @@ for filters, documents, and options:
 |------|-------------|-------------|
 | `mongo-find` | `( coll filter opts -- json flag )` | Query with skip/limit/sort/projection |
 | `mongo-count` | `( coll filter opts -- n flag )` | Server-side count (O(index), not O(N)) |
-| `mongo-insert` | `( coll doc opts -- flag )` | Insert document |
-| `mongo-update` | `( coll filter update opts -- flag )` | Update with upsert/hint/collation |
-| `mongo-delete` | `( coll filter opts -- flag )` | Delete with hint/collation |
+| `mongo-insert` | `( coll doc -- id flag )` | Insert document, return `_id` |
+| `mongo-update` | `( coll filter update opts -- n flag )` | Update with upsert/hint/collation |
+| `mongo-delete` | `( coll filter opts -- n flag )` | Delete with hint/collation |
 
 `mongo-find` returns `HeapJson` directly — no parsing step needed. The unified
 `MongoQueryOptions` struct supports `skip`, `limit`, `sort`, `projection`, `hint`,
@@ -666,7 +666,7 @@ Regex uses the C++ `<regex>` library (ECMAScript syntax by default).
 
 | Word | Stack Effect | Description | Example |
 |------|-------------|-------------|---------|
-| `sregex-find` | `( str pattern -- match flag )` | First match | `s" abc123" s" [0-9]+" sregex-find` → `"123" true` |
+| `sregex-find` | `( str pattern -- index )` | First match position (-1 if not found) | `s" abc123" s" [0-9]+" sregex-find` → `3` |
 | `sregex-replace` | `( str pat repl -- result )` | Replace matches (clears taint) | `s" foo123bar" s" [0-9]+" s" NUM" sregex-replace` → `"fooNUMbar"` |
 | `sregex-search` | `( str pattern -- matches flag )` | Search with captures | `s" 2026-03-12" s" ([0-9]+)-([0-9]+)-([0-9]+)" sregex-search` → array `true` |
 | `sregex-match` | `( str pattern -- matches flag )` | Full string match | `s" hello" s" h.*o" sregex-match` → array `true` |
@@ -699,7 +699,7 @@ processing without observables.
 | `array-pop` | `( array -- array val )` | Remove from end | `[1,2,3] array-pop` → `[1,2] 3` |
 | `array-get` | `( array idx -- val )` | Get by index | `[10,20,30] 1 array-get` → `20` |
 | `array-set` | `( array idx val -- array )` | Set by index | `[10,20,30] 1 99 array-set` → `[10,99,30]` |
-| `array-length` | `( array -- array n )` | Element count (non-consuming) | `[1,2,3] array-length` → `[1,2,3] 3` |
+| `array-length` | `( array -- n )` | Element count (consuming — use `dup array-length` to keep array) | `[1,2,3] array-length` → `3` |
 
 ### Queue and Deque Operations
 
@@ -850,7 +850,9 @@ primitives for building multilayer perceptrons), and data analysis. Solver and
 decomposition words return a Boolean success flag.
 
 Three TIL-level convenience words (`mat-xavier`, `mat-he`, `mat-mse`) are defined in
-`data/help.til` for neural network weight initialization and loss computation.
+`data/library/mlp.til` for neural network weight initialization and loss computation.
+They become available after `include /library/mlp.til` (or `include data/library/mlp.til`
+for native builds).
 
 **Words:** `json->mat` `mat+` `mat-` `mat*` `mat-add-col` `mat-apply` `mat-clip`
 `mat-col` `mat-col-sum` `mat-cols` `mat-cross-entropy` `mat-det` `mat-diag` `mat-eigen`
@@ -954,7 +956,9 @@ the **pre-activation** input, not the activated output.
 | `mat->json` | `( mat -- json )` | To JSON `{rows, cols, data}` |
 | `json->mat` | `( json -- mat )` | From JSON `{rows, cols, data}` |
 
-### TIL-Level Convenience
+### TIL-Level Convenience (from `data/library/mlp.til`)
+
+Requires `include /library/mlp.til` before use.
 
 | Word | Stack Effect | Description |
 |------|-------------|-------------|
@@ -1365,15 +1369,15 @@ return stack; `r>` moves it back; `r@` copies without removing. Values pushed wi
 `>r` **must** be popped with `r>` before the word returns.
 
 ```
-> # Save a value across a computation:
-> : array-sum  ( array -- n )
-    0 >r                          # running sum on return stack
-    dup array-length drop 0 do
-      dup i array-get r> + >r     # add element to sum
-    loop
-    drop r> ;                     # retrieve sum
-> array-new 10 array-push 20 array-push 30 array-push array-sum .
-60
+> # Save a value across a computation (avoid >r/r> across do/loop —
+> # do uses the return stack for its loop counter).
+> : hypot  ( a b -- sqrt(a*a + b*b) )
+    dup * >r                      # save b*b on return stack
+    dup *                         # compute a*a
+    r> +                          # retrieve b*b, add
+    sqrt ;
+> 3.0 4.0 hypot .
+5
 ```
 
 ```

@@ -475,12 +475,12 @@ void register_http_primitives(etil::core::Dictionary& dict) {
 
     dict.register_word("http-get",
         make_primitive("http-get", prim_http_get,
-            {T::String, T::Unknown}, {T::Unknown, T::Integer, T::Integer}));
+            {T::String, T::Map}, {T::ByteArray, T::Integer, T::Boolean}, true));
 
     dict.register_word("http-post",
         make_primitive("http-post", prim_http_post,
-            {T::String, T::Unknown, T::Unknown},
-            {T::Unknown, T::Integer, T::Integer}));
+            {T::String, T::Map, T::ByteArray},
+            {T::ByteArray, T::Integer, T::Boolean}, true));
 }
 
 } // namespace etil::net

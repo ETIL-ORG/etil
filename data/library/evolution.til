@@ -117,3 +117,41 @@ variable _bridge-map
   _bridge-map @ 0= if build-bridge-map then
   _bridge-map @
 ;
+
+# ===================================================================
+# Metadata (queryable via `help <word>` after include)
+# ===================================================================
+
+# --- Sibling Pools ---
+s" math-pool" s" description" s" text" s" Array of 18 arithmetic and stack-manipulation words for evolve-register-pool." meta! drop
+s" math-pool" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" math-pool" s" category" s" text" s" evolution-pool" meta! drop
+
+s" math-ext-pool" s" description" s" text" s" Array of 21 extended math words (trig, transcendental, rounding) for evolve-register-pool." meta! drop
+s" math-ext-pool" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" math-ext-pool" s" category" s" text" s" evolution-pool" meta! drop
+
+s" matrix-pool" s" description" s" text" s" Array of 18 linear algebra words for evolve-register-pool." meta! drop
+s" matrix-pool" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" matrix-pool" s" category" s" text" s" evolution-pool" meta! drop
+
+s" string-pool" s" description" s" text" s" Array of 11 string manipulation words for evolve-register-pool." meta! drop
+s" string-pool" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" string-pool" s" category" s" text" s" evolution-pool" meta! drop
+
+s" array-pool" s" description" s" text" s" Array of 15 array operation words for evolve-register-pool." meta! drop
+s" array-pool" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" array-pool" s" category" s" text" s" evolution-pool" meta! drop
+
+s" comparison-pool" s" description" s" text" s" Array of 10 comparison and logic words for evolve-register-pool (useful as secondary pool)." meta! drop
+s" comparison-pool" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" comparison-pool" s" category" s" text" s" evolution-pool" meta! drop
+
+# --- Bridge Map ---
+s" build-bridge-map" s" description" s" text" s" Build the type bridge map: map of 'from-type->to-type' keys to arrays of conversion words." meta! drop
+s" build-bridge-map" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" build-bridge-map" s" category" s" text" s" evolution-pool" meta! drop
+
+s" bridge-map" s" description" s" text" s" Return the type bridge map, building it on first call. Map keys are 'from->to' type conversion names." meta! drop
+s" bridge-map" s" stack-effect" s" text" s" ( -- map )" meta! drop
+s" bridge-map" s" category" s" text" s" evolution-pool" meta! drop

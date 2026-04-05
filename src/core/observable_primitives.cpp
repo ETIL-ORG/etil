@@ -1128,158 +1128,158 @@ void register_observable_primitives(Dictionary& dict) {
 
     // Creation
     dict.register_word("obs-from",    mk("prim_obs_from", prim_obs_from,
-        {T::Array}, {T::Unknown}));
+        {T::Array}, {T::Observable}));
     dict.register_word("obs-of",      mk("prim_obs_of", prim_obs_of,
-        {T::Unknown}, {T::Unknown}));
+        {T::Unknown}, {T::Observable}));
     dict.register_word("obs-empty",   mk("prim_obs_empty", prim_obs_empty,
-        {}, {T::Unknown}));
+        {}, {T::Observable}));
     dict.register_word("obs-range",   mk("prim_obs_range", prim_obs_range,
-        {T::Integer, T::Integer}, {T::Unknown}));
+        {T::Integer, T::Integer}, {T::Observable}));
 
     // Transform
     dict.register_word("obs-map",     mk("prim_obs_map", prim_obs_map,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-map-with", mk("prim_obs_map_with", prim_obs_map_with,
-        {T::Unknown, T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt, T::Unknown}, {T::Observable}));
     dict.register_word("obs-filter",  mk("prim_obs_filter", prim_obs_filter,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-filter-with", mk("prim_obs_filter_with", prim_obs_filter_with,
-        {T::Unknown, T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt, T::Unknown}, {T::Observable}));
 
     // Accumulate
     dict.register_word("obs-scan",    mk("prim_obs_scan", prim_obs_scan,
-        {T::Unknown, T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt, T::Unknown}, {T::Observable}));
     dict.register_word("obs-reduce",  mk("prim_obs_reduce", prim_obs_reduce,
-        {T::Unknown, T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt, T::Unknown}, {T::Unknown}));
 
     // Limiting
     dict.register_word("obs-take",    mk("prim_obs_take", prim_obs_take,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-skip",    mk("prim_obs_skip", prim_obs_skip,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-distinct", mk("prim_obs_distinct", prim_obs_distinct,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::Observable}));
 
     // Combination
     dict.register_word("obs-merge",   mk("prim_obs_merge", prim_obs_merge,
-        {T::Unknown, T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-concat",  mk("prim_obs_concat", prim_obs_concat,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Observable}, {T::Observable}));
     dict.register_word("obs-zip",     mk("prim_obs_zip", prim_obs_zip,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Observable}, {T::Observable}));
 
     // Terminal
     dict.register_word("obs-subscribe", mk("prim_obs_subscribe", prim_obs_subscribe,
-        {T::Unknown, T::Unknown}, {}));
+        {T::Observable, T::Xt}, {}));
     dict.register_word("obs-to-array", mk("prim_obs_to_array", prim_obs_to_array,
-        {T::Unknown}, {T::Array}));
+        {T::Observable}, {T::Array}));
     dict.register_word("obs-count",   mk("prim_obs_count", prim_obs_count,
-        {T::Unknown}, {T::Integer}));
+        {T::Observable}, {T::Integer}));
 
     // Introspection
     dict.register_word("obs?",        mk("prim_obs_check", prim_obs_check,
-        {T::Unknown}, {T::Unknown}));
+        {T::Unknown}, {T::Boolean}));
     dict.register_word("obs-kind",    mk("prim_obs_kind", prim_obs_kind,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::String}));
 
 #ifndef ETIL_WASM_BUILD
     // Temporal operators — blocked in WASM (sleep_for freezes the browser main thread)
     // Temporal: Creation
     dict.register_word("obs-timer",   mk("prim_obs_timer", prim_obs_timer,
-        {T::Integer, T::Integer}, {T::Unknown}));
+        {T::Integer, T::Integer}, {T::Observable}));
 
     // Temporal: Transform
     dict.register_word("obs-delay",   mk("prim_obs_delay", prim_obs_delay,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-timestamp", mk("prim_obs_timestamp", prim_obs_timestamp,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::Observable}));
     dict.register_word("obs-time-interval", mk("prim_obs_time_interval", prim_obs_time_interval,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::Observable}));
     dict.register_word("obs-delay-each", mk("prim_obs_delay_each", prim_obs_delay_each,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
 
     // Temporal: Rate-Limiting
     dict.register_word("obs-debounce-time", mk("prim_obs_debounce_time", prim_obs_debounce_time,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-throttle-time", mk("prim_obs_throttle_time", prim_obs_throttle_time,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-sample-time", mk("prim_obs_sample_time", prim_obs_sample_time,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-timeout", mk("prim_obs_timeout", prim_obs_timeout,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-audit-time", mk("prim_obs_audit_time", prim_obs_audit_time,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
 
     // Temporal: Windowed + Limiting
     dict.register_word("obs-buffer-time", mk("prim_obs_buffer_time", prim_obs_buffer_time,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-take-until-time", mk("prim_obs_take_until_time", prim_obs_take_until_time,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
 
     // Temporal: Error Recovery
     dict.register_word("obs-retry-delay", mk("prim_obs_retry_delay", prim_obs_retry_delay,
-        {T::Unknown, T::Integer, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer, T::Integer}, {T::Observable}));
 #endif
 
     // AVO Phase 1: Buffer + Composition
     dict.register_word("obs-buffer", mk("prim_obs_buffer", prim_obs_buffer,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-buffer-when", mk("prim_obs_buffer_when", prim_obs_buffer_when,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-window", mk("prim_obs_window", prim_obs_window,
-        {T::Unknown, T::Integer}, {T::Unknown}));
+        {T::Observable, T::Integer}, {T::Observable}));
     dict.register_word("obs-flat-map", mk("prim_obs_flat_map", prim_obs_flat_map,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-to-string", mk("prim_obs_to_string", prim_obs_to_string,
-        {T::Unknown}, {T::String}));
+        {T::Observable}, {T::String}));
 
     // AVO Phase 2: Streaming File I/O
     dict.register_word("obs-read-bytes", mk("prim_obs_read_bytes", prim_obs_read_bytes,
-        {T::String, T::Integer}, {T::Unknown}));
+        {T::String, T::Integer}, {T::Observable}));
     dict.register_word("obs-read-lines", mk("prim_obs_read_lines", prim_obs_read_lines,
-        {T::String}, {T::Unknown}));
+        {T::String}, {T::Observable}));
     dict.register_word("obs-read-json", mk("prim_obs_read_json", prim_obs_read_json,
-        {T::String}, {T::Unknown}));
+        {T::String}, {T::Observable}));
     dict.register_word("obs-read-csv", mk("prim_obs_read_csv", prim_obs_read_csv,
-        {T::String, T::String}, {T::Unknown}));
+        {T::String, T::String}, {T::Observable}));
     dict.register_word("obs-readdir", mk("prim_obs_readdir", prim_obs_readdir,
-        {T::String}, {T::Unknown}));
+        {T::String}, {T::Observable}));
     dict.register_word("obs-write-file", mk("prim_obs_write_file", prim_obs_write_file,
-        {T::Unknown, T::String}, {}));
+        {T::Observable, T::String}, {}));
     dict.register_word("obs-append-file", mk("prim_obs_append_file", prim_obs_append_file,
-        {T::Unknown, T::String}, {}));
+        {T::Observable, T::String}, {}));
 
 #ifdef ETIL_HTTP_CLIENT_ENABLED
     // AVO Phase 3: Streaming HTTP
     dict.register_word("obs-http-get", mk("prim_obs_http_get", prim_obs_http_get,
-        {T::String, T::Unknown}, {T::Unknown}));
+        {T::String, T::Map}, {T::Observable}));
     dict.register_word("obs-http-post", mk("prim_obs_http_post", prim_obs_http_post,
-        {T::String, T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::String, T::Map, T::ByteArray}, {T::Observable}));
     dict.register_word("obs-http-sse", mk("prim_obs_http_sse", prim_obs_http_sse,
-        {T::String, T::Unknown}, {T::Unknown}));
+        {T::String, T::Map}, {T::Observable}));
 #endif
 
     // Gap fill: high-value RxJS operators
     dict.register_word("obs-tap", mk("prim_obs_tap", prim_obs_tap,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-pairwise", mk("prim_obs_pairwise", prim_obs_pairwise,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::Observable}));
     dict.register_word("obs-first", mk("prim_obs_first", prim_obs_first,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::Observable}));
     dict.register_word("obs-last", mk("prim_obs_last", prim_obs_last,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::Observable}));
     dict.register_word("obs-take-while", mk("prim_obs_take_while", prim_obs_take_while,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-distinct-until", mk("prim_obs_distinct_until", prim_obs_distinct_until,
-        {T::Unknown}, {T::Unknown}));
+        {T::Observable}, {T::Observable}));
     dict.register_word("obs-start-with", mk("prim_obs_start_with", prim_obs_start_with,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Unknown}, {T::Observable}));
     dict.register_word("obs-finalize", mk("prim_obs_finalize", prim_obs_finalize,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-switch-map", mk("prim_obs_switch_map", prim_obs_switch_map,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
     dict.register_word("obs-catch", mk("prim_obs_catch", prim_obs_catch,
-        {T::Unknown, T::Unknown}, {T::Unknown}));
+        {T::Observable, T::Xt}, {T::Observable}));
 }
 
 } // namespace etil::core
