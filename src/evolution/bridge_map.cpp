@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/evolution/bridge_map.hpp"
+#include "etil/evolution/evolve_logger.hpp"
 
+#include <algorithm>
+#include <iomanip>
 #include <queue>
 #include <sstream>
 #include <unordered_set>
@@ -146,6 +149,23 @@ std::vector<std::string> BridgeMap::select_path(T from, T to, size_t max_hops) {
         record_usage(e.from, e.to, e.word);
     }
 
+    // Log selection
+    if (logger_ && logger_->enabled(EvolveLogCategory::Bridge)) {
+        std::ostringstream msg;
+        msg << "select: " << type_name(from) << "->" << type_name(to) << " chose ";
+        bool first = true;
+        for (const auto& w : candidates[chosen_idx].words) {
+            if (!first) msg << " + ";
+            msg << "'" << w << "'";
+            first = false;
+        }
+        msg << " (w=" << std::fixed << std::setprecision(3)
+            << candidates[chosen_idx].weight << ", "
+            << candidates.size() << " candidate"
+            << (candidates.size() == 1 ? "" : "s") << ")";
+        logger_->log(EvolveLogCategory::Bridge, msg.str());
+    }
+
     return candidates[chosen_idx].words;
 }
 
@@ -183,15 +203,67 @@ void BridgeMap::record_usage(T from, T to, const std::string& word) {
 
 void BridgeMap::end_mutation(double reward) {
     if (!tbbp_enabled_) return;
+    bool log_updates = logger_ && logger_->enabled(EvolveLogCategory::Bridge);
     for (const auto& ref : current_mutation_usages_) {
         auto* edge = find_edge_mut(ref.from, ref.to, ref.word);
         if (!edge) continue;
-        double updated = (1.0 - alpha_) * edge->weight + alpha_ * reward;
+        double before = edge->weight;
+        double updated = (1.0 - alpha_) * before + alpha_ * reward;
         if (updated < min_weight_) updated = min_weight_;
         edge->weight = updated;
         if (reward > 0.5) edge->successes++;
+
+        if (log_updates) {
+            std::ostringstream msg;
+            msg << "update: '" << edge->word << "' "
+                << std::fixed << std::setprecision(3) << before
+                << " -> " << updated
+                << " (reward=" << reward << ")";
+            logger_->log(EvolveLogCategory::Bridge, msg.str());
+        }
     }
     current_mutation_usages_.clear();
+}
+
+void BridgeMap::log_weight_summary(size_t top_n) const {
+    if (!logger_ || !logger_->enabled(EvolveLogCategory::Bridge)) return;
+
+    // Collect all edges with selection counts
+    struct Entry {
+        const BridgeEdge* edge;
+        double rate;
+    };
+    std::vector<Entry> entries;
+    for (const auto& [_, edges] : graph_) {
+        for (const auto& e : edges) {
+            if (e.selections == 0) continue;  // skip unused bridges
+            double rate = (e.selections > 0)
+                ? static_cast<double>(e.successes) / e.selections
+                : 0.0;
+            entries.push_back({&e, rate});
+        }
+    }
+
+    // Sort by weight descending
+    std::sort(entries.begin(), entries.end(),
+        [](const Entry& a, const Entry& b) {
+            return a.edge->weight > b.edge->weight;
+        });
+
+    std::ostringstream header;
+    header << "summary: top " << std::min(top_n, entries.size())
+           << " of " << entries.size() << " used bridges:";
+    logger_->log(EvolveLogCategory::Bridge, header.str());
+
+    for (size_t i = 0; i < std::min(top_n, entries.size()); ++i) {
+        const auto& e = *entries[i].edge;
+        std::ostringstream msg;
+        msg << "  " << e.word << " (w=" << std::fixed << std::setprecision(3)
+            << e.weight << ", " << e.selections << " sel, "
+            << e.successes << " succ, "
+            << std::setprecision(0) << (entries[i].rate * 100.0) << "% rate)";
+        logger_->log(EvolveLogCategory::Bridge, msg.str());
+    }
 }
 
 bool BridgeMap::has_conversions(T from) const {

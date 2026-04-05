@@ -25,6 +25,7 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
     bridge_map_.set_tbbp_enabled(config_.tbbp_enabled);
     bridge_map_.set_alpha(config_.tbbp_alpha);
     bridge_map_.set_min_weight(config_.tbbp_min_weight);
+    bridge_map_.set_logger(&logger_);
     // Fitness error stream is wired lazily in evolve_word() after logging starts
 }
 
@@ -226,6 +227,9 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
             "Gen " + std::to_string(state.generations) + ": "
             + std::to_string(children_created) + " children created");
     }
+
+    // TBBP: log bridge weight summary at end of each generation
+    bridge_map_.log_weight_summary(10);
 
     state.generations++;
     return children_created;

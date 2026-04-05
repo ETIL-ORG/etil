@@ -10,6 +10,9 @@
 #include <unordered_map>
 #include <vector>
 
+namespace etil::evolution { class EvolveLogger; }
+
+
 namespace etil::evolution {
 
 /// Type conversion edge in the bridge graph.
@@ -83,6 +86,14 @@ public:
     /// Clears the current-mutation usage list. No-op when tbbp_enabled is false.
     void end_mutation(double reward);
 
+    /// Attach a logger for bridge selection / weight update events.
+    /// Events logged at EvolveLogCategory::Bridge when enabled.
+    void set_logger(EvolveLogger* logger) { logger_ = logger; }
+
+    /// Emit a summary of top-N bridges by weight at Bridge category.
+    /// Called at generation end by EvolutionEngine.
+    void log_weight_summary(size_t top_n = 10) const;
+
     /// Is there any conversion from this type?
     bool has_conversions(T from) const;
 
@@ -129,6 +140,9 @@ private:
     std::vector<EdgeRef> current_mutation_usages_;
     double alpha_ = 0.1;
     double min_weight_ = 0.05;
+
+    // Logging
+    EvolveLogger* logger_ = nullptr;
 
     static const std::vector<BridgeEdge> empty_edges_;
 };
