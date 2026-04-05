@@ -2667,6 +2667,31 @@ Type repair (step 4) can insert single-hop or multi-hop bridge words when a type
 
 Fitness evaluation errors from mutated code are routed to the evolution log file, not stderr.
 
+### Type Bridge Back Propagation (TBBP)
+
+Each `BridgeEdge` carries a learned weight. When type repair needs to select a bridge, it uses **weighted-random sampling** among available paths proportional to path weight (product of edge weights). After each mutation, weights update via exponential moving average:
+
+```
+weight = (1 - α) × weight + α × reward
+reward = 1.0 if child_fitness > parent_fitness, else 0.0
+```
+
+Weights have a floor (default 0.05) to preserve exploration. The default learning rate `α = 0.1` and floor are configurable via `EvolutionConfig::tbbp_alpha` and `tbbp_min_weight`.
+
+**Runtime toggle:** `evolve-tbbp-enabled?` ( flag -- ) turns TBBP on/off at runtime for ablation studies. When disabled, bridges use deterministic BFS selection (first path found). Default: on.
+
+**Log output** (at `EvolveLogCategory::Bridge`):
+```
+[bridge] select: Matrix->Float chose 'mat-norm' (w=0.845, 4 candidates)
+[bridge] update: 'mat-norm' 0.845 -> 0.861 (reward=1)
+[bridge] summary: top 3 of 5 used bridges:
+  int->float (w=0.923, 45 sel, 42 succ, 93% rate)
+  array-length (w=0.872, 12 sel, 10 succ, 83% rate)
+  mat-norm (w=0.845, 8 sel, 6 succ, 75% rate)
+```
+
+Weights reset per evolution run (no persistence). Useful for discovering which bridges are productive for a given problem domain.
+
 ## Appendix U: Evolution Logging
 
 The evolution engine writes detailed diagnostic logs to timestamped files (`YYYYMMDDThhmmss-evolve.log`).
