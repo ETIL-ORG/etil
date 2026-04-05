@@ -1,0 +1,81 @@
+# TBBP benchmark — run evolution with full dictionary, logging on,
+# capture bridge usage metrics.
+
+# --- Register a rich bridge map ---
+
+s" int->float"     s" integer"   s" float"     evolve-bridge
+s" float->int"     s" float"     s" integer"   evolve-bridge
+s" array-length"   s" array"     s" integer"   evolve-bridge
+s" slength"        s" string"    s" integer"   evolve-bridge
+s" string->number" s" string"    s" integer"   evolve-bridge
+s" ssplit"         s" string"    s" array"     evolve-bridge
+s" sjoin"          s" array"     s" string"    evolve-bridge
+s" number->string" s" integer"   s" string"    evolve-bridge
+s" number->string" s" float"     s" string"    evolve-bridge
+s" mat-norm"       s" matrix"    s" float"     evolve-bridge
+s" mat-trace"      s" matrix"    s" float"     evolve-bridge
+s" mat-mean"       s" matrix"    s" float"     evolve-bridge
+s" mat-sum"        s" matrix"    s" float"     evolve-bridge
+s" mat-rows"       s" matrix"    s" integer"   evolve-bridge
+s" mat-cols"       s" matrix"    s" integer"   evolve-bridge
+s" mat->array"     s" matrix"    s" array"     evolve-bridge
+s" array->mat"     s" array"     s" matrix"    evolve-bridge
+s" bytes-length"   s" bytearray" s" integer"   evolve-bridge
+s" bytes->string"  s" bytearray" s" string"    evolve-bridge
+s" string->bytes"  s" string"    s" bytearray" evolve-bridge
+
+." 20 bridges registered" cr
+
+# --- Configure logging ---
+
+s" /tmp/" evolve-log-dir
+2 65535 evolve-log-start
+true evolve-log-show-failed
+
+# --- Target function: x squared via float bridge ---
+# This starts with bridge words in its body, so mutations touching those
+# should interact with type repair.
+: fn int->float dup * float->int ;
+
+# --- Build test cases ---
+
+: mk-test # ( x -- map )
+  dup fn
+  array-new swap array-push
+  swap
+  array-new swap array-push
+  map-new rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: tests
+  array-new
+  0 mk-test array-push
+  1 mk-test array-push
+  2 mk-test array-push
+  3 mk-test array-push
+  4 mk-test array-push
+  5 mk-test array-push
+  6 mk-test array-push
+  10 mk-test array-push
+;
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+
+# --- Run 50 generations with TBBP ON ---
+
+true evolve-tbbp-enabled?
+s" fn" tests evolve-register drop
+." === TBBP ON: 50 generations ===" cr
+
+: run50 50 0 do s" fn" evolve-word drop loop ;
+run50
+
+." TBBP ON generations: " s" fn" evolve-status . cr
+
+evolve-log-stop
+." Log closed" cr

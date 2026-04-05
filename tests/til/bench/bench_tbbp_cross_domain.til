@@ -1,0 +1,77 @@
+# TBBP cross-domain benchmark.
+#
+# Target: f(x) = x^2 as a Float (Integer input → Float output)
+# Starting program returns Integer x^2, creating a type mismatch that
+# can be fixed by inserting int->float bridge.
+#
+# Expected: mutations that insert int->float (or float->int in wrong places)
+# will update TBBP weights. Over 100 generations, weights should diverge.
+
+# --- Register a focused bridge map: Integer<->Float conversion paths ---
+
+s" int->float"     s" integer"   s" float"     evolve-bridge
+s" float->int"     s" float"     s" integer"   evolve-bridge
+s" number->string" s" integer"   s" string"    evolve-bridge
+s" number->string" s" float"     s" string"    evolve-bridge
+s" string->number" s" string"    s" integer"   evolve-bridge
+s" slength"        s" string"    s" integer"   evolve-bridge
+s" array-length"   s" array"     s" integer"   evolve-bridge
+s" sjoin"          s" array"     s" string"    evolve-bridge
+
+." 8 bridges registered" cr
+
+# --- Configure logging ---
+
+s" /tmp/" evolve-log-dir
+2 65535 evolve-log-start
+
+# --- Target: x² as Float ---
+# Starting program returns Integer x² (type mismatch with Float expected)
+
+: fn dup * ;
+
+# Test cases: Integer input → Float output (cross-type)
+# The mismatch will force distance fitness to reward bridge-inserting mutations
+
+: mk-test # ( x -- map )
+  dup               # ( x x )
+  dup *             # ( x x² )
+  int->float        # ( x x²f )  -- expected output as Float
+  array-new swap array-push   # ( x [x²f] )
+  swap                         # ( [x²f] x )
+  array-new swap array-push   # ( [x²f] [x] )
+  map-new rot                  # ( [x] map [x²f] )
+  s" out" swap map-set         # ( [x] map' )
+  swap                         # ( map' [x] )
+  s" in" swap map-set          # ( map'' )
+;
+
+: tests
+  array-new
+  1 mk-test array-push
+  2 mk-test array-push
+  3 mk-test array-push
+  4 mk-test array-push
+  5 mk-test array-push
+  6 mk-test array-push
+  7 mk-test array-push
+  8 mk-test array-push
+;
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+
+# --- Run 100 generations with TBBP ON ---
+
+true evolve-tbbp-enabled?
+s" fn" tests evolve-register drop
+." === TBBP ON: 100 generations (cross-domain) ===" cr
+
+: run100 100 0 do s" fn" evolve-word drop loop ;
+run100
+
+." TBBP ON generations: " s" fn" evolve-status . cr
+
+evolve-log-stop
+." Log closed" cr
