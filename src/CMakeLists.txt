@@ -18,7 +18,6 @@ set(ETIL_CORE_SOURCES
     core/map_primitives.cpp
     core/json_primitives.cpp
     core/heap_observable.cpp
-    core/observable_async.cpp
     core/observable_execution.cpp
     core/observable_primitives.cpp
     core/sha256.cpp
@@ -33,10 +32,11 @@ list(APPEND ETIL_CORE_SOURCES
     fileio/async_file_io.cpp
 )
 
-# UvSession (libuv event loop) — native only
+# libuv-dependent sources — native only
 if(NOT ETIL_WASM_TARGET)
     list(APPEND ETIL_CORE_SOURCES
         fileio/uv_session.cpp
+        core/observable_async.cpp
     )
 endif()
 

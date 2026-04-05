@@ -333,6 +333,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     // =====================================================================
 
     case K::FromArray: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             auto node = std::make_unique<IdleNode>();
             auto* arr = obs->source_array();
@@ -345,6 +346,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             if (!node->values.empty()) pipeline->add_node(std::move(node));
             return true;
         }
+#endif
         auto* arr = obs->source_array();
         for (size_t i = 0; i < arr->length(); ++i) {
             if (!ctx.tick()) return false;
@@ -356,6 +358,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     case K::Of: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             auto node = std::make_unique<IdleNode>();
             Value v = obs->state();
@@ -366,6 +369,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             pipeline->add_node(std::move(node));
             return true;
         }
+#endif
         Value v = obs->state();
         value_addref(v);
         observer(v, ctx);
@@ -378,6 +382,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     case K::Range: {
         int64_t start = obs->state().as_int;
         int64_t end = obs->param();
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             auto node = std::make_unique<IdleNode>();
             for (int64_t i = start; i < end; ++i)
@@ -387,6 +392,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             if (!node->values.empty()) pipeline->add_node(std::move(node));
             return true;
         }
+#endif
         for (int64_t i = start; i < end; ++i) {
             if (!ctx.tick()) return false;
             if (!observer(Value(i), ctx)) return true;
@@ -397,6 +403,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     case K::Timer: {
         int64_t delay_us = obs->state().as_int;
         int64_t period_us = obs->param();
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             auto node = std::make_unique<TimerNode>();
             node->delay_ms = (delay_us > 0) ? static_cast<uint64_t>((delay_us + 999) / 1000) : 0;
@@ -406,6 +413,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             pipeline->add_node(std::move(node));
             return true;
         }
+#endif
         if (delay_us > 0) {
             auto target = std::chrono::steady_clock::now()
                         + std::chrono::microseconds(delay_us);
@@ -580,6 +588,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     case K::DebounceTime: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             uint64_t quiet_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
             struct DebounceState {
@@ -608,6 +617,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             };
             return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
         }
+#endif
         // Sync
         int64_t quiet_us = obs->param();
         Value last_value = {}; bool has_value = false;
@@ -651,6 +661,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     case K::SampleTime: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             uint64_t period_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
             struct SampleState {
@@ -681,6 +692,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             };
             return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
         }
+#endif
         // Sync
         int64_t period_us = obs->param();
         Value latest = {}; bool has_latest = false;
@@ -702,6 +714,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     case K::AuditTime: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             uint64_t window_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
             struct AuditState {
@@ -731,6 +744,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             };
             return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
         }
+#endif
         // Sync
         int64_t window_us = obs->param();
         Value last_value = {}; bool has_value = false; bool in_window = false;
@@ -754,6 +768,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     case K::BufferTime: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             uint64_t period_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
             struct BufferTimeState {
@@ -781,6 +796,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             };
             return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
         }
+#endif
         // Sync
         int64_t window_us = obs->param();
         auto* buffer = new HeapArray();
@@ -801,6 +817,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     case K::TakeUntilTime: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             uint64_t duration_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
             auto expired = std::make_shared<bool>(false);
@@ -823,6 +840,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             };
             return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
         }
+#endif
         // Sync
         int64_t duration_us = obs->param();
         auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(duration_us);
@@ -834,6 +852,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     }
 
     case K::Timeout: {
+#ifndef ETIL_WASM_BUILD
         if (pipeline) {
             uint64_t limit_ms = static_cast<uint64_t>((obs->param() + 999) / 1000);
             auto timed_out = std::make_shared<bool>(false);
@@ -854,6 +873,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
             };
             return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
         }
+#endif
         // Sync
         int64_t limit_us = obs->param();
         auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(limit_us);
@@ -981,6 +1001,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
     // Fall through: remaining operators (Last, Buffer, BufferWhen, Window,
     // Finalize, Catch, File I/O, HTTP). These run synchronously via
     // execute_observable. In async context, collect into IdleNode.
+#ifndef ETIL_WASM_BUILD
     if (pipeline) {
         auto node = std::make_unique<IdleNode>();
         node->observer = observer;
@@ -992,6 +1013,7 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
         if (!node->values.empty()) pipeline->add_node(std::move(node));
         return true;
     }
+#endif
     return execute_observable(obs, ctx, observer);
 }
 

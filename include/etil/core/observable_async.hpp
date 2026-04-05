@@ -12,25 +12,34 @@
 #include <memory>
 #include <vector>
 
+#ifndef ETIL_WASM_BUILD
 #include <uv.h>
+#endif
 
 namespace etil::core {
 
 class ExecutionContext;
 
 /// Base class for async handle nodes in the pipeline.
+/// In WASM builds, register_on takes void* since libuv isn't available.
 struct AsyncNode {
     bool done = false;
     bool stopped = false;
     bool is_source = true;  // only source nodes affect completion tracking
     virtual ~AsyncNode() = default;
+#ifndef ETIL_WASM_BUILD
     virtual void register_on(uv_loop_t* loop) = 0;
+#else
+    virtual void register_on(void* /*loop*/) = 0;
+#endif
     virtual void stop() = 0;
     virtual void close() = 0;
 };
 
 /// Observer callback: receives a value, returns true to continue, false to stop.
 using Observer = std::function<bool(Value, ExecutionContext&)>;
+
+#ifndef ETIL_WASM_BUILD
 
 /// Timer source node: wraps a uv_timer_t.
 struct TimerNode : AsyncNode {
@@ -151,6 +160,8 @@ struct TransformTimerNode : AsyncNode {
     }
 };
 
+#endif // ETIL_WASM_BUILD (end of libuv-dependent node types)
+
 /// Manages all async nodes for a pipeline execution.
 class AsyncPipeline {
 public:
@@ -178,8 +189,13 @@ public:
     }
 
     /// Register all active nodes on the event loop.
+#ifndef ETIL_WASM_BUILD
     void register_handles(uv_loop_t* loop) {
         loop_ = loop;
+#else
+    void register_handles(void* loop) {
+        loop_ = loop;
+#endif
         registered_count_ = nodes_.size();
         for (auto& node : nodes_) {
             node->register_on(loop);
@@ -189,8 +205,13 @@ public:
     /// Register any nodes added after initial registration (dynamic nodes).
     void register_new_nodes() {
         if (!loop_) return;
+#ifndef ETIL_WASM_BUILD
+        auto* uv_loop = static_cast<uv_loop_t*>(loop_);
+#else
+        void* uv_loop = loop_;
+#endif
         while (registered_count_ < nodes_.size()) {
-            nodes_[registered_count_]->register_on(loop_);
+            nodes_[registered_count_]->register_on(uv_loop);
             ++registered_count_;
         }
     }
@@ -202,7 +223,9 @@ public:
             nodes_[i]->close();
         }
         // Drain close callbacks
-        if (loop_) uv_run(loop_, UV_RUN_NOWAIT);
+#ifndef ETIL_WASM_BUILD
+        if (loop_) uv_run(static_cast<uv_loop_t*>(loop_), UV_RUN_NOWAIT);
+#endif
         nodes_.erase(nodes_.begin() + static_cast<long>(from), nodes_.end());
         if (registered_count_ > nodes_.size()) registered_count_ = nodes_.size();
     }
@@ -210,13 +233,18 @@ public:
     /// Check deferred groups — activate any whose conditions are met.
     void check_deferred() {
         if (!loop_ || deferred_.empty()) return;
+#ifndef ETIL_WASM_BUILD
+        auto* uv_loop = static_cast<uv_loop_t*>(loop_);
+#else
+        void* uv_loop = loop_;
+#endif
         for (auto& group : deferred_) {
             if (group.activated || group.nodes.empty()) continue;
             bool cond = group.condition();
             if (cond) {
                 group.activated = true;
                 for (auto& node : group.nodes) {
-                    node->register_on(loop_);
+                    node->register_on(uv_loop);
                     nodes_.push_back(std::move(node));
                 }
                 group.nodes.clear();
@@ -297,12 +325,17 @@ private:
 
     std::vector<std::unique_ptr<AsyncNode>> nodes_;
     std::vector<DeferredGroup> deferred_;
-    uv_loop_t* loop_ = nullptr;
+    void* loop_ = nullptr;  // uv_loop_t* on native, always null on WASM
     size_t registered_count_ = 0;
 };
 
 /// Run an async pipeline on the libuv event loop.
 /// Polls UV_RUN_NOWAIT cooperatively with ctx.tick().
+/// In WASM builds, returns false immediately (no libuv event loop available).
+#ifndef ETIL_WASM_BUILD
 bool run_async_pipeline(ExecutionContext& ctx, AsyncPipeline& pipeline);
+#else
+inline bool run_async_pipeline(ExecutionContext&, AsyncPipeline&) { return false; }
+#endif
 
 } // namespace etil::core
