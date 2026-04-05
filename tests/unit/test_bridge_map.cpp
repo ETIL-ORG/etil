@@ -198,3 +198,119 @@ TEST_F(BridgeMapTest, TbbpEnabledRoundTrip) {
     EXPECT_TRUE(fresh.tbbp_enabled());
 }
 
+// --- Phase 1: Weighted path selection ---
+
+TEST_F(BridgeMapTest, SetEdgeWeightFound) {
+    EXPECT_TRUE(map.set_edge_weight(T::Integer, T::Float, "int->float", 2.5));
+    const auto& edges = map.conversions_from(T::Integer);
+    for (const auto& e : edges) {
+        if (e.to == T::Float && e.word == "int->float") {
+            EXPECT_DOUBLE_EQ(e.weight, 2.5);
+            return;
+        }
+    }
+    FAIL() << "edge not found after weight update";
+}
+
+TEST_F(BridgeMapTest, SetEdgeWeightNotFound) {
+    EXPECT_FALSE(map.set_edge_weight(T::Integer, T::Float, "nonexistent", 2.5));
+    EXPECT_FALSE(map.set_edge_weight(T::Unknown, T::Integer, "foo", 1.0));
+}
+
+TEST_F(BridgeMapTest, SelectPathDisabledFallsThrough) {
+    // With TBBP disabled, select_path == find_path (deterministic BFS)
+    map.set_tbbp_enabled(false);
+    for (int i = 0; i < 10; ++i) {
+        auto select_result = map.select_path(T::Integer, T::Float);
+        auto find_result = map.find_path(T::Integer, T::Float);
+        EXPECT_EQ(select_result, find_result);
+    }
+}
+
+TEST_F(BridgeMapTest, SelectPathSingleCandidate) {
+    // Integer → Float has only one edge: int->float
+    auto result = map.select_path(T::Integer, T::Float);
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0], "int->float");
+}
+
+TEST_F(BridgeMapTest, SelectPathMultipleEqualWeights) {
+    // Matrix → Float has 4 candidates: mat-norm, mat-trace, mat-mean, mat-sum
+    // With equal weights (all 1.0), selection should be roughly uniform
+    map.set_rng_seed(42);
+    std::map<std::string, int> counts;
+    for (int i = 0; i < 400; ++i) {
+        auto r = map.select_path(T::Matrix, T::Float);
+        ASSERT_EQ(r.size(), 1u);
+        counts[r[0]]++;
+    }
+    // All 4 should be selected; each should be ~100 ± noise (chi-squared)
+    EXPECT_EQ(counts.size(), 4u);
+    for (const auto& [name, count] : counts) {
+        EXPECT_GT(count, 50);
+        EXPECT_LT(count, 150);
+    }
+}
+
+TEST_F(BridgeMapTest, SelectPathSkewedWeights) {
+    // Make mat-norm heavily weighted, others at floor
+    map.set_edge_weight(T::Matrix, T::Float, "mat-norm", 10.0);
+    map.set_edge_weight(T::Matrix, T::Float, "mat-trace", 0.1);
+    map.set_edge_weight(T::Matrix, T::Float, "mat-mean", 0.1);
+    map.set_edge_weight(T::Matrix, T::Float, "mat-sum", 0.1);
+    map.set_rng_seed(42);
+    int mat_norm_count = 0;
+    for (int i = 0; i < 100; ++i) {
+        auto r = map.select_path(T::Matrix, T::Float);
+        if (r.size() == 1 && r[0] == "mat-norm") mat_norm_count++;
+    }
+    // mat-norm should dominate — expect ≥80 out of 100
+    EXPECT_GE(mat_norm_count, 80);
+}
+
+TEST_F(BridgeMapTest, SelectPathTwoHop) {
+    // Array → Float requires 2 hops. Multiple paths exist:
+    //   array-length (Array→Integer) + int->float (Integer→Float)
+    //   array->mat (Array→Matrix) + mat-{norm,trace,mean,sum} (Matrix→Float)
+    // select_path picks any of them via weighted-random.
+    map.set_rng_seed(42);
+    auto r = map.select_path(T::Array, T::Float);
+    ASSERT_EQ(r.size(), 2u);
+    // First hop must be from Array; valid options: array-length, array->mat
+    EXPECT_TRUE(r[0] == "array-length" || r[0] == "array->mat");
+    // Second hop must end at Float; valid options depend on first hop
+    if (r[0] == "array-length") {
+        EXPECT_EQ(r[1], "int->float");
+    } else {
+        EXPECT_TRUE(r[1] == "mat-norm" || r[1] == "mat-trace" ||
+                    r[1] == "mat-mean" || r[1] == "mat-sum");
+    }
+}
+
+TEST_F(BridgeMapTest, SelectPathTwoHopSkewedWeights) {
+    // Boost array-length and int->float; depress everything else
+    map.set_edge_weight(T::Array, T::Integer, "array-length", 10.0);
+    map.set_edge_weight(T::Integer, T::Float, "int->float", 10.0);
+    map.set_edge_weight(T::Array, T::Matrix, "array->mat", 0.01);
+    map.set_rng_seed(42);
+    int via_integer = 0;
+    for (int i = 0; i < 100; ++i) {
+        auto r = map.select_path(T::Array, T::Float);
+        if (r.size() == 2 && r[0] == "array-length" && r[1] == "int->float")
+            via_integer++;
+    }
+    // Should dominate — via integer path has 10*10=100, others have 0.01*(1..1)=~0.04
+    EXPECT_GE(via_integer, 90);
+}
+
+TEST_F(BridgeMapTest, SelectPathEmptyNoRoute) {
+    // Observable has no conversions
+    auto r = map.select_path(T::Observable, T::Integer);
+    EXPECT_TRUE(r.empty());
+}
+
+TEST_F(BridgeMapTest, SelectPathSameTypeEmpty) {
+    auto r = map.select_path(T::Integer, T::Integer);
+    EXPECT_TRUE(r.empty());
+}
+

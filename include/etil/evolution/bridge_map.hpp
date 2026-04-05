@@ -5,6 +5,7 @@
 
 #include "etil/core/word_impl.hpp"
 
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -44,6 +45,19 @@ public:
     /// Find a multi-hop path (BFS, max_hops). Returns ordered word sequence.
     std::vector<std::string> find_path(T from, T to, size_t max_hops = 2) const;
 
+    /// Select a path using TBBP weighted-random sampling among paths of the
+    /// shortest available length. When tbbp_enabled is false, falls through
+    /// to find_path() (deterministic BFS, first path found).
+    /// Returns ordered word sequence, or empty if no path exists.
+    std::vector<std::string> select_path(T from, T to, size_t max_hops = 2);
+
+    /// Override the RNG seed (for deterministic tests).
+    void set_rng_seed(uint64_t seed) { rng_.seed(seed); }
+
+    /// Directly set the weight of a specific edge. Returns true if found.
+    /// Used for testing and manual tuning.
+    bool set_edge_weight(T from, T to, const std::string& word, double weight);
+
     /// Is there any conversion from this type?
     bool has_conversions(T from) const;
 
@@ -76,6 +90,7 @@ private:
     size_t edge_count_ = 0;
     bool finalized_ = false;
     bool tbbp_enabled_ = true;
+    std::mt19937_64 rng_{std::random_device{}()};
 
     static const std::vector<BridgeEdge> empty_edges_;
 };

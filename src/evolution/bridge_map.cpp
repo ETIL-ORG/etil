@@ -82,6 +82,72 @@ std::vector<std::string> BridgeMap::find_path(T from, T to, size_t max_hops) con
     return {};
 }
 
+std::vector<std::string> BridgeMap::select_path(T from, T to, size_t max_hops) {
+    // When TBBP disabled, fall through to deterministic BFS
+    if (!tbbp_enabled_) {
+        return find_path(from, to, max_hops);
+    }
+
+    if (from == to) return {};
+
+    // Enumerate all 1-hop direct edges from → to
+    struct Candidate {
+        double weight;
+        std::vector<std::string> words;
+    };
+    std::vector<Candidate> candidates;
+
+    auto it_from = graph_.find(static_cast<int>(from));
+    if (it_from != graph_.end()) {
+        for (const auto& edge : it_from->second) {
+            if (edge.to == to) {
+                candidates.push_back({edge.weight, {edge.word}});
+            }
+        }
+    }
+
+    // If no direct edges and multi-hop allowed, enumerate 2-hop paths
+    if (candidates.empty() && max_hops >= 2 && it_from != graph_.end()) {
+        for (const auto& edge1 : it_from->second) {
+            if (edge1.to == to) continue;  // already handled
+            auto it_mid = graph_.find(static_cast<int>(edge1.to));
+            if (it_mid == graph_.end()) continue;
+            for (const auto& edge2 : it_mid->second) {
+                if (edge2.to == to) {
+                    candidates.push_back({
+                        edge1.weight * edge2.weight,
+                        {edge1.word, edge2.word}
+                    });
+                }
+            }
+        }
+    }
+
+    if (candidates.empty()) return {};
+    if (candidates.size() == 1) return candidates[0].words;
+
+    // Weighted-random selection via discrete_distribution
+    std::vector<double> weights;
+    weights.reserve(candidates.size());
+    for (const auto& c : candidates) weights.push_back(c.weight);
+
+    std::discrete_distribution<size_t> dist(weights.begin(), weights.end());
+    size_t chosen = dist(rng_);
+    return candidates[chosen].words;
+}
+
+bool BridgeMap::set_edge_weight(T from, T to, const std::string& word, double weight) {
+    auto it = graph_.find(static_cast<int>(from));
+    if (it == graph_.end()) return false;
+    for (auto& edge : it->second) {
+        if (edge.to == to && edge.word == word) {
+            edge.weight = weight;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool BridgeMap::has_conversions(T from) const {
     auto it = graph_.find(static_cast<int>(from));
     return it != graph_.end() && !it->second.empty();
