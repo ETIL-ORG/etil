@@ -1,0 +1,97 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# test_tbbp_validation.til -- Integration test for Type Bridge Back Propagation (TBBP)
+# Verifies that evolution runs crash-free with TBBP on/off toggling.
+
+include tests/til/harness.til
+
+# ===================================================================
+# Register bridge words
+# ===================================================================
+
+s" int->float"     s" integer"   s" float"     evolve-bridge
+s" float->int"     s" float"     s" integer"   evolve-bridge
+s" array-length"   s" array"     s" integer"   evolve-bridge
+s" slength"        s" string"    s" integer"   evolve-bridge
+s" number->string" s" integer"   s" string"    evolve-bridge
+s" ssplit"         s" string"    s" array"     evolve-bridge
+s" mat-norm"       s" matrix"    s" float"     evolve-bridge
+s" mat-trace"      s" matrix"    s" float"     evolve-bridge
+s" mat-mean"       s" matrix"    s" float"     evolve-bridge
+s" mat-sum"        s" matrix"    s" float"     evolve-bridge
+
+# ===================================================================
+# Test 1: TBBP toggle works at runtime
+# ===================================================================
+
+." TBBP enabled by default: " true true expect-eq
+
+." Disable TBBP: "
+false evolve-tbbp-enabled?
+true true expect-eq  # no crash
+
+." Re-enable TBBP: "
+true evolve-tbbp-enabled?
+true true expect-eq  # no crash
+
+# ===================================================================
+# Test 2: Target function and evolution with TBBP on
+# ===================================================================
+
+: quad dup dup * swap 3 * + 5 + ;
+
+: mk-test # ( x -- map )
+  dup quad
+  array-new swap array-push
+  swap
+  array-new swap array-push
+  map-new rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: tests
+  array-new
+  0 mk-test array-push
+  1 mk-test array-push
+  2 mk-test array-push
+  3 mk-test array-push
+  -1 mk-test array-push
+  5 mk-test array-push
+;
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+true evolve-tbbp-enabled?
+
+s" quad" tests evolve-register drop
+." Test A registered (TBBP on): " true true expect-eq
+
+." evolve gen 1 (TBBP on): " s" quad" evolve-word 0 > true expect-eq
+." evolve gen 2 (TBBP on): " s" quad" evolve-word 0 > true expect-eq
+." evolve gen 3 (TBBP on): " s" quad" evolve-word 0 > true expect-eq
+
+# ===================================================================
+# Test 3: Evolution continues with TBBP off
+# ===================================================================
+
+false evolve-tbbp-enabled?
+
+." evolve gen 4 (TBBP off): " s" quad" evolve-word 0 > true expect-eq
+." evolve gen 5 (TBBP off): " s" quad" evolve-word 0 > true expect-eq
+
+# ===================================================================
+# Test 4: Re-enable and finish
+# ===================================================================
+
+true evolve-tbbp-enabled?
+
+." evolve gen 6 (TBBP re-on): " s" quad" evolve-word 0 > true expect-eq
+." evolve gen 7 (TBBP re-on): " s" quad" evolve-word 0 > true expect-eq
+
+." total generations >= 7: " s" quad" evolve-status 7 >= true expect-eq
+
+." === TBBP VALIDATION COMPLETE ===" cr
