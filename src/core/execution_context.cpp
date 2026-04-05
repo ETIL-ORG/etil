@@ -10,6 +10,15 @@
 
 namespace etil::core {
 
+ExecutionContext::ExecutionContext(uint32_t thread_id)
+    : thread_id_(thread_id)
+    , data_field_registry_(std::make_shared<DataFieldRegistry>())
+    , start_time_(std::chrono::high_resolution_clock::now())
+{
+}
+
+ExecutionContext::~ExecutionContext() = default;
+
 etil::fileio::UvSession* ExecutionContext::uv_session() {
     if (uv_session_external_) return uv_session_external_;
     if (!uv_session_owned_) {

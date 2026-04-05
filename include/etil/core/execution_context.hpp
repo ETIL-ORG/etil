@@ -15,7 +15,7 @@
 #include <vector>
 
 namespace etil::lvfs { class Lvfs; }
-#include "etil/fileio/uv_session.hpp"
+namespace etil::fileio { class UvSession; }
 namespace etil::net { struct HttpClientState; }
 namespace etil::db { struct MongoClientState; }
 namespace etil::mcp { struct RolePermissions; }
@@ -227,12 +227,11 @@ namespace etil::core {
     class ExecutionContext
     {
     public:
-        ExecutionContext(uint32_t thread_id)
-            : thread_id_(thread_id)
-              , data_field_registry_(std::make_shared<DataFieldRegistry>())
-              , start_time_(std::chrono::high_resolution_clock::now())
-        {
-        }
+        // Constructor and destructor defined out-of-line so that
+        // etil::fileio::UvSession only needs to be forward-declared
+        // in this header (WASM target has no libuv).
+        ExecutionContext(uint32_t thread_id);
+        ~ExecutionContext();
 
         // Thread identification
         uint32_t thread_id() const { return thread_id_; }
