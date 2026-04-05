@@ -15,6 +15,7 @@
 namespace etil::core {
 class Dictionary;
 class Interpreter;
+struct InterpreterEngines;
 }
 
 namespace etil::lvfs {
@@ -54,6 +55,7 @@ struct Session {
     std::ostream interp_out{&out_buf};
     std::ostream interp_err{&err_buf};
     std::unique_ptr<etil::core::Interpreter> interp;
+    std::unique_ptr<etil::core::InterpreterEngines> engines;
     std::unique_ptr<etil::lvfs::Lvfs> lvfs;
     std::unique_ptr<etil::fileio::UvSession> uv_session;
 #ifdef ETIL_HTTP_CLIENT_ENABLED

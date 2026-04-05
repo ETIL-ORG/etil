@@ -22,6 +22,7 @@ set(ETIL_CORE_SOURCES
     core/observable_execution.cpp
     core/observable_primitives.cpp
     core/sha256.cpp
+    core/interpreter_bootstrap.cpp
     lvfs/lvfs.cpp
     lvfs/lvfs_primitives.cpp
 )

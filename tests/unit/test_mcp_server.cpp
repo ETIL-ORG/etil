@@ -462,3 +462,33 @@ TEST_F(McpMultiSessionTest, ResetWithinSession) {
     auto content = parse_tool_content(resp);
     EXPECT_EQ(content["depth"], 0);
 }
+
+// Verify evolution-related primitives work in MCP sessions.
+// Every session must have SelectionEngine and EvolutionEngine wired up.
+TEST_F(McpMultiSessionTest, EvolutionEngineAvailable) {
+    auto sid = server.create_session();
+
+    // evolve-bridge registers a type conversion — requires evolution engine
+    auto resp = call_tool(sid, 1, "interpret", {
+        {"code", "s\" int->float\" s\" integer\" s\" float\" evolve-bridge"}
+    });
+    auto content = parse_tool_content(resp);
+    // Should NOT contain "no evolution engine configured"
+    std::string out = content.value("output", "");
+    std::string err = content.value("error", "");
+    EXPECT_EQ(err.find("no evolution engine"), std::string::npos)
+        << "evolve-bridge failed with err: " << err;
+}
+
+TEST_F(McpMultiSessionTest, SelectionEngineAvailable) {
+    auto sid = server.create_session();
+
+    // select-strategy requires selection engine
+    auto resp = call_tool(sid, 1, "interpret", {
+        {"code", "1 select-strategy"}
+    });
+    auto content = parse_tool_content(resp);
+    std::string err = content.value("error", "");
+    EXPECT_EQ(err.find("no selection engine"), std::string::npos)
+        << "select-strategy failed with err: " << err;
+}

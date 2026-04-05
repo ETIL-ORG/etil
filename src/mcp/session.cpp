@@ -4,6 +4,7 @@
 #include "etil/mcp/session.hpp"
 #include "etil/core/dictionary.hpp"
 #include "etil/core/interpreter.hpp"
+#include "etil/core/interpreter_bootstrap.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/fileio/uv_session.hpp"
 #include "etil/lvfs/lvfs.hpp"
@@ -43,6 +44,9 @@ Session::Session(const std::string& session_id,
 
     etil::core::register_primitives(*dict);
     interp = std::make_unique<etil::core::Interpreter>(*dict, interp_out, interp_err);
+
+    // Wire selection and evolution engines (select-*/evolve-* primitives)
+    engines = etil::core::bootstrap_engines(*dict, *interp);
 
     // Configure path mapping before loading startup files
     if (!home_dir.empty()) {
