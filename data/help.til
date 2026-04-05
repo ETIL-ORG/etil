@@ -651,6 +651,10 @@ s" evolve-fitness-mode" s" description" s" text" s" Set fitness scoring mode: 0=
 s" evolve-fitness-mode" s" stack-effect" s" text" s" ( n -- )" meta! drop
 s" evolve-fitness-mode" s" category" s" text" s" evolution" meta! drop
 
+s" evolve-tbbp-enabled?" s" description" s" text" s" Turn Type Bridge Back Propagation on/off at runtime" meta! drop
+s" evolve-tbbp-enabled?" s" stack-effect" s" text" s" ( flag -- )" meta! drop
+s" evolve-tbbp-enabled?" s" category" s" text" s" evolution" meta! drop
+
 s" evolve-fitness-alpha" s" description" s" text" s" Set distance fitness scaling factor alpha (default 1.0)" meta! drop
 s" evolve-fitness-alpha" s" stack-effect" s" text" s" ( x -- )" meta! drop
 s" evolve-fitness-alpha" s" category" s" text" s" evolution" meta! drop

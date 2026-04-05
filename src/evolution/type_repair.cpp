@@ -104,7 +104,7 @@ bool TypeRepair::repair_sequence(ASTNode& seq, const Dictionary& dict) {
                 if (found < 0) {
                     // Needed type not on stack — try bridge insertion
                     if (bridge_map_ && actual != T::Unknown && needed != T::Unknown) {
-                        auto path = bridge_map_->find_path(actual, needed, 2);
+                        auto path = bridge_map_->select_path(actual, needed, 2);
                         if (!path.empty()) {
                             // Insert bridge word(s) before this WordCall
                             for (const auto& bridge_word : path) {

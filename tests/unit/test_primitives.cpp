@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 339u);  // +6: screate, s', to-hex, from-hex, sha256sum, sha256=
+    EXPECT_EQ(dict.concept_count(), 340u);  // +7: screate, s', to-hex, from-hex, sha256sum, sha256=, evolve-tbbp-enabled?
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

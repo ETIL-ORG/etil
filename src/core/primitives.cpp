@@ -1889,6 +1889,21 @@ bool prim_evolve_fitness_mode(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-tbbp-enabled? ( flag -- )
+// Turn Type Bridge Back Propagation on or off at runtime.
+bool prim_evolve_tbbp_enabled(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    bool flag = false;
+    if (opt->type == Value::Type::Boolean) flag = opt->as_int != 0;
+    else if (opt->type == Value::Type::Integer) flag = opt->as_int != 0;
+    engine->config().tbbp_enabled = flag;
+    engine->bridge_map().set_tbbp_enabled(flag);
+    return true;
+}
+
 // evolve-fitness-alpha ( f -- )
 bool prim_evolve_fitness_alpha(ExecutionContext& ctx) {
     auto opt = ctx.data_stack().pop();
@@ -3464,6 +3479,7 @@ static const PrimEntry prim_table[] = {
     {"evolve-tag",       prim_evolve_tag,       2, 0, {T::String, T::String}, {}},
     {"evolve-untag",     prim_evolve_untag,     1, 0, {T::String}, {}},
     {"evolve-bridge",    prim_evolve_bridge,    3, 0, {T::String, T::String, T::String}, {}},
+    {"evolve-tbbp-enabled?", prim_evolve_tbbp_enabled, 1, 0, {T::Boolean}, {}},
     {"evolve-fitness-mode",  prim_evolve_fitness_mode,  1, 0, {T::Integer}, {}},
     {"evolve-fitness-alpha",       prim_evolve_fitness_alpha,       1, 0, {T::Float},   {}},
     {"evolve-instruction-budget",  prim_evolve_instruction_budget, 1, 0, {T::Integer}, {}},

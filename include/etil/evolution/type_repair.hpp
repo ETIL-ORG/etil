@@ -22,7 +22,8 @@ using SigType = etil::core::TypeSignature::Type;
 class TypeRepair {
 public:
     /// Set the bridge map for bridge word insertion during repair.
-    void set_bridge_map(const BridgeMap* map) { bridge_map_ = map; }
+    /// Non-const pointer because select_path mutates edge selection counters.
+    void set_bridge_map(BridgeMap* map) { bridge_map_ = map; }
 
     /// Repair all type mismatches in the AST.
     /// Modifies the AST in-place by inserting shuffle and/or bridge nodes.
@@ -34,7 +35,7 @@ public:
     static std::vector<ASTNode> compute_shuffle(size_t from_pos, size_t to_pos);
 
 private:
-    const BridgeMap* bridge_map_ = nullptr;
+    BridgeMap* bridge_map_ = nullptr;
 
     bool repair_sequence(ASTNode& seq, const etil::core::Dictionary& dict);
 
