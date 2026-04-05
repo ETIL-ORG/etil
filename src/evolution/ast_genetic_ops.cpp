@@ -188,6 +188,16 @@ bool ASTGeneticOps::substitute_call(ASTNode& ast) {
 
     target->word_name = chosen_name;
 
+    // TBBP: record bridge usage if the chosen word is a bridge edge from
+    // the TOS type. Note: in practice this rarely fires because mutation
+    // operators select candidates by depth compatibility and Unknown-input
+    // permissiveness, not by bridge role. The primary TBBP signal comes
+    // from BridgeMap::select_path() in TypeRepair, which is called when
+    // the chosen word must act AS a bridge (converting types).
+    if (bridge_map_ && !stack_types.empty()) {
+        bridge_map_->try_record_bridge_usage(stack_types.back(), chosen_name);
+    }
+
     if (logger_ && logger_->enabled(EvolveLogCategory::Substitute)) {
         std::string pool_tag = (word_pool_ && !word_pool_->empty()) ? " [pool]" : "";
         std::string type_tag = stack_types.empty() ? "" : " [typed]";
@@ -487,6 +497,11 @@ bool ASTGeneticOps::grow_node(ASTNode& ast) {
         }
         if (chosen.empty()) return false;
         new_node = ASTNode::make_word_call(chosen);
+
+        // TBBP: record bridge usage if the grown word is a bridge
+        if (bridge_map_ && !tos_type.empty()) {
+            bridge_map_->try_record_bridge_usage(tos_type[0], chosen);
+        }
 
         if (logger_ && logger_->enabled(EvolveLogCategory::Grow)) {
             std::string type_tag = tos_type.empty() ? "" : " [typed]";

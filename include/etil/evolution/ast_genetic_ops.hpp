@@ -34,8 +34,12 @@ public:
     /// Set word pool for the current evolution run (empty = full dictionary).
     void set_word_pool(const std::vector<std::string>* pool) { word_pool_ = pool; }
 
-    /// Set the bridge map for type repair bridge insertion.
-    void set_bridge_map(BridgeMap* map) { repair_.set_bridge_map(map); }
+    /// Set the bridge map for type repair bridge insertion and
+    /// mutation-time bridge usage tracking.
+    void set_bridge_map(BridgeMap* map) {
+        bridge_map_ = map;
+        repair_.set_bridge_map(map);
+    }
 
     /// Mutate a WordImpl using AST-level operators.
     /// Returns a new WordImpl with mutated bytecode, or null if mutation failed.
@@ -66,6 +70,7 @@ private:
     EvolveLogger* logger_ = nullptr;
     const EvolutionConfig* config_ = nullptr;
     const std::vector<std::string>* word_pool_ = nullptr;
+    BridgeMap* bridge_map_ = nullptr;
 
     // Mutation operators (each returns true if applied)
     bool substitute_call(ASTNode& ast);

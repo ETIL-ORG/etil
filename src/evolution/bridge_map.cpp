@@ -225,6 +225,19 @@ void BridgeMap::end_mutation(double reward) {
     current_mutation_usages_.clear();
 }
 
+bool BridgeMap::try_record_bridge_usage(T from_type, const std::string& word) {
+    if (!tbbp_enabled_) return false;
+    auto it = graph_.find(static_cast<int>(from_type));
+    if (it == graph_.end()) return false;
+    for (const auto& edge : it->second) {
+        if (edge.word == word) {
+            record_usage(from_type, edge.to, word);
+            return true;
+        }
+    }
+    return false;
+}
+
 void BridgeMap::log_weight_summary(size_t top_n) const {
     if (!logger_ || !logger_->enabled(EvolveLogCategory::Bridge)) return;
 

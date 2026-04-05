@@ -86,6 +86,12 @@ public:
     /// Clears the current-mutation usage list. No-op when tbbp_enabled is false.
     void end_mutation(double reward);
 
+    /// Try to record usage of a bridge word starting at from_type.
+    /// Looks up any edge (from_type, *, word) and records its usage.
+    /// Used when mutation operators select a bridge word as a candidate.
+    /// Returns true if a matching edge was found and recorded.
+    bool try_record_bridge_usage(T from_type, const std::string& word);
+
     /// Attach a logger for bridge selection / weight update events.
     /// Events logged at EvolveLogCategory::Bridge when enabled.
     void set_logger(EvolveLogger* logger) { logger_ = logger; }
