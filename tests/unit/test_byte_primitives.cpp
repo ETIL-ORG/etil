@@ -64,7 +64,7 @@ TEST_F(BytePrimitivesTest, BytesResize) {
     EXPECT_EQ(opt_len->as_int, 8);
     auto opt_ba = ctx().data_stack().pop();
     auto* ba = opt_ba->as_byte_array();
-    uint8_t v;
+    uint8_t v = 0;
     ba->get(0, v);
     EXPECT_EQ(v, 42);  // original data preserved
     ba->get(4, v);
@@ -105,7 +105,7 @@ TEST_F(BytePrimitivesTest, StringToBytes) {
     EXPECT_EQ(opt->type, Value::Type::ByteArray);
     auto* ba = opt->as_byte_array();
     EXPECT_EQ(ba->length(), 3u);
-    uint8_t v;
+    uint8_t v = 0;
     ba->get(0, v); EXPECT_EQ(v, 'a');
     ba->get(1, v); EXPECT_EQ(v, 'b');
     ba->get(2, v); EXPECT_EQ(v, 'c');
