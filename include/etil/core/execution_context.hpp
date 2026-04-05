@@ -472,9 +472,11 @@ namespace etil::core {
         // LVFS (for cwd/cd/ls/ll/lr/cat primitives)
         etil::lvfs::Lvfs* lvfs_ = nullptr;
 
-        // UvSession — external override or lazily-owned
+        // UvSession — external override or lazily-owned (not in WASM builds)
         etil::fileio::UvSession* uv_session_external_ = nullptr;
+#ifndef ETIL_WASM_BUILD
         std::unique_ptr<etil::fileio::UvSession> uv_session_owned_;
+#endif
 
         // SelectionEngine (for evolutionary word selection)
         etil::selection::SelectionEngine* selection_engine_ = nullptr;

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/core/execution_context.hpp"
+
+#ifndef ETIL_WASM_BUILD
 #include "etil/fileio/uv_session.hpp"
+#endif
 
 #ifdef __x86_64__
 #include <cpuid.h>
@@ -19,6 +22,7 @@ ExecutionContext::ExecutionContext(uint32_t thread_id)
 
 ExecutionContext::~ExecutionContext() = default;
 
+#ifndef ETIL_WASM_BUILD
 etil::fileio::UvSession* ExecutionContext::uv_session() {
     if (uv_session_external_) return uv_session_external_;
     if (!uv_session_owned_) {
@@ -26,6 +30,11 @@ etil::fileio::UvSession* ExecutionContext::uv_session() {
     }
     return uv_session_owned_.get();
 }
+#else
+etil::fileio::UvSession* ExecutionContext::uv_session() {
+    return nullptr;  // no libuv in WASM builds
+}
+#endif
 
 SIMDContext::SIMDContext() {
 #ifdef __x86_64__
