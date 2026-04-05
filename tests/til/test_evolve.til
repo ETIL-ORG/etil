@@ -39,7 +39,7 @@ variable done
 
 : random-op
     op-pool
-    array-length
+    dup array-length
     0 swap random-range
     array-get ;
 
@@ -69,7 +69,7 @@ variable done
     dup s"  " sjoin ;
 
 : mutate
-    array-length
+    dup array-length
     0 swap random-range
     dup random-gene
     array-set ;
@@ -121,7 +121,7 @@ variable done
 # --- Test: op-pool creates 3-element array ---
 
 ." op-pool size: "
-op-pool array-length swap drop 3 expect-eq
+op-pool array-length 3 expect-eq
 
 # --- Test: num-pos? classification ---
 
@@ -144,7 +144,7 @@ op-pool array-length swap drop 3 expect-eq
 
 ." random-genome length: "
 42 random-seed
-random-genome array-length swap drop GENOME-LEN expect-eq
+random-genome array-length GENOME-LEN expect-eq
 
 # --- Test: genome->code produces a string ---
 

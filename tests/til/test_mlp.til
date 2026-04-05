@@ -49,7 +49,7 @@ variable test-net
 test-net !
 
 : test-make-network
-    test-net @ array-length swap drop 2 s" make-network 2 layers" check-eq
+    test-net @ array-length 2 s" make-network 2 layers" check-eq
 ;
 test-make-network
 
@@ -94,7 +94,7 @@ test-forward-batch
     array->mat
     test-net @ forward-cache
     swap drop
-    array-length swap drop 3 s" forward-cache 3 entries" check-eq
+    array-length 3 s" forward-cache 3 entries" check-eq
 ;
 test-forward-cache
 

@@ -43,7 +43,7 @@ variable done
 
 : random-op
     op-pool
-    array-length
+    dup array-length
     0 swap random-range
     array-get ;
 
@@ -74,13 +74,13 @@ variable done
     s"  " ssplit ;
 
 : mutate
-    array-length
+    dup array-length
     0 swap random-range
     dup random-gene
     array-set ;
 
 : score
-    array-length 0 swap 0
+    dup array-length 0 swap 0
     do
         i num-pos?
         if

@@ -46,9 +46,7 @@ TEST_F(ArrayPrimitivesTest, ArrayPushAndLength) {
     auto opt_len = ctx().data_stack().pop();
     ASSERT_TRUE(opt_len.has_value());
     EXPECT_EQ(opt_len->as_int, 2);
-    auto opt_arr = ctx().data_stack().pop();
-    ASSERT_TRUE(opt_arr.has_value());
-    opt_arr->release();
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
 }
 
 TEST_F(ArrayPrimitivesTest, ArrayPushPop) {

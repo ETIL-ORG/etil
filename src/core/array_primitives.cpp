@@ -99,12 +99,12 @@ bool prim_array_set(ExecutionContext& ctx) {
     return true;
 }
 
-// array-length ( arr -- arr n )
+// array-length ( arr -- n )
 bool prim_array_length(ExecutionContext& ctx) {
     auto* arr = pop_array(ctx);
     if (!arr) return false;
     int64_t len = static_cast<int64_t>(arr->length());
-    ctx.data_stack().push(Value::from(arr));
+    arr->release();
     ctx.data_stack().push(Value(len));
     return true;
 }
@@ -353,7 +353,7 @@ void register_array_primitives(Dictionary& dict) {
     dict.register_word("array-set", make_primitive("array-set", prim_array_set,
         {T::Array, T::Integer, T::Unknown}, {T::Array}));
     dict.register_word("array-length", make_primitive("array-length", prim_array_length,
-        {T::Array}, {T::Array, T::Integer}));
+        {T::Array}, {T::Integer}));
     dict.register_word("array-shift", make_primitive("array-shift", prim_array_shift,
         {T::Array}, {T::Array, T::Unknown}));
     dict.register_word("array-unshift", make_primitive("array-unshift", prim_array_unshift,

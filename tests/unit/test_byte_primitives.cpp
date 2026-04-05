@@ -53,16 +53,16 @@ TEST_F(BytePrimitivesTest, BytesLength) {
     auto opt_len = ctx().data_stack().pop();
     ASSERT_TRUE(opt_len.has_value());
     EXPECT_EQ(opt_len->as_int, 10);
-    auto opt_ba = ctx().data_stack().pop();
-    opt_ba->release();
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
 }
 
 TEST_F(BytePrimitivesTest, BytesResize) {
-    run("4 bytes-new 0 42 bytes-set 8 bytes-resize bytes-length");
+    run("4 bytes-new 0 42 bytes-set dup 8 bytes-resize bytes-length");
     auto opt_len = ctx().data_stack().pop();
     ASSERT_TRUE(opt_len.has_value());
     EXPECT_EQ(opt_len->as_int, 8);
     auto opt_ba = ctx().data_stack().pop();
+    ASSERT_TRUE(opt_ba.has_value());
     auto* ba = opt_ba->as_byte_array();
     uint8_t v = 0;
     ba->get(0, v);

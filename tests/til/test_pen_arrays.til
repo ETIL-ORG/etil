@@ -9,14 +9,14 @@ include tests/til/harness.til
 # --- Valid boundary operations ---
 
 ." array empty length: "
-array-new array-length 0 expect-eq drop
+array-new array-length 0 expect-eq
 
 ." array push and get idx 0: "
 array-new 42 array-push 0 array-get 42 expect-eq
 
 ." array push 3 and length: "
 array-new 10 array-push 20 array-push 30 array-push
-array-length 3 expect-eq drop
+array-length 3 expect-eq
 
 ." array overwrite element: "
 array-new 42 array-push 0 99 array-set 0 array-get 99 expect-eq
@@ -30,15 +30,15 @@ array-new 10 array-push 20 array-push array-shift 10 expect-eq drop
 ." array drain via pop: "
 array-new 1 array-push 2 array-push 3 array-push
 array-pop drop array-pop drop array-pop drop
-array-length 0 expect-eq drop
+array-length 0 expect-eq
 
 ." array drain via shift: "
 array-new 1 array-push 2 array-push 3 array-push
 array-shift drop array-shift drop array-shift drop
-array-length 0 expect-eq drop
+array-length 0 expect-eq
 
 ." array compact empty: "
-array-new array-compact array-length 0 expect-eq drop
+array-new array-compact array-length 0 expect-eq
 
 ." array compact preserves: "
 array-new 42 array-push 99 array-push array-compact
@@ -53,7 +53,7 @@ array-new 1 array-push 2 array-push 3 array-push array-reverse
 0 array-get 3 expect-eq
 
 ." array reverse empty: "
-array-new array-reverse array-length 0 expect-eq drop
+array-new array-reverse array-length 0 expect-eq
 
 ." array reverse single: "
 array-new 42 array-push array-reverse 0 array-get 42 expect-eq
@@ -107,5 +107,5 @@ drop drop pass
 # --- Verify interpreter still healthy after PEN ---
 ." array post-PEN sanity: "
 array-new 100 array-push 200 array-push
-array-length 2 expect-eq
+dup array-length 2 expect-eq
 0 array-get 100 expect-eq

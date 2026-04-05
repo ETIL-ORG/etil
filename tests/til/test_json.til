@@ -40,7 +40,7 @@ j| true | json-type s" boolean" s= expect-true
 
 # --- json-keys ---
 ." json-keys: "
-j| {"x": 1, "y": 2} | json-keys array-length swap drop 2 expect-eq
+j| {"x": 1, "y": 2} | json-keys array-length 2 expect-eq
 
 # --- json->map ---
 ." json->map: "
@@ -48,7 +48,7 @@ j| {"name": "test"} | json->map s" name" map-get s" test" s= expect-true
 
 # --- json->array ---
 ." json->array: "
-j| [10, 20] | json->array array-length swap drop 2 expect-eq
+j| [10, 20] | json->array array-length 2 expect-eq
 
 # --- map->json ---
 ." map->json: "

@@ -52,7 +52,7 @@ variable done
 # random-op ( -- str )  Random operator from pool
 : random-op
     op-pool
-    array-length
+    dup array-length
     0 swap random-range
     array-get ;
 
@@ -89,7 +89,7 @@ variable done
 
 # mutate ( genome -- genome )  Change one random gene in-place
 : mutate
-    array-length
+    dup array-length
     0 swap random-range
     dup random-gene
     array-set ;

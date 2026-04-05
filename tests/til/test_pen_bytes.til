@@ -9,7 +9,7 @@ include tests/til/harness.til
 # --- Valid boundary operations ---
 
 ." bytes zero-size create: "
-0 bytes-new bytes-length 0 expect-eq drop
+0 bytes-new bytes-length 0 expect-eq
 
 ." bytes last valid index get: "
 4 bytes-new 3 bytes-get 0 expect-eq
@@ -30,13 +30,13 @@ include tests/til/harness.til
 4 bytes-new 0 257 bytes-set 0 bytes-get 1 expect-eq
 
 ." bytes resize grow from zero: "
-0 bytes-new 10 bytes-resize bytes-length 10 expect-eq drop
+0 bytes-new 10 bytes-resize bytes-length 10 expect-eq
 
 ." bytes resize shrink to zero: "
-4 bytes-new 0 bytes-resize bytes-length 0 expect-eq drop
+4 bytes-new 0 bytes-resize bytes-length 0 expect-eq
 
 ." bytes negative resize clamps: "
-4 bytes-new -5 bytes-resize bytes-length 0 expect-eq drop
+4 bytes-new -5 bytes-resize bytes-length 0 expect-eq
 
 ." bytes grow preserves data: "
 2 bytes-new 0 42 bytes-set 1 99 bytes-set 4 bytes-resize
@@ -49,7 +49,7 @@ include tests/til/harness.til
 s" hello" string->bytes bytes->string s" hello" s= true expect-eq
 
 ." bytes round-trip length: "
-s" hello" string->bytes bytes-length 5 expect-eq drop
+s" hello" string->bytes bytes-length 5 expect-eq
 
 # --- PEN: operations that should fail gracefully ---
 # These trigger "returns false" at the interpret level.

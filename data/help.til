@@ -1006,7 +1006,7 @@ s" array-set" s" stack-effect" s" text" s" ( array index value -- array )" meta!
 s" array-set" s" category" s" text" s" array" meta! drop
 
 s" array-length" s" description" s" text" s" Get number of elements" meta! drop
-s" array-length" s" stack-effect" s" text" s" ( array -- array n )" meta! drop
+s" array-length" s" stack-effect" s" text" s" ( array -- n )" meta! drop
 s" array-length" s" category" s" text" s" array" meta! drop
 
 s" array-shift" s" description" s" text" s" Remove and return first element" meta! drop

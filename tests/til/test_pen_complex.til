@@ -38,14 +38,14 @@ array-shift s" first" s= true expect-eq drop
 array-new
 3 bytes-new array-push
 5 bytes-new array-push
-array-length 2 expect-eq
-0 array-get bytes-length 3 expect-eq drop
+dup array-length 2 expect-eq
+0 array-get bytes-length 3 expect-eq
 
 ." array of byte arrays second: "
 array-new
 3 bytes-new array-push
 5 bytes-new array-push
-1 array-get bytes-length 5 expect-eq drop
+1 array-get bytes-length 5 expect-eq
 
 ." array of byte arrays with data: "
 array-new
@@ -58,7 +58,7 @@ array-new
 array-new
   array-new 10 array-push 20 array-push array-push
   array-new 30 array-push 40 array-push array-push
-array-length 2 expect-eq drop
+array-length 2 expect-eq
 
 ." nested array inner access: "
 array-new
@@ -79,7 +79,7 @@ array-new
   42 array-push
   s" hello" array-push
   3 bytes-new array-push
-array-length 3 expect-eq
+dup array-length 3 expect-eq
 0 array-get 42 expect-eq
 
 ." mixed type array string: "
@@ -94,7 +94,7 @@ array-new
   42 array-push
   s" hello" array-push
   3 bytes-new array-push
-2 array-get bytes-length 3 expect-eq drop
+2 array-get bytes-length 3 expect-eq
 
 # --- String/bytes conversion round-trips ---
 
@@ -125,7 +125,7 @@ array-new s" x" array-push s" y" array-push array-compact
 
 ." compact preserves ints: "
 array-new 1 array-push 2 array-push 3 array-push array-compact
-array-length 3 expect-eq
+dup array-length 3 expect-eq
 2 array-get 3 expect-eq
 
 # --- Stress: build and discard heap objects (control flow is compile-only) ---
@@ -189,5 +189,5 @@ test-begin-until 42 expect-eq
 # --- Verify interpreter still healthy ---
 ." complex post-PEN sanity: "
 array-new 1 array-push 2 array-push 3 array-push
-array-length 3 expect-eq
+dup array-length 3 expect-eq
 1 array-get 2 expect-eq

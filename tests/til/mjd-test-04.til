@@ -10,7 +10,7 @@ get-file s| \n| ssplit constant word-array
 : random-words
     10000 0
     do
-        word-array array-length 0 swap random-range array-get s.
+        word-array dup array-length 0 swap random-range array-get s.
         space i 1 + 10 mod 0 =
         if cr then
     loop ;

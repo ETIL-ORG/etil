@@ -292,9 +292,7 @@ TEST_F(JsonPrimitivesTest, JsonKeys) {
     ASSERT_TRUE(opt.has_value());
     EXPECT_EQ(opt->type, Value::Type::Integer);
     EXPECT_EQ(opt->as_int, 2);
-    auto arr = ctx().data_stack().pop();  // array
-    ASSERT_TRUE(arr.has_value());
-    arr->release();
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
 }
 
 // --- Pack/Unpack ---
@@ -319,9 +317,7 @@ TEST_F(JsonPrimitivesTest, JsonToArray) {
     ASSERT_TRUE(opt.has_value());
     EXPECT_EQ(opt->type, Value::Type::Integer);
     EXPECT_EQ(opt->as_int, 3);
-    auto arr = ctx().data_stack().pop();  // array (array-length is non-destructive)
-    ASSERT_TRUE(arr.has_value());
-    arr->release();
+    EXPECT_EQ(ctx().data_stack().size(), 0u);
 }
 
 TEST_F(JsonPrimitivesTest, MapToJson) {

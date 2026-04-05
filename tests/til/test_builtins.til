@@ -53,7 +53,7 @@ true expect-eq
 ." meta-keys count: "
 s" testword" meta-keys
 true expect-eq
-array-length 2 expect-eq drop
+array-length 2 expect-eq
 
 ." meta-del success: "
 s" testword" s" author" meta-del
@@ -67,7 +67,7 @@ false expect-eq
 ." meta-keys after delete: "
 s" testword" meta-keys
 true expect-eq
-array-length 1 expect-eq drop
+array-length 1 expect-eq
 
 # --- impl-meta! / impl-meta@ ---
 

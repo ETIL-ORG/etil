@@ -71,19 +71,19 @@ s" hello" s" xyz" s" !" sreplace s" hello" s= true expect-eq
 # --- ssplit/sjoin edge cases ---
 
 ." ssplit empty string: "
-s" " s" ," ssplit array-length 1 expect-eq drop
+s" " s" ," ssplit array-length 1 expect-eq
 
 ." sjoin empty array: "
 array-new s" ," sjoin s" " s= true expect-eq
 
 ." ssplit single char delim: "
-s" a,b,c" s" ," ssplit array-length 3 expect-eq drop
+s" a,b,c" s" ," ssplit array-length 3 expect-eq
 
 ." ssplit no delimiter found: "
-s" hello" s" ," ssplit array-length 1 expect-eq drop
+s" hello" s" ," ssplit array-length 1 expect-eq
 
 ." ssplit empty delimiter: "
-s" abc" s" " ssplit array-length 3 expect-eq drop
+s" abc" s" " ssplit array-length 3 expect-eq
 
 # --- slength edge cases ---
 

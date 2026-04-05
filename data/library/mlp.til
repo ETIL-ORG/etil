@@ -102,7 +102,7 @@ variable _tn-lr
 # forward ( X network -- Y )
 : forward
     _fw-net !
-    _fw-net @ array-length swap drop 0 do
+    _fw-net @ array-length 0 do
         _fw-net @ i array-get layer-forward
     loop
 ;
@@ -129,7 +129,7 @@ variable _tn-lr
     array-new _fc-cache !
     dup map-new s" A" rot map-set
     _fc-cache @ swap array-push _fc-cache !
-    _fc-net @ array-length swap drop 0 do
+    _fc-net @ array-length 0 do
         _fc-net @ i array-get layer-forward-cache
         _fc-cache @ swap array-push _fc-cache !
     loop
@@ -182,7 +182,7 @@ variable _tn-lr
     mat- 2.0 mat-scale _bk-dA !
     array-new >r
     # Iterate layers in reverse (countdown loop)
-    _bk-net @ array-length swap drop 1 -
+    _bk-net @ array-length 1 -
     begin
         dup 0 >=
     while
@@ -214,7 +214,7 @@ variable _tn-lr
 # Mutates layer maps in-place.
 : sgd-update
     _su-lr ! _su-grads ! _su-net !
-    _su-net @ array-length swap drop 0 do
+    _su-net @ array-length 0 do
         _su-net @ i array-get _su-layer !
         _su-grads @ i array-get _su-grad !
         # W' = W - lr * dW

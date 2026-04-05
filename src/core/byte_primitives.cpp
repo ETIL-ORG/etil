@@ -79,12 +79,12 @@ bool prim_bytes_set(ExecutionContext& ctx) {
     return true;
 }
 
-// bytes-length ( bytes -- bytes n )
+// bytes-length ( bytes -- n )
 bool prim_bytes_length(ExecutionContext& ctx) {
     auto* ba = pop_byte_array(ctx);
     if (!ba) return false;
     int64_t len = static_cast<int64_t>(ba->length());
-    ctx.data_stack().push(Value::from(ba));
+    ba->release();
     ctx.data_stack().push(Value(len));
     return true;
 }
@@ -145,7 +145,7 @@ void register_byte_primitives(Dictionary& dict) {
     dict.register_word("bytes-set", make_primitive("bytes-set", prim_bytes_set,
         {T::Unknown, T::Integer, T::Integer}, {T::Unknown}));
     dict.register_word("bytes-length", make_primitive("bytes-length", prim_bytes_length,
-        {T::Unknown}, {T::Unknown, T::Integer}));
+        {T::Unknown}, {T::Integer}));
     dict.register_word("bytes-resize", make_primitive("bytes-resize", prim_bytes_resize,
         {T::Unknown, T::Integer}, {T::Unknown}));
     dict.register_word("bytes->string", make_primitive("bytes->string", prim_bytes_to_string,

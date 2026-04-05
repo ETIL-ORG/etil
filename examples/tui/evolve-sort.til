@@ -17,8 +17,8 @@ variable best-net
 variable best-score
 variable gen-count
 
-# Helper: array-length drops the array, keeps only the count
-: alen array-length swap drop ;
+# Helper: alias for array-length (kept for historical non-consuming compat)
+: alen array-length ;
 
 # --- All 24 permutations of [1,2,3,4] ---
 variable perms

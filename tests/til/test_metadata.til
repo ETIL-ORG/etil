@@ -41,7 +41,7 @@ s" square" meta-keys
 true expect-eq
 # 3 user keys (definition-type/source-file/source-line are now impl-level)
 ." meta-keys array length: "
-array-length 3 expect-eq drop
+array-length 3 expect-eq
 
 # meta-del success returns -1
 ." meta-del success: "
@@ -57,7 +57,7 @@ s" square" s" example" meta@
 ." meta-keys after delete: "
 s" square" meta-keys
 true expect-eq
-array-length 2 expect-eq drop
+array-length 2 expect-eq
 
 # meta-del failure (already deleted) returns 0
 ." meta-del already deleted: "
