@@ -35,7 +35,7 @@ public:
     void set_word_pool(const std::vector<std::string>* pool) { word_pool_ = pool; }
 
     /// Set the bridge map for type repair bridge insertion.
-    void set_bridge_map(const BridgeMap* map) { repair_.set_bridge_map(map); }
+    void set_bridge_map(BridgeMap* map) { repair_.set_bridge_map(map); }
 
     /// Mutate a WordImpl using AST-level operators.
     /// Returns a new WordImpl with mutated bytecode, or null if mutation failed.

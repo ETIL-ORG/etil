@@ -276,3 +276,69 @@ TEST_F(BridgeRepairTest, MultiHopBridge) {
     EXPECT_EQ(ast.children[3].word_name, "int->float");    // Integer → Float
     EXPECT_EQ(ast.children[4].word_name, "float->int");    // Float → Integer (original)
 }
+
+// --- Phase 3: TypeRepair uses weighted selection ---
+
+// Add a second String→Integer bridge to create multiple candidates
+class WeightedBridgeRepairTest : public BridgeRepairTest {
+protected:
+    void SetUp() override {
+        BridgeRepairTest::SetUp();
+        // String → Integer already has slength; add a second option
+        using T = TypeSignature::Type;
+        bridge_map.add(T::String, T::Integer, "staint");
+        bridge_map.finalize();
+        bridge_map.set_rng_seed(42);
+    }
+};
+
+TEST_F(WeightedBridgeRepairTest, RepairRecordsSelectionCounters) {
+    // String → Integer bridge needed; count that selections increment on repair
+    using T = TypeSignature::Type;
+
+    // Start with clean counters — BridgeMap is fresh for this test case
+    ASTNode ast = ASTNode::make_sequence({
+        ASTNode::make_literal_string("hello"),
+        ASTNode::make_word_call("int->float")  // needs Integer, has String
+    });
+
+    bool ok = repair.repair(ast, dict);
+    EXPECT_TRUE(ok);
+
+    // One of the String→Integer bridges should have selections=1
+    const auto& edges = bridge_map.conversions_from(T::String);
+    uint64_t total_selections = 0;
+    for (const auto& e : edges) {
+        if (e.to == T::Integer) total_selections += e.selections;
+    }
+    EXPECT_GE(total_selections, 1u);
+}
+
+TEST_F(WeightedBridgeRepairTest, RepairFavorsHeavyWeightedBridge) {
+    // Make slength heavily weighted; staint should be starved
+    using T = TypeSignature::Type;
+    bridge_map.set_edge_weight(T::String, T::Integer, "slength", 10.0);
+    bridge_map.set_edge_weight(T::String, T::Integer, "staint", 0.1);
+
+    int slength_count = 0;
+    int staint_count = 0;
+
+    for (int i = 0; i < 50; ++i) {
+        ASTNode ast = ASTNode::make_sequence({
+            ASTNode::make_literal_string("hello"),
+            ASTNode::make_word_call("int->float")
+        });
+        bool ok = repair.repair(ast, dict);
+        ASSERT_TRUE(ok);
+
+        // The inserted bridge is at children[1] (after the literal at 0)
+        ASSERT_GE(ast.children.size(), 2u);
+        const auto& bridge = ast.children[1].word_name;
+        if (bridge == "slength") slength_count++;
+        else if (bridge == "staint") staint_count++;
+    }
+
+    // slength should dominate — expect ≥40 of 50
+    EXPECT_GE(slength_count, 40);
+    EXPECT_LE(staint_count, 10);
+}
