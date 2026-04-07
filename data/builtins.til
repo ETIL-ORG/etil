@@ -59,3 +59,32 @@
 
 : obs-interval 0 swap obs-timer ;
 
+# --- MCE (Modular Co-Evolution) ---
+
+# evolve-chain uses evolve-sub ( sub-str chain-str -- n ) to mutate
+# each sub-concept while evaluating the chain word for fitness.
+# Tests must be registered on the chain word beforehand.
+
+variable _mce-subs
+variable _mce-chain
+
+: _evolve-round   # ( -- )
+  _mce-subs @ dup array-length   # array n
+  0 do                            # loop n times; stack: array
+    dup i array-get               # array sub-concept-str
+    _mce-chain @ evolve-sub drop  # array; evolve sub via chain, discard count
+  loop
+  drop                            # release array ref
+;
+
+# evolve-chain ( chain-str sub-concepts-array generations -- )
+# Round-robin evolution: for each generation, evolve each sub-concept
+# once via chain-level fitness evaluation.
+: evolve-chain
+  swap _mce-subs !                # save sub-concepts; stack: chain-str generations
+  swap _mce-chain !               # save chain name; stack: generations
+  0 do
+    _evolve-round
+  loop
+;
+

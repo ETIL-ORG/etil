@@ -40,6 +40,30 @@ TBBP with cross-type target. Target: `f(x) = Float x²` (Integer input → Float
 
 **Expected finding:** Still sparse signal — reward signal is anti-correlated with TypeRepair firing. See `docs/claude-knowledge/20260405A-TBBP-Validation-Findings.md` for analysis.
 
+### `bench_mce_monolithic.til`
+
+Monolithic evolution baseline for MCE comparison. Target: `f(x) = x² + 3x + 5` (Integer → Integer).
+
+- Single `target-fn` word, evolved monolithically
+- 100 generations, RNG seed 42
+- 9 test cases (x = -3, -1, 0, 1, 2, 3, 4, 5, 10)
+
+### `bench_mce_quad.til`
+
+MCE round-robin co-evolution of decomposed sub-concepts. Same target function.
+
+- Decomposition: `square-term` / `linear-term` / `offset` / `target-fn`
+- 100 rounds × 3 sub-concepts = 300 total `evolve-word` calls
+- Same RNG seed (42) and test cases as monolithic for fair comparison
+
+**MCE Phase Comparison:**
+
+| Metric | Monolithic | MCE Chain |
+|--------|-----------|-----------|
+| Gen to ≥0.95 fitness | TBD | TBD |
+| Final fitness | TBD | TBD |
+| Weight variance (per sub-concept) | N/A | TBD |
+
 ## Adding New Benchmarks
 
 Follow the naming pattern `bench_<feature>_<variant>.til`. Benchmarks should:
