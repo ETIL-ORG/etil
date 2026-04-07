@@ -167,14 +167,6 @@ The bridge insertion logic at the DAG level mirrors `TypeRepair` at the AST leve
 | **Duplicate** | Copy a concept node (and its impl population), creating a specialized variant | Same type as original; impls diverge over time |
 | **Absorb** | Inline a child concept's best impl into the parent impl's bytecode | Collapses one level of nesting |
 
-### Edge Mutations
-
-| Mutation | Description |
-|----------|-------------|
-| **Reorder** | Swap the position of two child concepts within a parent impl |
-| **Bridge swap** | Replace the bridge word on an edge with an alternative from the BridgeMap |
-| **Contract change** | Widen or narrow the type contract on an edge (e.g., Integer → Unknown) |
-
 ### Subtree Mutations
 
 | Mutation | Description |
