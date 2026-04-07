@@ -10,7 +10,7 @@
 - `20260405B-TBBP-Implementation-Plan.md` — TBBP plan format used as template
 - `20260403B-Type-Directed-Bridges-Implementation-Plan.md` — TDB (shipped v1.12.10)
 
-**Prerequisites:** v1.13.12 (TBBP shipped, BridgeMap with weighted selection operational, etil-web WASM deployed, 1486/1486 tests passing)
+**Prerequisites:** v2.1.1 (TBBP shipped, BridgeMap with weighted selection operational, etil-web WASM deployed, primitive signatures normalized, 1486/1486 tests passing)
 **Status:** Plan
 **Workflow:** See `docs/claude-knowledge/20260403A-feature-branch-workflow.md` and `docs/claude-knowledge/20260404-speedbumps.md`
 
@@ -30,12 +30,12 @@ missing is **orchestration**: scheduling, credit accounting, and module-aware cr
 
 This plan covers four phases:
 
-| Phase | What | Where | Estimated Effort |
-|---|---|---|---|
-| **1a** | Round-robin evolve-chain TIL word | TIL-only (data/builtins.til) | ~1 day |
-| **1b** | Chain-level credit accounting | C++ (EvolutionEngine) | ~3 days |
-| **2**  | Co-evolutionary mean-over-partners credit | C++ (EvolutionEngine) | ~1 week |
-| **3**  | Module-boundary crossover | C++ (ast_genetic_ops) | ~2 days |
+| Phase | What | Where | Estimated Effort | Version |
+|---|---|---|---|---|
+| **1a** | Round-robin evolve-chain TIL word | TIL-only (data/builtins.til) | ~1 day | v2.2.x |
+| **1b** | Chain-level credit accounting | C++ (EvolutionEngine) | ~3 days | v2.3.x |
+| **2**  | Co-evolutionary mean-over-partners credit | C++ (EvolutionEngine) | ~1 week | v2.4.x |
+| **3**  | Module-boundary crossover | C++ (ast_genetic_ops) | ~2 days | v2.5.x |
 
 Each phase ships as its own version bump on a feature branch, is benchmarked against the prior
 phase's baseline, and is either merged or discarded based on a measurable delta. Phase 2 is
@@ -91,7 +91,7 @@ Lessons drawn directly from `20260405A-MCE-Design-Review.md` and
 **Goal:** Demonstrate that round-robin evolution of user-decomposed sub-concepts converges on
 the quadratic target faster (or at least no slower) than monolithic evolution. No C++ changes.
 
-**Branch:** `scripts/branch.sh mce-phase-1a-orchestration` → v1.14.0
+**Branch:** `scripts/branch.sh mce-phase-1a-orchestration` → v2.2.0
 **Estimated effort:** ~1 day (TIL glue + benchmark)
 
 ### Design
@@ -188,7 +188,7 @@ monolithic.
 
 ### Super-Push Gate
 
-v1.14.0 ships only if Phase 1a validation passes (one of the three criteria above). If not, the
+v2.2.0 ships only if Phase 1a validation passes (one of the three criteria above). If not, the
 branch is held and Phase 1b is attempted directly on the same branch.
 
 ---
@@ -199,7 +199,7 @@ branch is held and Phase 1b is attempted directly on the same branch.
 "whatever chain fitness happened when this impl ran." This tightens credit-assignment noise
 that Phase 1a's implicit credit may expose.
 
-**Branch:** `scripts/branch.sh mce-phase-1b-credit` → v1.15.0 (if 1a merged)
+**Branch:** `scripts/branch.sh mce-phase-1b-credit` → v2.3.0 (if 1a merged)
 **Estimated effort:** ~3 days
 
 ### Design
@@ -301,7 +301,7 @@ with multiple partner combinations and use the **mean fitness across partners** 
 weight. This eliminates the Red Queen problem (impl A performs well only with partner B, so
 B's replacement destroys A's apparent fitness).
 
-**Branch:** `scripts/branch.sh mce-phase-2-coevol` → v1.16.0
+**Branch:** `scripts/branch.sh mce-phase-2-coevol` → v2.4.0
 **Estimated effort:** ~1 week
 **Skip condition:** Phase 1b produces stable weights across 5 runs of
 `bench_mce_quad.til` (stddev of winning-impl weight < 0.1 per sub-concept).
@@ -369,7 +369,7 @@ branch is held as future work.
 **Goal:** Add `chain_crossover` — swap sub-concept impl references between two chains — as a
 complement to word-level AST crossover. This is "sexual reproduction at the module level."
 
-**Branch:** `scripts/branch.sh mce-phase-3-crossover` → v1.17.0 (or v1.16.0 if Phase 2 skipped)
+**Branch:** `scripts/branch.sh mce-phase-3-crossover` → v2.5.0 (or v2.4.0 if Phase 2 skipped)
 **Estimated effort:** ~2 days
 
 ### Design
@@ -481,7 +481,7 @@ requirement that benchmark sub-concepts must have explicit concrete-type bodies.
 ## Revisiting TBBP After MCE
 
 The TBBP Validation Findings (`20260405C-TBBP-Validation-Findings.md` §"Recommendation") noted:
-> Revisit with Path B or Path C as a v1.14+ experiment once MCE is operational. MCE's
+> Revisit with Path B or Path C as a v2.2+ experiment once MCE is operational. MCE's
 > round-robin evolution may produce cleaner fitness deltas that could make TBBP's signal more
 > actionable.
 
@@ -497,25 +497,25 @@ it is not lost.
 ## Sequencing Summary
 
 ```
-v1.13.12 (master, current)
+v2.1.1 (master, current)
     │
     ├── Phase 1a branch: mce-phase-1a-orchestration
-    │     └── v1.14.0 — TIL evolve-chain + bench_mce_quad.til
+    │     └── v2.2.0 — TIL evolve-chain + bench_mce_quad.til
     │         └── [validation gate: 1-of-3 criteria]
     │             └── merge to master
     │
     ├── Phase 1b branch: mce-phase-1b-credit
-    │     └── v1.15.0 — chain concept + survival credit
+    │     └── v2.3.0 — chain concept + survival credit
     │         └── [validation gate: variance ↓, convergence ≤]
     │             └── merge to master
     │
     ├── Phase 2 branch: mce-phase-2-coevol  [CONDITIONAL]
-    │     └── v1.16.0 — mean-over-partners credit
+    │     └── v2.4.0 — mean-over-partners credit
     │         └── [validation gate: solves pathological case]
     │             └── merge OR hold branch as future work
     │
     └── Phase 3 branch: mce-phase-3-crossover
-          └── v1.17.0 (or v1.16.0 if 2 skipped) — chain_crossover
+          └── v2.5.0 (or v2.4.0 if 2 skipped) — chain_crossover
               └── [validation gate: faster convergence]
                   └── merge to master
 ```
