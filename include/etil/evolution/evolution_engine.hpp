@@ -11,6 +11,8 @@
 #include "etil/selection/selection_engine.hpp"
 #include "etil/core/dictionary.hpp"
 
+#include <chrono>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -61,6 +63,12 @@ public:
     /// Returns the number of children created and evaluated.
     size_t evolve_word(const std::string& word);
 
+    /// MCE: mutate sub_concept but evaluate chain_word for fitness.
+    /// Tests must be registered on chain_word. Children are registered
+    /// under sub_concept. Returns children created.
+    size_t evolve_sub_concept(const std::string& sub_concept,
+                               const std::string& chain_word);
+
     /// Evolve all words that have test cases registered.
     void evolve_all();
 
@@ -88,6 +96,9 @@ public:
     BridgeMap& bridge_map() { return bridge_map_; }
     const BridgeMap& bridge_map() const { return bridge_map_; }
 
+    /// Seed all RNGs for deterministic, reproducible evolution runs.
+    void seed_rng(uint64_t seed);
+
 private:
     EvolutionConfig config_;
     etil::core::Dictionary& dict_;
@@ -97,6 +108,8 @@ private:
     BridgeMap bridge_map_;
     EvolveLogger logger_;
     etil::selection::SelectionEngine parent_selector_;
+    std::mt19937_64 rng_{static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count())};
 
     struct WordEvolution {
         std::vector<TestCase> tests;

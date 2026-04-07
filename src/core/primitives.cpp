@@ -2020,6 +2020,46 @@ bool prim_evolve_log_dir(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-sub ( sub-str chain-str -- n )
+// MCE: mutate sub-concept but evaluate chain for fitness.
+bool prim_evolve_sub(ExecutionContext& ctx) {
+    auto* chain_str = pop_string(ctx);
+    if (!chain_str) return false;
+    auto* sub_str = pop_string(ctx);
+    if (!sub_str) { chain_str->release(); return false; }
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        sub_str->release();
+        chain_str->release();
+        ctx.data_stack().push(Value(int64_t(0)));
+        return true;
+    }
+
+    std::string sub(sub_str->c_str(), sub_str->length());
+    std::string chain(chain_str->c_str(), chain_str->length());
+    sub_str->release();
+    chain_str->release();
+
+    size_t created = engine->evolve_sub_concept(sub, chain);
+    ctx.data_stack().push(Value(static_cast<int64_t>(created)));
+    return true;
+}
+
+// evolve-seed! ( n -- )
+// Seed all evolution RNGs for deterministic, reproducible runs.
+bool prim_evolve_seed(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    if (opt->type == Value::Type::Integer) {
+        engine->seed_rng(static_cast<uint64_t>(opt->as_int));
+    }
+    return true;
+}
+
 // --- Help primitive ---
 
 namespace {
@@ -3507,6 +3547,8 @@ static const PrimEntry prim_table[] = {
     {"evolve-log-stop",        prim_evolve_log_stop,        0, 0, {},                    {}},
     {"evolve-log-dir",         prim_evolve_log_dir,         1, 0, {T::String},           {}},
     {"evolve-log-show-failed", prim_evolve_log_show_failed, 1, 0, {T::Boolean},          {}},
+    {"evolve-seed!",           prim_evolve_seed,            1, 0, {T::Integer},          {}},
+    {"evolve-sub",             prim_evolve_sub,             2, 1, {T::String, T::String}, {T::Integer}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::String}},

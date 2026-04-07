@@ -44,6 +44,9 @@ public:
 
     const MutationConfig& config() const { return config_; }
 
+    /// Override the RNG seed (for deterministic benchmarks).
+    void set_rng_seed(uint64_t seed) { rng_.seed(seed); }
+
 private:
     MutationConfig config_;
     std::mt19937_64 rng_;

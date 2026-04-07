@@ -685,6 +685,18 @@ s" evolve-log-show-failed" s" description" s" text" s" Enable/disable showing fa
 s" evolve-log-show-failed" s" stack-effect" s" text" s" ( flag -- )" meta! drop
 s" evolve-log-show-failed" s" category" s" text" s" evolution" meta! drop
 
+s" evolve-seed!" s" description" s" text" s" Seed all evolution RNGs for deterministic reproducible runs" meta! drop
+s" evolve-seed!" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" evolve-seed!" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-sub" s" description" s" text" s" MCE: mutate sub-concept but evaluate chain word for fitness" meta! drop
+s" evolve-sub" s" stack-effect" s" text" s" ( sub-str chain-str -- n )" meta! drop
+s" evolve-sub" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-chain" s" description" s" text" s" Round-robin evolution of sub-concepts within a chain word" meta! drop
+s" evolve-chain" s" stack-effect" s" text" s" ( chain-str sub-concepts-array generations -- )" meta! drop
+s" evolve-chain" s" category" s" text" s" evolution" meta! drop
+
 # --- System ---
 
 s" sys-semver" s" description" s" text" s" Print project semantic version" meta! drop

@@ -2605,6 +2605,9 @@ These words drive the evolutionary pipeline. Available in both the REPL and MCP 
 | `evolve-word` | `( word-str -- n )` | Run one generation of evolution, return children created |
 | `evolve-all` | `( -- )` | Evolve all words with registered test cases |
 | `evolve-status` | `( word-str -- n )` | Return number of generations evolved |
+| `evolve-sub` | `( sub-str chain-str -- n )` | MCE: mutate sub-concept, evaluate chain for fitness |
+| `evolve-chain` | `( chain-str subs-array gens -- )` | MCE: round-robin evolution of sub-concepts |
+| `evolve-seed!` | `( n -- )` | Seed all evolution RNGs for reproducible runs |
 
 ### Semantic Tags and Bridges
 
@@ -2695,6 +2698,29 @@ Weights have a floor (default 0.05) to preserve exploration. The default learnin
 ```
 
 Weights reset per evolution run (no persistence). Useful for discovering which bridges are productive for a given problem domain.
+
+### Modular Co-Evolution (MCE)
+
+MCE decomposes a target word into sub-concepts and evolves each independently while evaluating chain-level fitness. Instead of evolving one monolithic word, users decompose the problem:
+
+```til
+: square-term  dup * ;                                     # sub-concept
+: linear-term  3 * ;                                       # sub-concept
+: offset       5 ;                                         # sub-concept
+: target-fn    dup square-term swap linear-term + offset + ;  # chain
+
+# Register tests on the chain word
+s" target-fn" tests evolve-register drop
+
+# Round-robin: each generation evolves one sub-concept via chain fitness
+s" target-fn"
+  array-new s" square-term" array-push s" linear-term" array-push s" offset" array-push
+  100 evolve-chain
+```
+
+`evolve-chain` iterates N generations, calling `evolve-sub` on each sub-concept in round-robin order. `evolve-sub` mutates the sub-concept's impls but evaluates the chain word's test cases for fitness — so children are scored on their contribution to the full chain, not in isolation.
+
+`evolve-seed!` seeds all evolution RNGs (engine, AST genetic ops, bytecode genetic ops, bridge map) for deterministic, reproducible benchmark runs.
 
 ## Appendix U: Evolution Logging
 

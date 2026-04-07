@@ -1,0 +1,67 @@
+# MCE benchmark — round-robin co-evolution of decomposed sub-concepts
+# Target: f(x) = x^2 + 3x + 5  (Integer -> Integer)
+# Decomposed as: target-fn = square-term swap linear-term + offset +
+#
+# Compare with bench_mce_monolithic.til using the same RNG seed and
+# generation budget.
+
+# --- Sub-concept definitions ---
+
+: square-term  dup * ;            # ( Integer -- Integer )
+: linear-term  3 * ;              # ( Integer -- Integer )
+: offset       5 ;                # ( -- Integer )
+: target-fn    dup square-term swap linear-term + offset + ;
+
+# --- Build test cases on the chain word ---
+
+: mk-test   # ( x -- map )
+  dup target-fn
+  array-new swap array-push
+  swap
+  array-new swap array-push
+  map-new rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: tests
+  array-new
+  0  mk-test array-push
+  1  mk-test array-push
+  2  mk-test array-push
+  3  mk-test array-push
+  4  mk-test array-push
+  5  mk-test array-push
+  -1 mk-test array-push
+  -3 mk-test array-push
+  10 mk-test array-push
+;
+
+# --- Configure evolution ---
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+42 evolve-seed!
+
+# --- Logging ---
+
+s" /tmp/" evolve-log-dir
+1 65535 evolve-log-start
+
+# --- Register tests on the chain word and evolve ---
+
+s" target-fn" tests evolve-register drop
+
+." === MCE Chain: 100 generations (3 sub-concepts x 100 rounds) ===" cr
+
+s" target-fn"
+  array-new s" square-term" array-push s" linear-term" array-push s" offset" array-push
+  100
+  evolve-chain
+
+." target-fn generations: " s" target-fn" evolve-status . cr
+
+evolve-log-stop
+." Log closed" cr

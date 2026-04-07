@@ -1,0 +1,92 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# test_mce.til — Integration test for Modular Co-Evolution (MCE) Phase 1a
+# Validates: evolve-seed!, evolve-chain, round-robin sub-concept evolution
+
+include tests/til/harness.til
+
+# ===================================================================
+# Setup: sub-concept decomposition of f(x) = x^2 + 3x + 5
+# ===================================================================
+
+: square-term  dup * ;
+: linear-term  3 * ;
+: offset       5 ;
+: target-fn    dup square-term swap linear-term + offset + ;
+
+# ===================================================================
+# Test 1: target-fn computes correctly
+# ===================================================================
+
+." target-fn(0)=5: "   0 target-fn 5  expect-eq
+." target-fn(1)=9: "   1 target-fn 9  expect-eq
+." target-fn(2)=15: "  2 target-fn 15 expect-eq
+." target-fn(3)=23: "  3 target-fn 23 expect-eq
+." target-fn(-1)=3: " -1 target-fn 3  expect-eq
+
+# ===================================================================
+# Test 2: evolve-seed! doesn't crash
+# ===================================================================
+
+." evolve-seed! accepts integer: " 42 evolve-seed! true true expect-eq
+." evolve-seed! second call: "    99 evolve-seed! true true expect-eq
+
+# ===================================================================
+# Test 3: Build test cases and register on chain word
+# ===================================================================
+
+: mk-test   # ( x -- map )
+  dup target-fn
+  array-new swap array-push
+  swap
+  array-new swap array-push
+  map-new rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: make-tests
+  array-new
+  0  mk-test array-push
+  1  mk-test array-push
+  2  mk-test array-push
+  3  mk-test array-push
+  5  mk-test array-push
+  -1 mk-test array-push
+  10 mk-test array-push
+;
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+
+s" target-fn" make-tests evolve-register drop
+." test registration: " true true expect-eq
+
+# ===================================================================
+# Test 4: evolve-chain runs without crashing (3 generations)
+# ===================================================================
+
+42 evolve-seed!
+
+s" target-fn"
+  array-new s" square-term" array-push s" linear-term" array-push s" offset" array-push
+  3
+  evolve-chain
+
+." evolve-chain 3 gens: " true true expect-eq
+
+# ===================================================================
+# Test 5: evolve-word was called on sub-concepts (not chain word)
+# ===================================================================
+
+# evolve-chain calls evolve-sub on each sub-concept via the chain.
+# target-fn itself is not directly evolved.
+." target-fn status 0: " s" target-fn" evolve-status 0 expect-eq
+
+# Each sub-concept should have 3 recorded generations
+." square-term gens>0: " s" square-term" evolve-status 0 > true expect-eq
+." linear-term gens>0: " s" linear-term" evolve-status 0 > true expect-eq
+." offset gens>0: "      s" offset"      evolve-status 0 > true expect-eq

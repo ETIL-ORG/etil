@@ -1,0 +1,66 @@
+# MCE baseline benchmark — monolithic evolution of a single target-fn
+# Target: f(x) = x^2 + 3x + 5  (Integer -> Integer)
+#
+# This is the control for comparison with bench_mce_quad.til.
+# Both use the same RNG seed, test cases, and generation count.
+
+# --- Target function (monolithic) ---
+
+: target-fn  dup dup * swap 3 * + 5 + ;
+
+# --- Build test cases ---
+
+: mk-test   # ( x -- map )
+  dup target-fn
+  array-new swap array-push
+  swap
+  array-new swap array-push
+  map-new rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: tests
+  array-new
+  0  mk-test array-push
+  1  mk-test array-push
+  2  mk-test array-push
+  3  mk-test array-push
+  4  mk-test array-push
+  5  mk-test array-push
+  -1 mk-test array-push
+  -3 mk-test array-push
+  10 mk-test array-push
+;
+
+# --- Configure evolution ---
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+42 evolve-seed!
+
+# --- Logging ---
+
+s" /tmp/" evolve-log-dir
+1 65535 evolve-log-start
+
+# --- Register and evolve ---
+
+s" target-fn" tests evolve-register drop
+
+." === Monolithic: 100 generations ===" cr
+
+: run-monolithic
+  100 0 do
+    s" target-fn" evolve-word drop
+  loop
+;
+
+run-monolithic
+
+." Generations: " s" target-fn" evolve-status . cr
+
+evolve-log-stop
+." Log closed" cr

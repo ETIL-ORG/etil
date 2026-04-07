@@ -29,6 +29,13 @@ EvolutionEngine::EvolutionEngine(EvolutionConfig config, Dictionary& dict)
     // Fitness error stream is wired lazily in evolve_word() after logging starts
 }
 
+void EvolutionEngine::seed_rng(uint64_t seed) {
+    rng_.seed(seed);
+    genetic_ops_.set_rng_seed(seed);
+    ast_genetic_ops_.set_rng_seed(seed);
+    bridge_map_.set_rng_seed(seed);
+}
+
 void EvolutionEngine::register_tests(
     const std::string& word, std::vector<TestCase> tests) {
     word_state_[word].tests = std::move(tests);
@@ -113,8 +120,6 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
 
     // Generate children
     std::uniform_real_distribution<double> coin(0.0, 1.0);
-    std::mt19937_64 local_rng(
-        std::chrono::steady_clock::now().time_since_epoch().count());
     size_t children_created = 0;
 
     for (size_t i = 0; i < config_.generation_size; ++i) {
@@ -122,7 +127,7 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
         double parent_fitness = 0.0;
         bool is_mutation = false;
 
-        if (coin(local_rng) < config_.mutation_rate || evolvable.size() < 2) {
+        if (coin(rng_) < config_.mutation_rate || evolvable.size() < 2) {
             // Mutation
             auto* parent = parent_selector_.select(evolvable);
             if (!parent) continue;
@@ -286,6 +291,156 @@ void EvolutionEngine::prune(const std::string& word) {
         impls_opt = dict_.get_implementations(word);
         if (!impls_opt) break;
     }
+}
+
+size_t EvolutionEngine::evolve_sub_concept(
+    const std::string& sub_concept, const std::string& chain_word) {
+
+    // Get chain word's tests
+    auto chain_it = word_state_.find(chain_word);
+    if (chain_it == word_state_.end() || chain_it->second.tests.empty()) {
+        return 0;
+    }
+    auto& tests = chain_it->second.tests;
+
+    // Route fitness errors to the evolution log file
+    fitness_.set_error_stream(logger_.stream());
+
+    // Get chain word's best bytecode impl for evaluation
+    auto chain_impls = dict_.get_implementations(chain_word);
+    if (!chain_impls || chain_impls->empty()) return 0;
+    WordImplPtr chain_impl;
+    double best_w = -1.0;
+    for (auto& impl : *chain_impls) {
+        if (impl->bytecode() && impl->weight() > best_w) {
+            chain_impl = impl;
+            best_w = impl->weight();
+        }
+    }
+    if (!chain_impl) return 0;
+
+    // Get sub-concept's evolvable impls
+    auto sub_impls = dict_.get_implementations(sub_concept);
+    if (!sub_impls || sub_impls->empty()) return 0;
+    std::vector<WordImplPtr> evolvable;
+    for (auto& impl : *sub_impls) {
+        if (impl->bytecode()) evolvable.push_back(impl);
+    }
+    if (evolvable.empty()) return 0;
+
+    // Rebuild signature index
+    ast_genetic_ops_.rebuild_index();
+
+    // Use sub-concept's word pool if registered, otherwise full dictionary
+    auto sub_state_it = word_state_.find(sub_concept);
+    if (sub_state_it != word_state_.end() && !sub_state_it->second.word_pool.empty()) {
+        ast_genetic_ops_.set_word_pool(&sub_state_it->second.word_pool);
+    } else {
+        ast_genetic_ops_.set_word_pool(nullptr);
+    }
+
+    if (logger_.enabled(EvolveLogCategory::Engine)) {
+        logger_.log(EvolveLogCategory::Engine,
+            "MCE: evolving sub-concept '" + sub_concept
+            + "' via chain '" + chain_word
+            + "' (" + std::to_string(evolvable.size()) + " evolvable impls, "
+            + std::to_string(tests.size()) + " test cases)");
+    }
+
+    // Evaluate baselines: run chain impl (which calls sub-concept through dictionary)
+    // This gives implicit credit — the sub-concept impl that happens to be selected
+    // contributes to the chain's fitness.
+    std::vector<std::pair<WordImplPtr, FitnessResult>> results;
+    for (auto& impl : evolvable) {
+        auto fr = fitness_.evaluate(*chain_impl, tests, dict_,
+                                     config_.instruction_budget,
+                                     config_.fitness_mode, config_.distance_alpha);
+        impl->set_weight(std::max(fr.fitness, config_.prune_threshold));
+        results.push_back({impl, fr});
+    }
+
+    // Generate children by mutating sub-concept impls
+    std::uniform_real_distribution<double> coin(0.0, 1.0);
+    size_t children_created = 0;
+
+    for (size_t i = 0; i < config_.generation_size; ++i) {
+        auto* parent = parent_selector_.select(evolvable);
+        if (!parent) continue;
+
+        double parent_fitness = 0.0;
+        for (const auto& [impl, fr] : results) {
+            if (impl.get() == parent) { parent_fitness = fr.fitness; break; }
+        }
+
+        bridge_map_.begin_mutation();
+
+        WordImplPtr child;
+        if (coin(rng_) < config_.mutation_rate || evolvable.size() < 2) {
+            if (config_.use_ast_ops) {
+                child = ast_genetic_ops_.mutate(*parent);
+            } else {
+                child = genetic_ops_.clone(*parent, dict_);
+                if (child && child->bytecode()) {
+                    genetic_ops_.mutate(*child->bytecode());
+                }
+            }
+        } else {
+            auto* p2 = parent_selector_.select(evolvable);
+            if (!p2) { bridge_map_.end_mutation(0.0); continue; }
+            for (int attempt = 0; attempt < 5 && p2 == parent && evolvable.size() > 1; ++attempt) {
+                p2 = parent_selector_.select(evolvable);
+            }
+            if (config_.use_ast_ops) {
+                child = ast_genetic_ops_.crossover(*parent, *p2);
+            } else {
+                child = genetic_ops_.crossover(*parent, *p2, dict_);
+            }
+        }
+
+        if (!child) {
+            bridge_map_.end_mutation(0.0);
+            continue;
+        }
+
+        // Register child in dictionary so chain evaluation can use it
+        dict_.register_word(sub_concept, child);
+
+        // Evaluate chain fitness with child available via implicit credit
+        auto fr = fitness_.evaluate(*chain_impl, tests, dict_,
+                                     config_.instruction_budget,
+                                     config_.fitness_mode, config_.distance_alpha);
+
+        double reward = (fr.fitness > parent_fitness) ? 1.0 : 0.0;
+        bridge_map_.end_mutation(reward);
+
+        child->set_weight(std::max(fr.fitness, config_.prune_threshold));
+        results.push_back({child, fr});
+
+        if (logger_.enabled(EvolveLogCategory::Fitness)) {
+            logger_.log(EvolveLogCategory::Fitness,
+                "MCE child of '" + sub_concept + "' impl#"
+                + std::to_string(child->id())
+                + ": " + std::to_string(fr.tests_passed) + "/"
+                + std::to_string(fr.tests_total)
+                + " pass, fitness=" + std::to_string(fr.fitness));
+        }
+
+        children_created++;
+    }
+
+    // Update weights and prune sub-concept impls
+    update_weights(sub_concept, results);
+    prune(sub_concept);
+
+    if (logger_.enabled(EvolveLogCategory::Engine)) {
+        logger_.log(EvolveLogCategory::Engine,
+            "MCE: " + std::to_string(children_created)
+            + " children of '" + sub_concept + "' created");
+    }
+
+    // Track generations for the sub-concept
+    word_state_[sub_concept].generations++;
+    return children_created;
 }
 
 } // namespace etil::evolution

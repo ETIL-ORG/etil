@@ -54,6 +54,9 @@ public:
     /// Rebuild the signature index (call when dictionary changes).
     void rebuild_index();
 
+    /// Override the RNG seed (for deterministic benchmarks).
+    void set_rng_seed(uint64_t seed) { rng_.seed(seed); }
+
     /// Check if inserting bridge_word at position in a Sequence creates
     /// a no-op inverse pair with an adjacent node (e.g., int->float + float->int).
     static bool is_inverse_bridge(const ASTNode& seq, size_t position,

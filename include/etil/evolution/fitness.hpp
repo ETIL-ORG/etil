@@ -59,6 +59,11 @@ public:
     /// instead of stderr. Typically the evolution log file.
     void set_error_stream(std::ostream* err) { err_stream_ = err; }
 
+    /// Get the captured stdout from the last fitness evaluation.
+    /// Mutated code may contain print words; their output is captured
+    /// here rather than sent to stdout.
+    static std::string last_captured_output();
+
 private:
     double speed_weight_ = 0.1;
     std::ostream* err_stream_ = nullptr;  // null = use default (stderr)

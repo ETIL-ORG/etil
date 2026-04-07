@@ -8,10 +8,17 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <sstream>
 
 namespace etil::evolution {
 
 using namespace etil::core;
+
+// Capture output from mutated code during fitness evaluation.
+// Print words (., type, .", etc.) in mutated bytecode would otherwise
+// spam stdout. Redirected to a buffer that can be inspected via the
+// evolution log file for debugging.
+static thread_local std::ostringstream fitness_out_;
 
 static void drain_stack(ExecutionContext& ctx) {
     while (ctx.data_stack().size() > 0) {
@@ -65,6 +72,8 @@ bool Fitness::run_single_test(
     ExecutionContext ctx(0);
     ctx.set_dictionary(&dict);
     if (err_stream_) ctx.set_err(err_stream_);
+    fitness_out_.str("");
+    ctx.set_out(&fitness_out_);
     ctx.set_limits(instruction_budget, 10000, SIZE_MAX, 10.0);
 
     // Push inputs
@@ -140,6 +149,8 @@ double Fitness::run_single_test_distance(
     ExecutionContext ctx(0);
     ctx.set_dictionary(&dict);
     if (err_stream_) ctx.set_err(err_stream_);
+    fitness_out_.str("");
+    ctx.set_out(&fitness_out_);
     ctx.set_limits(instruction_budget, 10000, SIZE_MAX, 10.0);
 
     // Push inputs
@@ -265,6 +276,10 @@ FitnessResult Fitness::evaluate(
                    + speed_score * speed_weight_;
 
     return result;
+}
+
+std::string Fitness::last_captured_output() {
+    return fitness_out_.str();
 }
 
 } // namespace etil::evolution
