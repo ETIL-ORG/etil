@@ -72,6 +72,7 @@ bool Fitness::run_single_test(
     ExecutionContext ctx(0);
     ctx.set_dictionary(&dict);
     if (err_stream_) ctx.set_err(err_stream_);
+    if (sel_engine_) ctx.set_selection_engine(sel_engine_);
     fitness_out_.str("");
     ctx.set_out(&fitness_out_);
     ctx.set_limits(instruction_budget, 10000, SIZE_MAX, 10.0);
@@ -149,6 +150,7 @@ double Fitness::run_single_test_distance(
     ExecutionContext ctx(0);
     ctx.set_dictionary(&dict);
     if (err_stream_) ctx.set_err(err_stream_);
+    if (sel_engine_) ctx.set_selection_engine(sel_engine_);
     fitness_out_.str("");
     ctx.set_out(&fitness_out_);
     ctx.set_limits(instruction_budget, 10000, SIZE_MAX, 10.0);

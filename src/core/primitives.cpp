@@ -2020,6 +2020,21 @@ bool prim_evolve_log_dir(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-mce-select ( flag -- )
+// Set MCE fitness selection mode: false=lookup (latest, deterministic),
+// true=weighted-random (runtime behavior).
+bool prim_evolve_mce_select(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    bool flag = false;
+    if (opt->type == Value::Type::Boolean) flag = opt->as_int != 0;
+    else if (opt->type == Value::Type::Integer) flag = opt->as_int != 0;
+    engine->config().mce_weighted_select = flag;
+    return true;
+}
+
 // evolve-sub ( sub-str chain-str -- n )
 // MCE: mutate sub-concept but evaluate chain for fitness.
 bool prim_evolve_sub(ExecutionContext& ctx) {
@@ -3549,6 +3564,7 @@ static const PrimEntry prim_table[] = {
     {"evolve-log-show-failed", prim_evolve_log_show_failed, 1, 0, {T::Boolean},          {}},
     {"evolve-seed!",           prim_evolve_seed,            1, 0, {T::Integer},          {}},
     {"evolve-sub",             prim_evolve_sub,             2, 1, {T::String, T::String}, {T::Integer}},
+    {"evolve-mce-select",      prim_evolve_mce_select,      1, 0, {T::Boolean},           {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::String}},

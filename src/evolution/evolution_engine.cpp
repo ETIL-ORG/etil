@@ -306,6 +306,13 @@ size_t EvolutionEngine::evolve_sub_concept(
     // Route fitness errors to the evolution log file
     fitness_.set_error_stream(logger_.stream());
 
+    // Set selection mode for fitness evaluation
+    if (config_.mce_weighted_select) {
+        fitness_.set_selection_engine(&parent_selector_);
+    } else {
+        fitness_.set_selection_engine(nullptr);
+    }
+
     // Get chain word's best bytecode impl for evaluation
     auto chain_impls = dict_.get_implementations(chain_word);
     if (!chain_impls || chain_impls->empty()) return 0;

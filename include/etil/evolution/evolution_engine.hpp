@@ -47,6 +47,10 @@ struct EvolutionConfig {
     double tbbp_alpha = 0.1;              // EMA learning rate
     double tbbp_min_weight = 0.05;        // weight floor to preserve exploration
 
+    // MCE fitness selection: false = lookup (latest impl, deterministic),
+    // true = weighted-random (runtime behavior, non-deterministic)
+    bool mce_weighted_select = false;
+
     // Logging — controlled via TIL words (evolve-log-start, etc.)
     EvolveLogLevel log_level = EvolveLogLevel::Off;
     uint32_t log_categories = static_cast<uint32_t>(EvolveLogCategory::All);

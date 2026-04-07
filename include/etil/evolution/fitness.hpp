@@ -9,6 +9,8 @@
 
 #include <vector>
 
+namespace etil::selection { class SelectionEngine; }
+
 namespace etil::evolution {
 
 /// Fitness evaluation mode.
@@ -59,6 +61,13 @@ public:
     /// instead of stderr. Typically the evolution log file.
     void set_error_stream(std::ostream* err) { err_stream_ = err; }
 
+    /// Set a selection engine for fitness evaluation contexts.
+    /// When set, Call instructions use dict->select() (weighted-random)
+    /// instead of dict->lookup() (latest impl). This changes which
+    /// impls are selected during chain evaluation.
+    void set_selection_engine(etil::selection::SelectionEngine* e) { sel_engine_ = e; }
+    etil::selection::SelectionEngine* selection_engine() const { return sel_engine_; }
+
     /// Get the captured stdout from the last fitness evaluation.
     /// Mutated code may contain print words; their output is captured
     /// here rather than sent to stdout.
@@ -67,6 +76,7 @@ public:
 private:
     double speed_weight_ = 0.1;
     std::ostream* err_stream_ = nullptr;  // null = use default (stderr)
+    etil::selection::SelectionEngine* sel_engine_ = nullptr;
 
     bool run_single_test(
         etil::core::WordImpl& impl,

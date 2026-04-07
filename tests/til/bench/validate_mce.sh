@@ -2,8 +2,7 @@
 # Copyright (c) 2026 Mark Deazley. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# MCE Phase 1a validation — compare monolithic vs MCE chain evolution
-# across 5 seeds. Extracts max fitness from evolution logs.
+# MCE validation — two benchmarks, three selection modes, 5 seeds.
 
 set -uo pipefail
 
@@ -18,66 +17,78 @@ if [[ ! -x "$REPL" ]]; then
 fi
 
 SEEDS=(42 123 7 999 314159)
-GENS=${1:-30}
-MONO_LOG=/tmp/mce-mono-log
-CHAIN_LOG=/tmp/mce-chain-log
 
-mkdir -p "$MONO_LOG" "$CHAIN_LOG"
+run_til() {
+    (cd "$PROJECT_DIR" && echo "include $1
+/quit" | timeout 120 "$REPL" --quiet 2>/dev/null >/dev/null) || true
+}
 
 best_fitness() {
-    # Extract the highest fitness= value from a log file
     grep -o 'fitness=[0-9.]*' "$1" | sed 's/fitness=//' | sort -rn | head -1
 }
 
 max_passes() {
-    # Extract the best "N/M pass" from a log file
-    grep -o '[0-9]*/9 pass' "$1" | sed 's|/9 pass||' | sort -rn | head -1
+    local total=$1; shift
+    grep -oP "[0-9]+/$total pass" "$1" | sed "s|/$total pass||" | sort -rn | head -1
 }
 
-echo "=== MCE Phase 1a Validation ==="
-echo "Target: f(x) = x^2 + 3x + 5"
-echo "Generations: $GENS"
-echo ""
-printf "%-8s  %-16s  %-16s\n" "Seed" "Monolithic" "MCE Chain"
-printf "%-8s  %-16s  %-16s\n" "----" "----------" "---------"
-
-for seed in "${SEEDS[@]}"; do
-    # Clean logs
-    rm -f "$MONO_LOG"/*.log "$CHAIN_LOG"/*.log
-
-    # Write seed file
-    echo "$seed constant SEED" > /tmp/mce_seed.til
-
-    # Run monolithic (must cd to project dir for builtins.til)
-    (cd "$PROJECT_DIR" && echo "include /tmp/mce_mono.til
-/quit" | timeout 120 "$REPL" --quiet 2>/dev/null >/dev/null) || true
-
-    # Run MCE chain
-    (cd "$PROJECT_DIR" && echo "include /tmp/mce_chain.til
-/quit" | timeout 120 "$REPL" --quiet 2>/dev/null >/dev/null) || true
-
-    # Extract results from logs
-    mono_log=$(ls -t "$MONO_LOG"/*.log 2>/dev/null | head -1)
-    chain_log=$(ls -t "$CHAIN_LOG"/*.log 2>/dev/null | head -1)
-
-    if [[ -n "$mono_log" ]]; then
-        mono_best=$(best_fitness "$mono_log")
-        mono_pass=$(max_passes "$mono_log")
-        mono_result="${mono_pass:-0}/9 f=${mono_best:-?}"
+fmt_result() {
+    local log_dir=$1 total=$2
+    local log_file
+    log_file=$(ls -t "$log_dir"/*.log 2>/dev/null | head -1)
+    if [[ -n "$log_file" ]]; then
+        local bp fp
+        bp=$(max_passes "$total" "$log_file")
+        fp=$(best_fitness "$log_file")
+        echo "${bp:-0}/$total f=${fp:-?}"
     else
-        mono_result="no log"
+        echo "no log"
     fi
+}
 
-    if [[ -n "$chain_log" ]]; then
-        chain_best=$(best_fitness "$chain_log")
-        chain_pass=$(max_passes "$chain_log")
-        chain_result="${chain_pass:-0}/9 f=${chain_best:-?}"
-    else
-        chain_result="no log"
-    fi
+run_benchmark() {
+    local name=$1 mono_til=$2 chain_til=$3 wr_til=$4 total=$5
+    local mono_log=/tmp/mce-mono-${name}-log
+    local chain_log=/tmp/mce-chain-${name}-log
+    local wr_log=/tmp/mce-wr-${name}-log
 
-    printf "%-8s  %-16s  %-16s\n" "$seed" "$mono_result" "$chain_result"
-done
+    mkdir -p "$mono_log" "$chain_log" "$wr_log"
+
+    echo ""
+    echo "=== Benchmark: $name ==="
+    echo ""
+    printf "%-8s  %-16s  %-16s  %-16s\n" "Seed" "Monolithic" "MCE-lookup" "MCE-weighted"
+    printf "%-8s  %-16s  %-16s  %-16s\n" "----" "----------" "----------" "------------"
+
+    for seed in "${SEEDS[@]}"; do
+        rm -f "$mono_log"/*.log "$chain_log"/*.log "$wr_log"/*.log
+        echo "$seed constant SEED" > /tmp/mce_seed.til
+
+        run_til "$mono_til"
+        run_til "$chain_til"
+        run_til "$wr_til"
+
+        printf "%-8s  %-16s  %-16s  %-16s\n" \
+            "$seed" \
+            "$(fmt_result "$mono_log" "$total")" \
+            "$(fmt_result "$chain_log" "$total")" \
+            "$(fmt_result "$wr_log" "$total")"
+    done
+}
+
+echo "=== MCE Selection Mode Comparison ==="
+echo "Seeds: ${SEEDS[*]}"
+
+run_benchmark "quad" \
+    /tmp/mce_mono.til /tmp/mce_chain.til /tmp/mce_chain_wr.til 9
+
+run_benchmark "xtype" \
+    /tmp/mce_mono_xtype.til /tmp/mce_chain_xtype.til /tmp/mce_chain_xtype_wr.til 11
 
 echo ""
-echo "Format: best_passes/9 f=best_fitness"
+echo "quad:  f(x) = x^2+3x+5 — Integer→Integer homogeneous (30 gens)"
+echo "xtype: f(x) = slength(number->string(x^2+1)) — Integer→String→Integer (50 gens)"
+echo ""
+echo "Monolithic:   evolve-word on pipeline directly"
+echo "MCE-lookup:   evolve-sub with lookup() = latest impl (deterministic)"
+echo "MCE-weighted: evolve-sub with weighted-random (runtime behavior)"
