@@ -420,7 +420,9 @@ size_t EvolutionEngine::evolve_sub_concept(
             logger_.log(EvolveLogCategory::Fitness,
                 "MCE child of '" + sub_concept + "' impl#"
                 + std::to_string(child->id())
-                + ": fitness=" + std::to_string(fr.fitness));
+                + ": " + std::to_string(fr.tests_passed) + "/"
+                + std::to_string(fr.tests_total)
+                + " pass, fitness=" + std::to_string(fr.fitness));
         }
 
         children_created++;

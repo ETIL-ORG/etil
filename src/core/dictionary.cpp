@@ -31,6 +31,7 @@ void Dictionary::register_word(const std::string& word, WordImplPtr impl) {
         wc.name = word;
     }
     wc.implementations.push_back(std::move(impl));
+    generation_.fetch_add(1, std::memory_order_release);
     spdlog::debug("Registered implementation for concept '{}'", word);
 }
 
