@@ -109,7 +109,7 @@ public:
 
     /// Select a concept for evolution, weighted by contribution × depth_discount^depth.
     std::string select_for_evolution(std::mt19937_64& rng,
-                                     double depth_discount = 0.8) const;
+                                     double depth_discount = 1.0) const;
 
     /// Reset all contribution weights and statistics (called at start of run).
     void reset();
@@ -286,7 +286,7 @@ Normalization ensures contributions sum to 1.0 across all evolvable concepts in 
 struct EvolutionConfig {
     // ... existing ...
     size_t dag_variance_k = 5;       // evaluations per concept for variance computation
-    double dag_depth_discount = 0.8; // depth attenuation for scheduling priority
+    double dag_depth_discount = 1.0; // depth attenuation for scheduling (1.0 = disabled)
 };
 ```
 
