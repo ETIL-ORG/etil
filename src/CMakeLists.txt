@@ -57,6 +57,7 @@ set(ETIL_EVOLUTION_SOURCES
     evolution/fitness.cpp
     evolution/evolution_engine.cpp
     evolution/evolve_logger.cpp
+    evolution/concept_dag.cpp
 )
 
 set(ETIL_JIT_SOURCES

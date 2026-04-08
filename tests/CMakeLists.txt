@@ -142,6 +142,20 @@ target_link_libraries(etil_evolution_tests
 etil_add_link_map(etil_evolution_tests)
 gtest_discover_tests(etil_evolution_tests)
 
+# ConceptDAG unit tests
+add_executable(etil_concept_dag_tests
+    unit/test_concept_dag.cpp
+)
+
+target_link_libraries(etil_concept_dag_tests
+    PRIVATE
+        etil
+        GTest::gtest_main
+)
+
+etil_add_link_map(etil_concept_dag_tests)
+gtest_discover_tests(etil_concept_dag_tests)
+
 # AST decompiler unit tests
 add_executable(etil_decompiler_tests
     unit/test_decompiler.cpp

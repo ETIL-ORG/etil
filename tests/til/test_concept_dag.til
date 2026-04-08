@@ -1,0 +1,77 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# test_concept_dag.til — Integration test for ConceptDAG
+# Validates: evolve-dag-register, evolve-dag, evolve-dag-show,
+# evolve-contribution, contribution-weighted scheduling
+
+include tests/til/harness.til
+
+# ===================================================================
+# Setup: decomposed f(x) = x^2 + 3x + 5
+# ===================================================================
+
+: square-term  dup * ;
+: linear-term  3 * ;
+: offset       5 ;
+: target-fn    dup square-term swap linear-term + offset + ;
+
+# ===================================================================
+# Test 1: target-fn computes correctly
+# ===================================================================
+
+." target-fn(0)=5: "   0 target-fn 5  expect-eq
+." target-fn(1)=9: "   1 target-fn 9  expect-eq
+." target-fn(2)=15: "  2 target-fn 15 expect-eq
+
+# ===================================================================
+# Test 2: Build test cases and register DAG
+# ===================================================================
+
+: mk-test dup target-fn array-new swap array-push swap array-new swap array-push map-new rot s" out" swap map-set swap s" in" swap map-set ;
+
+: make-tests
+  array-new
+  0  mk-test array-push
+  1  mk-test array-push
+  2  mk-test array-push
+  3  mk-test array-push
+  5  mk-test array-push
+  -1 mk-test array-push
+  10 mk-test array-push
+;
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+42 evolve-seed!
+
+." dag-register: " s" target-fn" make-tests evolve-dag-register true expect-eq
+
+# ===================================================================
+# Test 3: evolve-dag-show doesn't crash
+# ===================================================================
+
+." dag-show: " s" target-fn" evolve-dag-show true true expect-eq
+
+# ===================================================================
+# Test 4: evolve-dag runs without crashing (5 generations)
+# ===================================================================
+
+s" target-fn" 5 evolve-dag
+." dag 5 gens: " true true expect-eq
+
+# ===================================================================
+# Test 5: contribution weights are queryable and non-zero
+# ===================================================================
+
+." sq contrib>0: " s" square-term" evolve-contribution 0.0e0 > true expect-eq
+." lin contrib>0: " s" linear-term" evolve-contribution 0.0e0 > true expect-eq
+." off contrib>0: " s" offset" evolve-contribution 0.0e0 > true expect-eq
+
+# ===================================================================
+# Test 6: sub-concepts have been evolved (non-zero generation counts)
+# ===================================================================
+
+# At least one sub-concept should have >0 generations after 5 rounds
+." some gens>0: " s" square-term" evolve-status s" linear-term" evolve-status + s" offset" evolve-status + 0 > true expect-eq

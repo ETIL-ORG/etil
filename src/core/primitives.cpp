@@ -2075,6 +2075,206 @@ bool prim_evolve_seed(ExecutionContext& ctx) {
     return true;
 }
 
+// --- ConceptDAG primitives ---
+
+// evolve-dag-register ( root-str tests-array -- flag )
+// Same test format as evolve-register: array of maps with "in" and "out" keys.
+bool prim_evolve_dag_register(ExecutionContext& ctx) {
+    auto* arr = pop_array(ctx);
+    if (!arr) return false;
+    auto* root_str = pop_string(ctx);
+    if (!root_str) { ctx.data_stack().push(Value::from(arr)); return false; }
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        root_str->release();
+        arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    std::string root(root_str->c_str(), root_str->length());
+    root_str->release();
+
+    if (arr->length() > 1000) {
+        ctx.err() << "Error: evolve-dag-register max 1000 test cases\n";
+        arr->release();
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    // Parse test cases from array of maps (same as evolve-register)
+    std::vector<etil::evolution::TestCase> tests;
+    for (size_t i = 0; i < arr->length(); ++i) {
+        Value map_val;
+        arr->get(i, map_val);
+        if (map_val.type != Value::Type::Map) continue;
+        auto* m = map_val.as_map();
+
+        etil::evolution::TestCase tc;
+
+        auto in_it = m->entries().find("in");
+        if (in_it != m->entries().end() && in_it->second.type == Value::Type::Array) {
+            auto* in_arr = in_it->second.as_array();
+            for (size_t j = 0; j < in_arr->length(); ++j) {
+                Value v;
+                in_arr->get(j, v);
+                tc.inputs.push_back(v);
+            }
+        }
+
+        auto out_it = m->entries().find("out");
+        if (out_it != m->entries().end() && out_it->second.type == Value::Type::Array) {
+            auto* out_arr = out_it->second.as_array();
+            for (size_t j = 0; j < out_arr->length(); ++j) {
+                Value v;
+                out_arr->get(j, v);
+                tc.expected.push_back(v);
+            }
+        }
+
+        tests.push_back(std::move(tc));
+    }
+    arr->release();
+
+    bool ok = engine->register_dag(root, std::move(tests));
+    ctx.data_stack().push(Value(ok));
+    return true;
+}
+
+// evolve-dag ( root-str generations -- )
+bool prim_evolve_dag(ExecutionContext& ctx) {
+    auto gen_val = ctx.data_stack().pop();
+    if (!gen_val) return false;
+    auto* root_str = pop_string(ctx);
+    if (!root_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        root_str->release();
+        return true;
+    }
+
+    int64_t gens = (gen_val->type == Value::Type::Integer) ? gen_val->as_int : 0;
+    std::string root(root_str->c_str(), root_str->length());
+    root_str->release();
+
+    if (gens > 0) {
+        engine->evolve_dag(root, static_cast<size_t>(gens));
+    }
+    return true;
+}
+
+// evolve-dag-accumulate! ( flag -- )
+bool prim_evolve_dag_accumulate(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    bool flag = false;
+    if (opt->type == Value::Type::Boolean) flag = opt->as_int != 0;
+    else if (opt->type == Value::Type::Integer) flag = opt->as_int != 0;
+    engine->set_accumulate_contributions(flag);
+    return true;
+}
+
+// evolve-dag-show ( root-str -- )
+bool prim_evolve_dag_show(ExecutionContext& ctx) {
+    auto* root_str = pop_string(ctx);
+    if (!root_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        root_str->release();
+        return true;
+    }
+
+    std::string root(root_str->c_str(), root_str->length());
+    root_str->release();
+
+    auto* d = engine->dag(root);
+    if (!d) {
+        ctx.out() << "No ConceptDAG registered for '" << root << "'\n";
+    } else {
+        d->dump(ctx.out());
+    }
+    return true;
+}
+
+// evolve-contribution ( concept-str -- x )
+// Query a concept's contribution weight in its registered DAG.
+bool prim_evolve_contribution(ExecutionContext& ctx) {
+    auto* name_str = pop_string(ctx);
+    if (!name_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        name_str->release();
+        ctx.data_stack().push(Value(0.0));
+        return true;
+    }
+
+    std::string name(name_str->c_str(), name_str->length());
+    name_str->release();
+
+    // Search all registered DAGs for this concept
+    for (const auto& word : engine->registered_words()) {
+        auto* d = engine->dag(word);
+        if (d) {
+            auto* node = d->node(name);
+            if (node) {
+                ctx.data_stack().push(Value(node->contribution));
+                return true;
+            }
+        }
+    }
+
+    // Not found in any DAG — check all DAGs explicitly
+    ctx.data_stack().push(Value(0.0));
+    return true;
+}
+
+// evolve-dag-variance-k! ( n -- )
+bool prim_evolve_dag_variance_k(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    if (opt->type == Value::Type::Integer && opt->as_int > 0) {
+        engine->config().dag_variance_k = static_cast<size_t>(opt->as_int);
+    }
+    return true;
+}
+
+// evolve-dag-depth-discount! ( x -- )
+bool prim_evolve_dag_depth_discount(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    double val = 1.0;
+    if (opt->type == Value::Type::Float) val = opt->as_float;
+    else if (opt->type == Value::Type::Integer) val = static_cast<double>(opt->as_int);
+    engine->config().dag_depth_discount = val;
+    return true;
+}
+
+// evolve-dag-stats-interval! ( n -- )
+bool prim_evolve_dag_stats_interval(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    if (opt->type == Value::Type::Integer && opt->as_int >= 0) {
+        engine->config().dag_stats_interval = static_cast<size_t>(opt->as_int);
+    }
+    return true;
+}
+
 // --- Help primitive ---
 
 namespace {
@@ -3565,6 +3765,14 @@ static const PrimEntry prim_table[] = {
     {"evolve-seed!",           prim_evolve_seed,            1, 0, {T::Integer},          {}},
     {"evolve-sub",             prim_evolve_sub,             2, 1, {T::String, T::String}, {T::Integer}},
     {"evolve-mce-select",      prim_evolve_mce_select,      1, 0, {T::Boolean},           {}},
+    {"evolve-dag-register",    prim_evolve_dag_register,    2, 1, {T::String, T::Array},  {T::Boolean}},
+    {"evolve-dag",             prim_evolve_dag,             2, 0, {T::String, T::Integer},{}},
+    {"evolve-dag-accumulate!", prim_evolve_dag_accumulate,  1, 0, {T::Boolean},           {}},
+    {"evolve-dag-show",        prim_evolve_dag_show,        1, 0, {T::String},            {}},
+    {"evolve-contribution",    prim_evolve_contribution,    1, 1, {T::String},            {T::Float}},
+    {"evolve-dag-variance-k!", prim_evolve_dag_variance_k,  1, 0, {T::Integer},           {}},
+    {"evolve-dag-depth-discount!", prim_evolve_dag_depth_discount, 1, 0, {T::Float},      {}},
+    {"evolve-dag-stats-interval!", prim_evolve_dag_stats_interval, 1, 0, {T::Integer},   {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::String}},

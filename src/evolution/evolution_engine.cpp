@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <random>
+#include <sstream>
 
 namespace etil::evolution {
 
@@ -448,6 +449,163 @@ size_t EvolutionEngine::evolve_sub_concept(
     // Track generations for the sub-concept
     word_state_[sub_concept].generations++;
     return children_created;
+}
+
+// --- ConceptDAG integration ---
+
+bool EvolutionEngine::register_dag(const std::string& root_concept,
+                                    std::vector<TestCase> tests) {
+    // Register tests on the root word (reuses existing test infrastructure)
+    word_state_[root_concept].tests = std::move(tests);
+
+    // Build the DAG from the call graph
+    ConceptDAG dag;
+    dag.build(root_concept, dict_);
+
+    if (dag.evolvable_concepts().empty()) {
+        return false;
+    }
+
+    // Reset or preserve contribution weights
+    if (!accumulate_contributions_) {
+        dag.reset();
+    }
+
+    dags_[root_concept] = std::move(dag);
+
+    if (logger_.enabled(EvolveLogCategory::DAG)) {
+        auto& d = dags_[root_concept];
+        logger_.log(EvolveLogCategory::DAG,
+            "DAG registered: '" + root_concept
+            + "' (" + std::to_string(d.size()) + " nodes"
+            + ", " + std::to_string(d.evolvable_concepts().size()) + " evolvable"
+            + ", depth " + std::to_string(d.max_depth()) + ")");
+    }
+    return true;
+}
+
+size_t EvolutionEngine::evolve_dag_generation(const std::string& root_concept) {
+    auto dag_it = dags_.find(root_concept);
+    if (dag_it == dags_.end()) return 0;
+
+    auto& dag = dag_it->second;
+
+    // Select concept weighted by contribution
+    std::string selected = dag.select_for_evolution(
+        rng_, config_.dag_depth_discount);
+    if (selected.empty()) return 0;
+
+    if (logger_.enabled(EvolveLogCategory::DAG)) {
+        auto* sel_node = dag.node(selected);
+        logger_.log(EvolveLogCategory::DAG,
+            "DAG select: '" + selected
+            + "' (contrib=" + std::to_string(sel_node ? sel_node->contribution : 0.0)
+            + ", depth=" + std::to_string(sel_node ? sel_node->depth : 0) + ")");
+    }
+
+    // Evolve the selected concept via chain-level fitness
+    size_t children = evolve_sub_concept(selected, root_concept);
+
+    // Update DAG node statistics
+    auto* node = dag.node(selected);
+    if (node) {
+        node->stats.generations_evolved++;
+        node->stats.children_created += children;
+
+        // Update impl count from dictionary
+        auto impls = dict_.get_implementations(selected);
+        node->stats.impl_count = impls ? impls->size() : 0;
+    }
+
+    // Compute variance-based contribution weights for all evolvable concepts
+    // by running K evaluations of the root chain with selection engine active
+    auto chain_it = word_state_.find(root_concept);
+    if (chain_it != word_state_.end() && !chain_it->second.tests.empty()) {
+        auto chain_impls = dict_.get_implementations(root_concept);
+        if (chain_impls && !chain_impls->empty()) {
+            // Find best chain impl
+            WordImplPtr chain_impl;
+            double best_w = -1.0;
+            for (auto& impl : *chain_impls) {
+                if (impl->bytecode() && impl->weight() > best_w) {
+                    chain_impl = impl;
+                    best_w = impl->weight();
+                }
+            }
+
+            if (chain_impl) {
+                auto& tests = chain_it->second.tests;
+                // Run K evaluations with selection engine for variance sampling
+                fitness_.set_selection_engine(&parent_selector_);
+                for (auto& concept_name : dag.evolvable_concepts()) {
+                    double sum = 0.0, sum_sq = 0.0;
+                    for (size_t k = 0; k < config_.dag_variance_k; ++k) {
+                        auto fr = fitness_.evaluate(*chain_impl, tests, dict_,
+                                                     config_.instruction_budget,
+                                                     config_.fitness_mode,
+                                                     config_.distance_alpha);
+                        sum += fr.fitness;
+                        sum_sq += fr.fitness * fr.fitness;
+
+                        auto* cn = dag.node(concept_name);
+                        if (cn) cn->stats.record_fitness(fr.fitness);
+                    }
+                    double mean = sum / static_cast<double>(config_.dag_variance_k);
+                    double var = (sum_sq / static_cast<double>(config_.dag_variance_k))
+                                 - (mean * mean);
+                    if (var < 0.0) var = 0.0;  // numerical guard
+
+                    auto* cn = dag.node(concept_name);
+                    if (cn) cn->contribution = var + 1e-6;  // floor prevents zero
+                }
+                fitness_.set_selection_engine(nullptr);  // restore
+                dag.normalize_contributions();
+            }
+        }
+    }
+
+    return children;
+}
+
+void EvolutionEngine::evolve_dag(const std::string& root_concept,
+                                  size_t generations) {
+    for (size_t i = 0; i < generations; ++i) {
+        evolve_dag_generation(root_concept);
+
+        // Mid-evolution stats snapshot
+        if (config_.dag_stats_interval > 0
+            && (i + 1) % config_.dag_stats_interval == 0
+            && logger_.enabled(EvolveLogCategory::DAG)) {
+            auto* d = dag(root_concept);
+            if (d) {
+                std::ostringstream oss;
+                oss << "DAG stats (gen " << (i + 1) << "/" << generations << "):\n";
+                d->dump(oss);
+                logger_.log(EvolveLogCategory::DAG, oss.str());
+            }
+        }
+    }
+
+    // End-of-evolution stats dump
+    if (logger_.enabled(EvolveLogCategory::DAG)) {
+        auto* d = dag(root_concept);
+        if (d) {
+            std::ostringstream oss;
+            oss << "DAG final stats (" << generations << " generations):\n";
+            d->dump(oss);
+            logger_.log(EvolveLogCategory::DAG, oss.str());
+        }
+    }
+}
+
+ConceptDAG* EvolutionEngine::dag(const std::string& root_concept) {
+    auto it = dags_.find(root_concept);
+    return it != dags_.end() ? &it->second : nullptr;
+}
+
+const ConceptDAG* EvolutionEngine::dag(const std::string& root_concept) const {
+    auto it = dags_.find(root_concept);
+    return it != dags_.end() ? &it->second : nullptr;
 }
 
 } // namespace etil::evolution
