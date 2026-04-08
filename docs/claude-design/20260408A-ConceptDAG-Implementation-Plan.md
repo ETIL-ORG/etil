@@ -595,7 +595,7 @@ Enforced in:
 - [ ] Implement `subtree_crossover()` and `subtree_duplicate()`
 - [ ] Add `max_dag_depth` and `max_dag_nodes` to `EvolutionConfig`
 - [ ] Enforce limits in all DAG mutation methods
-- [ ] Add TIL words for limits: `evolve-dag-max-depth ( n -- )`, `evolve-dag-max-nodes ( n -- )`
+- [ ] Add TIL words for limits: `evolve-dag-max-depth ( n -- )`, `evolve-dag-max-depth@ ( -- n )`, `evolve-dag-max-nodes ( n -- )`, `evolve-dag-max-nodes@ ( -- n )`
 - [ ] Unit tests:
     - `BloatControlRejectsDeepInsert` — insert at max depth fails
     - `BloatControlRejectsOversize` — duplicate when at max nodes fails
@@ -622,7 +622,9 @@ Tier B ships if topology mutations produce measurable benefits on a benchmark wi
 | `evolve-dag-show` | `( root-str -- )` | 3 | Print DAG structure with weights and stats |
 | `evolve-dag-stats-interval` | `( n -- )` | 3 | Set mid-evolution stats logging frequency |
 | `evolve-dag-max-depth` | `( n -- )` | 6 | Set maximum DAG nesting depth |
+| `evolve-dag-max-depth@` | `( -- n )` | 6 | Get maximum DAG nesting depth |
 | `evolve-dag-max-nodes` | `( n -- )` | 6 | Set maximum concept count per DAG |
+| `evolve-dag-max-nodes@` | `( -- n )` | 6 | Get maximum concept count per DAG |
 
 ---
 
