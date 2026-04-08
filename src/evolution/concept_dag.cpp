@@ -193,7 +193,9 @@ std::string ConceptDAG::select_for_evolution(std::mt19937_64& rng,
 void ConceptDAG::reset() {
     for (auto& [_, node] : nodes_) {
         node.contribution = 1.0;
+        size_t saved_impl_count = node.stats.impl_count;
         node.stats = ConceptNodeStats{};
+        node.stats.impl_count = saved_impl_count;
     }
 }
 
