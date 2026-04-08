@@ -2263,6 +2263,18 @@ bool prim_evolve_dag_depth_discount(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-dag-stats-interval! ( n -- )
+bool prim_evolve_dag_stats_interval(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    if (opt->type == Value::Type::Integer && opt->as_int >= 0) {
+        engine->config().dag_stats_interval = static_cast<size_t>(opt->as_int);
+    }
+    return true;
+}
+
 // --- Help primitive ---
 
 namespace {
@@ -3760,6 +3772,7 @@ static const PrimEntry prim_table[] = {
     {"evolve-contribution",    prim_evolve_contribution,    1, 1, {T::String},            {T::Float}},
     {"evolve-dag-variance-k!", prim_evolve_dag_variance_k,  1, 0, {T::Integer},           {}},
     {"evolve-dag-depth-discount!", prim_evolve_dag_depth_discount, 1, 0, {T::Float},      {}},
+    {"evolve-dag-stats-interval!", prim_evolve_dag_stats_interval, 1, 0, {T::Integer},   {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::String}},

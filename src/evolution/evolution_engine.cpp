@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <random>
+#include <sstream>
 
 namespace etil::evolution {
 
@@ -471,6 +472,15 @@ bool EvolutionEngine::register_dag(const std::string& root_concept,
     }
 
     dags_[root_concept] = std::move(dag);
+
+    if (logger_.enabled(EvolveLogCategory::DAG)) {
+        auto& d = dags_[root_concept];
+        logger_.log(EvolveLogCategory::DAG,
+            "DAG registered: '" + root_concept
+            + "' (" + std::to_string(d.size()) + " nodes"
+            + ", " + std::to_string(d.evolvable_concepts().size()) + " evolvable"
+            + ", depth " + std::to_string(d.max_depth()) + ")");
+    }
     return true;
 }
 
@@ -484,6 +494,14 @@ size_t EvolutionEngine::evolve_dag_generation(const std::string& root_concept) {
     std::string selected = dag.select_for_evolution(
         rng_, config_.dag_depth_discount);
     if (selected.empty()) return 0;
+
+    if (logger_.enabled(EvolveLogCategory::DAG)) {
+        auto* sel_node = dag.node(selected);
+        logger_.log(EvolveLogCategory::DAG,
+            "DAG select: '" + selected
+            + "' (contrib=" + std::to_string(sel_node ? sel_node->contribution : 0.0)
+            + ", depth=" + std::to_string(sel_node ? sel_node->depth : 0) + ")");
+    }
 
     // Evolve the selected concept via chain-level fitness
     size_t children = evolve_sub_concept(selected, root_concept);
@@ -553,6 +571,30 @@ void EvolutionEngine::evolve_dag(const std::string& root_concept,
                                   size_t generations) {
     for (size_t i = 0; i < generations; ++i) {
         evolve_dag_generation(root_concept);
+
+        // Mid-evolution stats snapshot
+        if (config_.dag_stats_interval > 0
+            && (i + 1) % config_.dag_stats_interval == 0
+            && logger_.enabled(EvolveLogCategory::DAG)) {
+            auto* d = dag(root_concept);
+            if (d) {
+                std::ostringstream oss;
+                oss << "DAG stats (gen " << (i + 1) << "/" << generations << "):\n";
+                d->dump(oss);
+                logger_.log(EvolveLogCategory::DAG, oss.str());
+            }
+        }
+    }
+
+    // End-of-evolution stats dump
+    if (logger_.enabled(EvolveLogCategory::DAG)) {
+        auto* d = dag(root_concept);
+        if (d) {
+            std::ostringstream oss;
+            oss << "DAG final stats (" << generations << " generations):\n";
+            d->dump(oss);
+            logger_.log(EvolveLogCategory::DAG, oss.str());
+        }
     }
 }
 

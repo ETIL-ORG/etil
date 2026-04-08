@@ -725,6 +725,10 @@ s" evolve-dag-depth-discount!" s" description" s" text" s" Set depth attenuation
 s" evolve-dag-depth-discount!" s" stack-effect" s" text" s" ( x -- )" meta! drop
 s" evolve-dag-depth-discount!" s" category" s" text" s" evolution" meta! drop
 
+s" evolve-dag-stats-interval!" s" description" s" text" s" Set mid-evolution stats logging frequency (0=end-only)" meta! drop
+s" evolve-dag-stats-interval!" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" evolve-dag-stats-interval!" s" category" s" text" s" evolution" meta! drop
+
 # --- System ---
 
 s" sys-semver" s" description" s" text" s" Print project semantic version" meta! drop

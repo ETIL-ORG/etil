@@ -37,6 +37,7 @@ enum class EvolveLogCategory : uint32_t {
     Bridge      = 1 << 13,  // Bridge word insertion (future)
     Diff        = 1 << 14,  // Side-by-side before/after code diff
     ASTDump     = 1 << 15,  // Tree-format AST dumps
+    DAG         = 1 << 16,  // ConceptDAG scheduling, contribution weights, topology
     All         = 0xFFFFFFFF,
 };
 
