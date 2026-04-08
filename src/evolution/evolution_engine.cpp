@@ -450,4 +450,73 @@ size_t EvolutionEngine::evolve_sub_concept(
     return children_created;
 }
 
+// --- ConceptDAG integration ---
+
+bool EvolutionEngine::register_dag(const std::string& root_concept,
+                                    std::vector<TestCase> tests) {
+    // Register tests on the root word (reuses existing test infrastructure)
+    word_state_[root_concept].tests = std::move(tests);
+
+    // Build the DAG from the call graph
+    ConceptDAG dag;
+    dag.build(root_concept, dict_);
+
+    if (dag.evolvable_concepts().empty()) {
+        return false;
+    }
+
+    // Reset or preserve contribution weights
+    if (!accumulate_contributions_) {
+        dag.reset();
+    }
+
+    dags_[root_concept] = std::move(dag);
+    return true;
+}
+
+size_t EvolutionEngine::evolve_dag_generation(const std::string& root_concept) {
+    auto dag_it = dags_.find(root_concept);
+    if (dag_it == dags_.end()) return 0;
+
+    auto& dag = dag_it->second;
+
+    // Select concept weighted by contribution
+    std::string selected = dag.select_for_evolution(
+        rng_, config_.dag_depth_discount);
+    if (selected.empty()) return 0;
+
+    // Evolve the selected concept via chain-level fitness
+    size_t children = evolve_sub_concept(selected, root_concept);
+
+    // Update DAG node statistics
+    auto* node = dag.node(selected);
+    if (node) {
+        node->stats.generations_evolved++;
+        node->stats.children_created += children;
+
+        // Update impl count from dictionary
+        auto impls = dict_.get_implementations(selected);
+        node->stats.impl_count = impls ? impls->size() : 0;
+    }
+
+    return children;
+}
+
+void EvolutionEngine::evolve_dag(const std::string& root_concept,
+                                  size_t generations) {
+    for (size_t i = 0; i < generations; ++i) {
+        evolve_dag_generation(root_concept);
+    }
+}
+
+ConceptDAG* EvolutionEngine::dag(const std::string& root_concept) {
+    auto it = dags_.find(root_concept);
+    return it != dags_.end() ? &it->second : nullptr;
+}
+
+const ConceptDAG* EvolutionEngine::dag(const std::string& root_concept) const {
+    auto it = dags_.find(root_concept);
+    return it != dags_.end() ? &it->second : nullptr;
+}
+
 } // namespace etil::evolution

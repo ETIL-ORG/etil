@@ -6,6 +6,7 @@
 #include "etil/evolution/genetic_ops.hpp"
 #include "etil/evolution/ast_genetic_ops.hpp"
 #include "etil/evolution/bridge_map.hpp"
+#include "etil/evolution/concept_dag.hpp"
 #include "etil/evolution/fitness.hpp"
 #include "etil/evolution/evolve_logger.hpp"
 #include "etil/selection/selection_engine.hpp"
@@ -50,6 +51,9 @@ struct EvolutionConfig {
     // MCE fitness selection: false = lookup (latest impl, deterministic),
     // true = weighted-random (runtime behavior, non-deterministic)
     bool mce_weighted_select = false;
+
+    // ConceptDAG scheduling
+    double dag_depth_discount = 1.0;  // depth attenuation (1.0 = disabled)
 
     // Logging — controlled via TIL words (evolve-log-start, etc.)
     EvolveLogLevel log_level = EvolveLogLevel::Off;
@@ -103,6 +107,28 @@ public:
     /// Seed all RNGs for deterministic, reproducible evolution runs.
     void seed_rng(uint64_t seed);
 
+    // --- ConceptDAG ---
+
+    /// Register a root concept and build its ConceptDAG from the call graph.
+    /// Tests are registered on the root word for fitness evaluation.
+    bool register_dag(const std::string& root_concept,
+                      std::vector<TestCase> tests);
+
+    /// Run one generation of DAG-aware evolution: select a concept by
+    /// contribution weight, evolve it via evolve_sub_concept, update stats.
+    size_t evolve_dag_generation(const std::string& root_concept);
+
+    /// Run N generations of DAG-aware evolution.
+    void evolve_dag(const std::string& root_concept, size_t generations);
+
+    /// Get the ConceptDAG for a root (nullptr if not registered).
+    ConceptDAG* dag(const std::string& root_concept);
+    const ConceptDAG* dag(const std::string& root_concept) const;
+
+    /// Toggle contribution weight accumulation across runs.
+    void set_accumulate_contributions(bool flag) { accumulate_contributions_ = flag; }
+    bool accumulate_contributions() const { return accumulate_contributions_; }
+
 private:
     EvolutionConfig config_;
     etil::core::Dictionary& dict_;
@@ -121,6 +147,8 @@ private:
         size_t generations = 0;
     };
     std::unordered_map<std::string, WordEvolution> word_state_;
+    std::unordered_map<std::string, ConceptDAG> dags_;
+    bool accumulate_contributions_ = false;
 
     void update_weights(
         const std::string& word,
