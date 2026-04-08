@@ -258,7 +258,7 @@ The BridgeMap is the shared infrastructure across both levels. TBBP's learned br
 
 1. **DAG extraction from bytecode.** An impl's child concepts are discovered by scanning its bytecode for `Call` instructions. Should the ConceptDAG be built lazily (scan on first access) or eagerly (scan at registration)? Lazy is simpler but misses concepts added by dynamic word definition.
 
-2. **Contribution weight persistence.** Should contribution weights survive across sessions (stored as concept metadata via `meta!`) or reset per evolution run (like TBBP weights)? Persistent weights allow incremental refinement; ephemeral weights avoid stale signals.
+2. **Recursive concepts.** Should contribution weights survive across sessions (stored as concept metadata via `meta!`) or reset per evolution run (like TBBP weights)? Persistent weights allow incremental refinement; ephemeral weights avoid stale signals.
 
 3. **Recursive concepts.** A concept that calls itself (direct recursion) or participates in a cycle (mutual recursion) creates a cycle in the DAG, violating the acyclicity invariant. Options: forbid recursive concepts in the DAG (treat them as opaque leaves), or extend to a concept **graph** (not DAG) with cycle-aware scheduling.
 
@@ -289,3 +289,21 @@ ConceptDAG makes the implicit concept call graph explicit and evolvable. It unif
 - **Phase 4** (evolved chain structure) → DAG topology mutations with type-safe bridge insertion
 
 The BridgeMap, proven by TDB and TBBP, is the shared type-safety infrastructure across both the AST (micro) and ConceptDAG (macro) evolution tiers. The existing dictionary, selection engine, and fitness evaluator are reused without modification.
+
+## Question Responses: 20260308T0650
+
+1. **DAG Extraction**: Eager
+2. **Recursive concepts**: 
+   - _Now_: Contribution weight persistence: Reset per evolution run by default, 
+and shall have a boolean word that changes it to accumulating between runs.  
+   - _Future_: Shall be persisted to/from MongoDB when commanded.
+3. **Recursive concepts**: Forbid recursive concepts in the DAG, treat them as opaque leaves.
+4. **Multi-root interaction**: Per-root allowing specialization via gene duplication.
+5. **Absorb granularity**:: Permanent
+6. **Interaction with `evolve-register-pool`.**: DAG topology mutations might eventually have their 
+own pool... I 'm not sure how to populate it as the operations they perform are will be difficult to classify into groups. 
+Word groups (s/b called 'implementation groups' to differentiate from concepts) should be scope limited to the impl mutations.  
+
+## Statistics & Logging:
+The ConceptDAG should store statistical information at each Concept node that quantifies the fitness of the node and it's children.
+This information shall be logged at the end of evolution and optionally during evolution as a strategy to track evolution progress without spamming the log.
