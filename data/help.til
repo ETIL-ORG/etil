@@ -713,6 +713,18 @@ s" evolve-dag-show" s" description" s" text" s" Print ConceptDAG structure with 
 s" evolve-dag-show" s" stack-effect" s" text" s" ( root-str -- )" meta! drop
 s" evolve-dag-show" s" category" s" text" s" evolution" meta! drop
 
+s" evolve-contribution" s" description" s" text" s" Query a concept's contribution weight in its registered DAG" meta! drop
+s" evolve-contribution" s" stack-effect" s" text" s" ( concept-str -- x )" meta! drop
+s" evolve-contribution" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-dag-variance-k!" s" description" s" text" s" Set K for variance-based contribution weight computation" meta! drop
+s" evolve-dag-variance-k!" s" stack-effect" s" text" s" ( n -- )" meta! drop
+s" evolve-dag-variance-k!" s" category" s" text" s" evolution" meta! drop
+
+s" evolve-dag-depth-discount!" s" description" s" text" s" Set depth attenuation factor for scheduling priority" meta! drop
+s" evolve-dag-depth-discount!" s" stack-effect" s" text" s" ( x -- )" meta! drop
+s" evolve-dag-depth-discount!" s" category" s" text" s" evolution" meta! drop
+
 # --- System ---
 
 s" sys-semver" s" description" s" text" s" Print project semantic version" meta! drop

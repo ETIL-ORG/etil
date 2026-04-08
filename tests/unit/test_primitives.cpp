@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 347u);  // +4: evolve-dag-register, evolve-dag, evolve-dag-accumulate!, evolve-dag-show
+    EXPECT_EQ(dict.concept_count(), 350u);  // +3: evolve-contribution, evolve-dag-variance-k!, evolve-dag-depth-discount!
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

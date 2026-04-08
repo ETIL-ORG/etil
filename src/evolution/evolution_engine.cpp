@@ -499,6 +499,53 @@ size_t EvolutionEngine::evolve_dag_generation(const std::string& root_concept) {
         node->stats.impl_count = impls ? impls->size() : 0;
     }
 
+    // Compute variance-based contribution weights for all evolvable concepts
+    // by running K evaluations of the root chain with selection engine active
+    auto chain_it = word_state_.find(root_concept);
+    if (chain_it != word_state_.end() && !chain_it->second.tests.empty()) {
+        auto chain_impls = dict_.get_implementations(root_concept);
+        if (chain_impls && !chain_impls->empty()) {
+            // Find best chain impl
+            WordImplPtr chain_impl;
+            double best_w = -1.0;
+            for (auto& impl : *chain_impls) {
+                if (impl->bytecode() && impl->weight() > best_w) {
+                    chain_impl = impl;
+                    best_w = impl->weight();
+                }
+            }
+
+            if (chain_impl) {
+                auto& tests = chain_it->second.tests;
+                // Run K evaluations with selection engine for variance sampling
+                fitness_.set_selection_engine(&parent_selector_);
+                for (auto& concept_name : dag.evolvable_concepts()) {
+                    double sum = 0.0, sum_sq = 0.0;
+                    for (size_t k = 0; k < config_.dag_variance_k; ++k) {
+                        auto fr = fitness_.evaluate(*chain_impl, tests, dict_,
+                                                     config_.instruction_budget,
+                                                     config_.fitness_mode,
+                                                     config_.distance_alpha);
+                        sum += fr.fitness;
+                        sum_sq += fr.fitness * fr.fitness;
+
+                        auto* cn = dag.node(concept_name);
+                        if (cn) cn->stats.record_fitness(fr.fitness);
+                    }
+                    double mean = sum / static_cast<double>(config_.dag_variance_k);
+                    double var = (sum_sq / static_cast<double>(config_.dag_variance_k))
+                                 - (mean * mean);
+                    if (var < 0.0) var = 0.0;  // numerical guard
+
+                    auto* cn = dag.node(concept_name);
+                    if (cn) cn->contribution = var + 1e-6;  // floor prevents zero
+                }
+                fitness_.set_selection_engine(nullptr);  // restore
+                dag.normalize_contributions();
+            }
+        }
+    }
+
     return children;
 }
 

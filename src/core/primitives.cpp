@@ -2204,6 +2204,65 @@ bool prim_evolve_dag_show(ExecutionContext& ctx) {
     return true;
 }
 
+// evolve-contribution ( concept-str -- x )
+// Query a concept's contribution weight in its registered DAG.
+bool prim_evolve_contribution(ExecutionContext& ctx) {
+    auto* name_str = pop_string(ctx);
+    if (!name_str) return false;
+
+    auto* engine = ctx.evolution_engine();
+    if (!engine) {
+        ctx.err() << "Error: no evolution engine configured\n";
+        name_str->release();
+        ctx.data_stack().push(Value(0.0));
+        return true;
+    }
+
+    std::string name(name_str->c_str(), name_str->length());
+    name_str->release();
+
+    // Search all registered DAGs for this concept
+    for (const auto& word : engine->registered_words()) {
+        auto* d = engine->dag(word);
+        if (d) {
+            auto* node = d->node(name);
+            if (node) {
+                ctx.data_stack().push(Value(node->contribution));
+                return true;
+            }
+        }
+    }
+
+    // Not found in any DAG — check all DAGs explicitly
+    ctx.data_stack().push(Value(0.0));
+    return true;
+}
+
+// evolve-dag-variance-k! ( n -- )
+bool prim_evolve_dag_variance_k(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    if (opt->type == Value::Type::Integer && opt->as_int > 0) {
+        engine->config().dag_variance_k = static_cast<size_t>(opt->as_int);
+    }
+    return true;
+}
+
+// evolve-dag-depth-discount! ( x -- )
+bool prim_evolve_dag_depth_discount(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    auto* engine = ctx.evolution_engine();
+    if (!engine) { ctx.err() << "Error: no evolution engine configured\n"; return true; }
+    double val = 1.0;
+    if (opt->type == Value::Type::Float) val = opt->as_float;
+    else if (opt->type == Value::Type::Integer) val = static_cast<double>(opt->as_int);
+    engine->config().dag_depth_discount = val;
+    return true;
+}
+
 // --- Help primitive ---
 
 namespace {
@@ -3698,6 +3757,9 @@ static const PrimEntry prim_table[] = {
     {"evolve-dag",             prim_evolve_dag,             2, 0, {T::String, T::Integer},{}},
     {"evolve-dag-accumulate!", prim_evolve_dag_accumulate,  1, 0, {T::Boolean},           {}},
     {"evolve-dag-show",        prim_evolve_dag_show,        1, 0, {T::String},            {}},
+    {"evolve-contribution",    prim_evolve_contribution,    1, 1, {T::String},            {T::Float}},
+    {"evolve-dag-variance-k!", prim_evolve_dag_variance_k,  1, 0, {T::Integer},           {}},
+    {"evolve-dag-depth-discount!", prim_evolve_dag_depth_discount, 1, 0, {T::Float},      {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::String}},

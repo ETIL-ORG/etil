@@ -54,6 +54,7 @@ struct EvolutionConfig {
 
     // ConceptDAG scheduling
     double dag_depth_discount = 1.0;  // depth attenuation (1.0 = disabled)
+    size_t dag_variance_k = 5;       // evaluations per concept for variance computation
 
     // Logging — controlled via TIL words (evolve-log-start, etc.)
     EvolveLogLevel log_level = EvolveLogLevel::Off;
