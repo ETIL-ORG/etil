@@ -8,6 +8,26 @@
 
 ---
 
+## Context: Where This Plan Fits
+
+ETIL's evolution engine operates at two levels. The **micro level** (AST) evolves individual word implementations via genetic operators — substitute, perturb, grow, shrink, crossover. This has been operational since v1.12.10 (Type-Directed Bridges) and produces working mutations within a single word's bytecode.
+
+The **macro level** is the concept call graph: words call words that call words. Until now, this structure was invisible to the evolution engine. MCE Phases 1a/1b (`20260405D`, `20260407A/B`) added `evolve-sub` and `evolve-chain` to evolve sub-concepts within a user-defined chain, but the chain was flat (round-robin scheduling) and the topology was frozen.
+
+The ConceptDAG design (`20260407D-ConceptDAG-Design.md`) replaces the flat chain model with a nested DAG that makes the call graph explicit and — in Tier B — evolvable. It unifies the original MCE plan's Phases 2–4:
+
+| Original MCE Phase | ConceptDAG Equivalent |
+|--------------------|-----------------------|
+| Phase 2 — co-evolutionary credit | Contribution weights computed from fitness variance |
+| Phase 3 — module-boundary crossover | Sub-DAG transplant between chains (Tier B) |
+| Phase 4 — evolved chain structure | DAG topology mutations: insert, remove, duplicate, absorb (Tier B) |
+
+The key architectural insight: the concept call graph alternates **Concept → impl → Concept → impl**. Concept nodes carry contribution weight (how much they matter to chain fitness). Impl nodes carry fitness weight (which bytecode gets selected). The `BridgeMap` provides type safety at both levels — AST-level type repair and DAG-level edge validation use the same bridge infrastructure.
+
+This plan is the implementation roadmap for that design.
+
+---
+
 ## Overview
 
 The ConceptDAG implementation is split into two tiers:
