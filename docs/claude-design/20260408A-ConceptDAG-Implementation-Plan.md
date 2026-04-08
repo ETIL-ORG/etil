@@ -37,7 +37,7 @@ These decisions are locked and shape every phase:
 | Decision | Choice | Implication |
 |----------|--------|-------------|
 | DAG extraction | **Eager** | Build DAG at `evolve-dag-register` time, not lazily |
-| Contribution weight persistence | **Reset per run**, boolean toggle for accumulation | Default ephemeral; `evolve-dag-accumulate` word for cross-run carry |
+| Contribution weight persistence | **Reset per run**, boolean toggle for accumulation | Default ephemeral; `evolve-dag-accumulate!` word for cross-run carry |
 | Recursive concepts | **Forbid** — treat as opaque leaves | Cycle detection during extraction; recursive words excluded from DAG scheduling |
 | Multi-root interaction | **Per-root** with gene duplication for specialization | Each root has its own contribution weight map; shared concepts get duplicated if roots diverge |
 | Absorb granularity | **Permanent** | No undo; absorbed concept is erased from DAG |
@@ -229,13 +229,13 @@ bool prim_evolve_dag_register(ExecutionContext& ctx);
 // evolve-dag ( root-str generations -- )
 bool prim_evolve_dag(ExecutionContext& ctx);
 
-// evolve-dag-accumulate ( flag -- )
+// evolve-dag-accumulate! ( flag -- )
 bool prim_evolve_dag_accumulate(ExecutionContext& ctx);
 ```
 
 ### Help Entries
 
-Add to `data/help.til` for `evolve-dag-register`, `evolve-dag`, `evolve-dag-accumulate`.
+Add to `data/help.til` for `evolve-dag-register`, `evolve-dag`, `evolve-dag-accumulate!`.
 
 ### Implementation Checklist
 
@@ -307,8 +307,8 @@ node.stats.impl_count = dict_.get_implementations(name)->size();
 - [ ] Implement variance-based contribution weight update in `evolve_dag_generation()`
 - [ ] Update `ConceptNodeStats` after each generation
 - [ ] Add `prim_evolve_contribution` — `evolve-contribution ( concept-str -- x )` to query contribution weight
-- [ ] Add `prim_evolve_dag_variance_k` — `evolve-dag-variance-k ( n -- )` to set K
-- [ ] TIL words for `dag_depth_discount` — `evolve-dag-depth-discount ( x -- )`
+- [ ] Add `prim_evolve_dag_variance_k` — `evolve-dag-variance-k! ( n -- )` to set K
+- [ ] TIL words for `dag_depth_discount` — `evolve-dag-depth-discount! ( x -- )`
 - [ ] Register primitives, update count test, add help entries
 - [ ] Unit tests:
     - `VarianceComputationNonZero` — concept with multiple impls has nonzero variance
@@ -352,7 +352,7 @@ Add config:
 size_t dag_stats_interval = 0;  // 0 = end-only, >0 = every N generations
 ```
 
-TIL word: `evolve-dag-stats-interval ( n -- )`
+TIL word: `evolve-dag-stats-interval! ( n -- )`
 
 ### New TIL Primitives
 
@@ -595,7 +595,7 @@ Enforced in:
 - [ ] Implement `subtree_crossover()` and `subtree_duplicate()`
 - [ ] Add `max_dag_depth` and `max_dag_nodes` to `EvolutionConfig`
 - [ ] Enforce limits in all DAG mutation methods
-- [ ] Add TIL words for limits: `evolve-dag-max-depth ( n -- )`, `evolve-dag-max-depth@ ( -- n )`, `evolve-dag-max-nodes ( n -- )`, `evolve-dag-max-nodes@ ( -- n )`
+- [ ] Add TIL words for limits: `evolve-dag-max-depth!`, `evolve-dag-max-depth@`, `evolve-dag-max-nodes!`, `evolve-dag-max-nodes@`
 - [ ] Unit tests:
     - `BloatControlRejectsDeepInsert` — insert at max depth fails
     - `BloatControlRejectsOversize` — duplicate when at max nodes fails
@@ -615,15 +615,15 @@ Tier B ships if topology mutations produce measurable benefits on a benchmark wi
 |------|-------------|-------|-------------|
 | `evolve-dag-register` | `( root-str tests-array -- flag )` | 1 | Build ConceptDAG from call graph, register tests |
 | `evolve-dag` | `( root-str generations -- )` | 1 | Run DAG-aware contribution-weighted evolution |
-| `evolve-dag-accumulate` | `( flag -- )` | 1 | Toggle contribution weight carry across runs |
+| `evolve-dag-accumulate!` | `( flag -- )` | 1 | Toggle contribution weight carry across runs |
 | `evolve-contribution` | `( concept-str -- x )` | 2 | Query a concept's contribution weight |
-| `evolve-dag-variance-k` | `( n -- )` | 2 | Set K for variance-based contribution |
-| `evolve-dag-depth-discount` | `( x -- )` | 2 | Set depth attenuation factor |
+| `evolve-dag-variance-k!` | `( n -- )` | 2 | Set K for variance-based contribution |
+| `evolve-dag-depth-discount!` | `( x -- )` | 2 | Set depth attenuation factor |
 | `evolve-dag-show` | `( root-str -- )` | 3 | Print DAG structure with weights and stats |
-| `evolve-dag-stats-interval` | `( n -- )` | 3 | Set mid-evolution stats logging frequency |
-| `evolve-dag-max-depth` | `( n -- )` | 6 | Set maximum DAG nesting depth |
+| `evolve-dag-stats-interval!` | `( n -- )` | 3 | Set mid-evolution stats logging frequency |
+| `evolve-dag-max-depth!` | `( n -- )` | 6 | Set maximum DAG nesting depth |
 | `evolve-dag-max-depth@` | `( -- n )` | 6 | Get maximum DAG nesting depth |
-| `evolve-dag-max-nodes` | `( n -- )` | 6 | Set maximum concept count per DAG |
+| `evolve-dag-max-nodes!` | `( n -- )` | 6 | Set maximum concept count per DAG |
 | `evolve-dag-max-nodes@` | `( -- n )` | 6 | Get maximum concept count per DAG |
 
 ---
@@ -649,7 +649,7 @@ Tier B ships if topology mutations produce measurable benefits on a benchmark wi
 |------|-------|------------|
 | Eager extraction misses dynamically defined concepts | 0 | Document: only concepts defined before `evolve-dag-register` are included |
 | Contribution-weighted scheduling starves low-contribution concepts | 1 | Minimum contribution floor (like `prune_threshold`) ensures all concepts get some evolution |
-| Variance computation (K evaluations) is expensive | 2 | Default K=5; tunable via `evolve-dag-variance-k`; can be reduced to K=1 (disabling variance) |
+| Variance computation (K evaluations) is expensive | 2 | Default K=5; tunable via `evolve-dag-variance-k!`; can be reduced to K=1 (disabling variance) |
 | DAG rebuild after topology mutation is expensive | 5 | Incremental DAG update (modify edges) instead of full rebuild — optimize if profiling shows hot |
 | Gene duplication creates name collisions | 5 | Naming scheme: `concept-dup-N` with incrementing counter stored in ConceptDAG |
 | Absorb permanently loses modularity | 5 | By design (decision: permanent). User can re-decompose manually if needed |
