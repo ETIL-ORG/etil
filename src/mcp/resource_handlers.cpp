@@ -51,17 +51,17 @@ void McpServer::register_all_resources() {
 
 nlohmann::json McpServer::resource_dictionary(const std::string& uri) {
     auto& session = *current_session_;
-    auto names = session.dict->word_names();
+    auto names = session.dict().word_names();
     std::sort(names.begin(), names.end());
 
     nlohmann::json words = nlohmann::json::array();
     for (const auto& name : names) {
         nlohmann::json entry = {{"name", name}};
 
-        auto desc = session.dict->get_concept_metadata(name, "description");
+        auto desc = session.dict().get_concept_metadata(name, "description");
         if (desc) entry["description"] = desc->content;
 
-        auto impls = session.dict->get_implementations(name);
+        auto impls = session.dict().get_implementations(name);
         if (impls) entry["implCount"] = impls->size();
 
         words.push_back(entry);
@@ -83,7 +83,7 @@ nlohmann::json McpServer::resource_word(const std::string& uri) {
     const std::string prefix = "etil://word/";
     std::string name = uri.substr(prefix.size());
 
-    auto impls = session.dict->get_implementations(name);
+    auto impls = session.dict().get_implementations(name);
     if (!impls) {
         nlohmann::json content_array = nlohmann::json::array();
         content_array.push_back({
@@ -95,10 +95,10 @@ nlohmann::json McpServer::resource_word(const std::string& uri) {
     }
 
     // Build concept metadata
-    auto meta_keys = session.dict->concept_metadata_keys(name);
+    auto meta_keys = session.dict().concept_metadata_keys(name);
     etil::core::MetadataMap concept_meta;
     for (const auto& key : meta_keys) {
-        auto entry = session.dict->get_concept_metadata(name, key);
+        auto entry = session.dict().get_concept_metadata(name, key);
         if (entry) {
             concept_meta.set(key, entry->format, std::string(entry->content));
         }
@@ -118,7 +118,7 @@ nlohmann::json McpServer::resource_word(const std::string& uri) {
 
 nlohmann::json McpServer::resource_stack(const std::string& uri) {
     auto& session = *current_session_;
-    const auto& ds = session.interp->context().data_stack();
+    const auto& ds = session.interp().context().data_stack();
 
     nlohmann::json elements = nlohmann::json::array();
     for (size_t i = 0; i < ds.size(); ++i) {
@@ -128,7 +128,7 @@ nlohmann::json McpServer::resource_stack(const std::string& uri) {
     nlohmann::json stack_data = {
         {"depth", ds.size()},
         {"elements", elements},
-        {"status", session.interp->stack_status()}
+        {"status", session.interp().stack_status()}
     };
 
     nlohmann::json content_array = nlohmann::json::array();
@@ -151,8 +151,8 @@ nlohmann::json McpServer::resource_session_stats(const std::string& uri) {
     }
 
     auto stats_json = session.stats.to_json(
-        session.dict->concept_count(),
-        session.interp->context().data_stack().size());
+        session.dict().concept_count(),
+        session.interp().context().data_stack().size());
 
     nlohmann::json content_array = nlohmann::json::array();
     content_array.push_back({

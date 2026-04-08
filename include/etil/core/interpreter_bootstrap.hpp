@@ -76,28 +76,4 @@ std::unique_ptr<InterpreterBundle> bootstrap_interpreter(
     std::ostream& err,
     const std::vector<std::string>& startup_files);
 
-// --- Legacy compatibility ---
-// TODO: Remove after all callers migrate to bootstrap_interpreter().
-
-/// Owns just the auxiliary engines (selection + evolution).
-/// Deprecated — use InterpreterBundle instead.
-struct InterpreterEngines {
-    std::unique_ptr<etil::selection::SelectionEngine> selection;
-    std::unique_ptr<etil::evolution::EvolutionEngine> evolution;
-
-    InterpreterEngines();
-    ~InterpreterEngines();
-
-    InterpreterEngines(const InterpreterEngines&) = delete;
-    InterpreterEngines& operator=(const InterpreterEngines&) = delete;
-    InterpreterEngines(InterpreterEngines&&) = delete;
-    InterpreterEngines& operator=(InterpreterEngines&&) = delete;
-};
-
-/// Deprecated — use bootstrap_interpreter() instead.
-/// Wires engines into an existing interpreter. Does NOT create
-/// dictionary, register primitives, or load startup files.
-std::unique_ptr<InterpreterEngines> bootstrap_engines(
-    Dictionary& dict, Interpreter& interp);
-
 } // namespace etil::core

@@ -27,11 +27,13 @@
 
 namespace etil::mcp {
 
+etil::core::Dictionary& Session::dict() { return *bundle->dict; }
+etil::core::Interpreter& Session::interp() { return *bundle->interp; }
+
 Session::Session(const std::string& session_id,
                  const std::string& sessions_base_dir,
                  const std::string& library_dir)
-    : id(session_id)
-    , dict(std::make_unique<etil::core::Dictionary>()) {
+    : id(session_id) {
 
     // Create per-session home directory if volume is configured
     if (!sessions_base_dir.empty()) {
@@ -39,56 +41,46 @@ Session::Session(const std::string& session_id,
         home_dir = (fs::path(sessions_base_dir) / session_id).string();
         std::error_code ec;
         fs::create_directories(home_dir, ec);
-        // Ignore errors — if creation fails, home_dir stays set but writes will fail
     }
 
-    etil::core::register_primitives(*dict);
-    interp = std::make_unique<etil::core::Interpreter>(*dict, interp_out, interp_err);
+    // Unified bootstrap — same entry point as native REPL and WASM
+    bundle = etil::core::bootstrap_interpreter(
+        etil::core::BootstrapMode::Mcp,
+        interp_out, interp_err,
+        {"data/builtins.til", "data/help.til"});
 
-    // Wire selection and evolution engines (select-*/evolve-* primitives)
-    engines = etil::core::bootstrap_engines(*dict, *interp);
-
-    // Configure path mapping before loading startup files
+    // Platform-specific post-bootstrap wiring
     if (!home_dir.empty()) {
-        interp->set_home_dir(home_dir);
+        interp().set_home_dir(home_dir);
     }
     if (!library_dir.empty()) {
-        interp->set_library_dir(library_dir);
+        interp().set_library_dir(library_dir);
     }
 
-    // Create and wire LVFS
     if (!home_dir.empty()) {
         lvfs = std::make_unique<etil::lvfs::Lvfs>(home_dir, library_dir);
-        interp->set_lvfs(lvfs.get());
+        interp().set_lvfs(lvfs.get());
     }
 
-    // Create and wire UvSession for async file I/O
     uv_session = std::make_unique<etil::fileio::UvSession>();
-    interp->context().set_uv_session(uv_session.get());
+    interp().context().set_uv_session(uv_session.get());
 
 #ifdef ETIL_HTTP_CLIENT_ENABLED
-    // Create and wire HTTP client state (config is shared across all sessions)
     {
         static const etil::net::HttpClientConfig http_config =
             etil::net::HttpClientConfig::from_env();
         if (http_config.enabled()) {
             http_state = std::make_unique<etil::net::HttpClientState>();
             http_state->config = &http_config;
-            interp->context().set_http_client_state(http_state.get());
+            interp().context().set_http_client_state(http_state.get());
         }
     }
-    etil::net::register_http_primitives(*dict);
+    etil::net::register_http_primitives(dict());
 #endif
 
 #ifdef ETIL_MONGODB_ENABLED
-    etil::db::register_mongo_primitives(*dict);
+    etil::db::register_mongo_primitives(dict());
 #endif
-
-    // Register handler words as concepts so help.til can attach metadata
-    interp->register_handler_words();
-
-    // Load startup files (from baked-in data/, not from volumes)
-    interp->load_startup_files({"data/builtins.til", "data/help.til"});
 
     // Discard any startup output
     out_buf.reset();
@@ -127,13 +119,13 @@ void Session::apply_role_permissions(const RolePermissions& perms) {
     // Wire permissions pointer into the interpreter's execution context.
     // The pointer is stable — RolePermissions lives in AuthConfig::roles
     // for the server's lifetime.
-    interp->context().set_permissions(&perms);
+    interp().context().set_permissions(&perms);
 }
 #endif // ETIL_JWT_ENABLED
 
 Session::~Session() {
-    if (interp) {
-        interp->shutdown();
+    if (bundle && bundle->interp) {
+        bundle->interp->shutdown();
     }
 
     // Clean up per-session home directory

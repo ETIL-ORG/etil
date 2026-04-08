@@ -3,6 +3,7 @@
 
 #include "etil/mcp/mcp_server.hpp"
 #include "etil/mcp/session.hpp"
+#include "etil/core/interpreter_bootstrap.hpp"
 #include "etil/core/metadata_json.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/heap_json.hpp"
@@ -471,7 +472,7 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     session.interp_err.clear();
 
     // Set execution limits before running
-    auto& ctx = session.interp->context();
+    auto& ctx = session.interp().context();
     uint64_t budget = MCP_INSTRUCTION_BUDGET;
     double timeout_seconds = MCP_TIMEOUT_SECONDS;
 
@@ -523,7 +524,7 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     auto wall_start = std::chrono::steady_clock::now();
     auto cpu_start = SessionStats::cpu_time_ns();
 
-    session.interp->interpret_line(code);
+    session.interp().interpret_line(code);
 
     auto wall_end = std::chrono::steady_clock::now();
     auto cpu_end = SessionStats::cpu_time_ns();
@@ -540,9 +541,9 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     ctx.reset_limits();
 
     // Check dictionary concept count limit
-    if (session.dict->concept_count() > MCP_MAX_CONCEPTS) {
+    if (session.dict().concept_count() > MCP_MAX_CONCEPTS) {
         session.interp_err << "Error: dictionary concept limit exceeded ("
-                           << session.dict->concept_count() << " > "
+                           << session.dict().concept_count() << " > "
                            << MCP_MAX_CONCEPTS << ")\n";
     }
 
@@ -599,11 +600,11 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
         errors += abort_msg;
     }
 
-    std::string stack_status = session.interp->stack_status();
+    std::string stack_status = session.interp().stack_status();
 
     // Build the stack array (direct indexed access, bottom to top)
     nlohmann::json stack_array = nlohmann::json::array();
-    const auto& ds = session.interp->context().data_stack();
+    const auto& ds = session.interp().context().data_stack();
     for (size_t i = 0; i < ds.size(); ++i) {
         stack_array.push_back(etil::core::Interpreter::format_value(ds[i]));
     }
@@ -639,14 +640,14 @@ nlohmann::json McpServer::tool_list_words(const nlohmann::json& params) {
         category_filter = params["category"].get<std::string>();
     }
 
-    auto words = session.interp->completable_words();
+    auto words = session.interp().completable_words();
 
     nlohmann::json word_list = nlohmann::json::array();
     for (const auto& word : words) {
         // Get metadata if available
-        auto desc_meta = session.dict->get_concept_metadata(word, "description");
-        auto cat_meta = session.dict->get_concept_metadata(word, "category");
-        auto effect_meta = session.dict->get_concept_metadata(word, "stack-effect");
+        auto desc_meta = session.dict().get_concept_metadata(word, "description");
+        auto cat_meta = session.dict().get_concept_metadata(word, "category");
+        auto effect_meta = session.dict().get_concept_metadata(word, "stack-effect");
 
         std::string description = desc_meta ? desc_meta->content : "";
         std::string category = cat_meta ? cat_meta->content : "";
@@ -663,7 +664,7 @@ nlohmann::json McpServer::tool_list_words(const nlohmann::json& params) {
         if (!stack_effect.empty()) entry["stackEffect"] = stack_effect;
 
         // Get implementation count
-        auto impls = session.dict->get_implementations(word);
+        auto impls = session.dict().get_implementations(word);
         if (impls) {
             entry["implCount"] = impls->size();
         }
@@ -684,7 +685,7 @@ nlohmann::json McpServer::tool_get_word_info(const nlohmann::json& params) {
     auto& session = *current_session_;
     std::string name = params.at("name").get<std::string>();
 
-    auto impls = session.dict->get_implementations(name);
+    auto impls = session.dict().get_implementations(name);
     if (!impls) {
         nlohmann::json content_array = nlohmann::json::array();
         content_array.push_back({
@@ -695,10 +696,10 @@ nlohmann::json McpServer::tool_get_word_info(const nlohmann::json& params) {
     }
 
     // Get concept metadata
-    auto meta_keys = session.dict->concept_metadata_keys(name);
+    auto meta_keys = session.dict().concept_metadata_keys(name);
     etil::core::MetadataMap concept_meta;
     for (const auto& key : meta_keys) {
-        auto entry = session.dict->get_concept_metadata(name, key);
+        auto entry = session.dict().get_concept_metadata(name, key);
         if (entry) {
             concept_meta.set(key, entry->format, std::string(entry->content));
         }
@@ -730,7 +731,7 @@ nlohmann::json McpServer::tool_get_word_info(const nlohmann::json& params) {
 
 nlohmann::json McpServer::tool_get_stack(const nlohmann::json& /*params*/) {
     auto& session = *current_session_;
-    const auto& ds = session.interp->context().data_stack();
+    const auto& ds = session.interp().context().data_stack();
     size_t depth = ds.size();
 
     nlohmann::json elements = nlohmann::json::array();
@@ -803,7 +804,7 @@ nlohmann::json McpServer::tool_get_stack(const nlohmann::json& /*params*/) {
     nlohmann::json stack_data = {
         {"depth", depth},
         {"elements", elements},
-        {"status", session.interp->stack_status()}
+        {"status", session.interp().stack_status()}
     };
 
     nlohmann::json content_array = nlohmann::json::array();
@@ -820,7 +821,7 @@ nlohmann::json McpServer::tool_set_weight(const nlohmann::json& params) {
     std::string word = params.at("word").get<std::string>();
     double weight = params.at("weight").get<double>();
 
-    auto impls = session.dict->get_implementations(word);
+    auto impls = session.dict().get_implementations(word);
     if (!impls || impls->empty()) {
         nlohmann::json content_array = nlohmann::json::array();
         content_array.push_back({
@@ -866,7 +867,7 @@ nlohmann::json McpServer::tool_reset(const nlohmann::json& /*params*/) {
     auto& session = *current_session_;
 
     // Shut down old interpreter
-    session.interp->shutdown();
+    session.interp().shutdown();
 
     // Release output buffers
     session.out_buf.reset();
@@ -874,41 +875,41 @@ nlohmann::json McpServer::tool_reset(const nlohmann::json& /*params*/) {
     session.err_buf.reset();
     session.interp_err.clear();
 
-    // Recreate dictionary and interpreter (preserve path mapping)
-    session.dict = std::make_unique<etil::core::Dictionary>();
-    etil::core::register_primitives(*session.dict);
-    session.interp = std::make_unique<etil::core::Interpreter>(
-        *session.dict, session.interp_out, session.interp_err);
+    // Recreate via unified bootstrap (same entry point as constructor)
+    session.bundle = etil::core::bootstrap_interpreter(
+        etil::core::BootstrapMode::Mcp,
+        session.interp_out, session.interp_err,
+        {"data/builtins.til", "data/help.til"});
+
+    // Re-wire platform-specific subsystems
     if (!session.home_dir.empty()) {
-        session.interp->set_home_dir(session.home_dir);
+        session.interp().set_home_dir(session.home_dir);
     }
     if (!library_dir_.empty()) {
-        session.interp->set_library_dir(library_dir_);
+        session.interp().set_library_dir(library_dir_);
     }
 
-    // Recreate LVFS
     if (!session.home_dir.empty()) {
         session.lvfs = std::make_unique<etil::lvfs::Lvfs>(
             session.home_dir, library_dir_);
-        session.interp->set_lvfs(session.lvfs.get());
+        session.interp().set_lvfs(session.lvfs.get());
     }
 
-    // Re-wire ExecutionContext pointers to existing session-owned objects
-    auto& ctx = session.interp->context();
+    auto& ctx = session.interp().context();
 
     if (session.uv_session) {
         ctx.set_uv_session(session.uv_session.get());
     }
 
 #ifdef ETIL_HTTP_CLIENT_ENABLED
-    etil::net::register_http_primitives(*session.dict);
+    etil::net::register_http_primitives(session.dict());
     if (session.http_state) {
         ctx.set_http_client_state(session.http_state.get());
     }
 #endif
 
 #ifdef ETIL_MONGODB_ENABLED
-    etil::db::register_mongo_primitives(*session.dict);
+    etil::db::register_mongo_primitives(session.dict());
     if (session.mongo_state) {
         ctx.set_mongo_client_state(session.mongo_state.get());
     }
@@ -919,9 +920,6 @@ nlohmann::json McpServer::tool_reset(const nlohmann::json& /*params*/) {
         ctx.set_permissions(session.permissions_ptr);
     }
 #endif
-
-    session.interp->register_handler_words();
-    session.interp->load_startup_files({"data/builtins.til", "data/help.til"});
 
     // Discard startup output
     session.out_buf.reset();
@@ -952,8 +950,8 @@ nlohmann::json McpServer::tool_get_session_stats(
     }
 
     auto stats_json = session.stats.to_json(
-        session.dict->concept_count(),
-        session.interp->context().data_stack().size());
+        session.dict().concept_count(),
+        session.interp().context().data_stack().size());
 
     nlohmann::json content_array = nlohmann::json::array();
     content_array.push_back({
@@ -1030,7 +1028,7 @@ nlohmann::json McpServer::tool_write_file(const nlohmann::json& params) {
     }
 
     // Resolve path under home directory
-    std::string resolved = session.interp->resolve_home_path(path);
+    std::string resolved = session.interp().resolve_home_path(path);
     if (resolved.empty()) {
         nlohmann::json content_array = nlohmann::json::array();
         content_array.push_back({
@@ -1118,7 +1116,7 @@ nlohmann::json McpServer::tool_read_file(const nlohmann::json& params) {
     }
 
     // Resolve path under home directory
-    std::string resolved = session.interp->resolve_home_path(path);
+    std::string resolved = session.interp().resolve_home_path(path);
     if (resolved.empty()) {
         nlohmann::json content_array = nlohmann::json::array();
         content_array.push_back({
@@ -1229,7 +1227,7 @@ nlohmann::json McpServer::tool_list_files(const nlohmann::json& params) {
             });
             return {{"content", content_array}, {"isError", true}};
         }
-        resolved = session.interp->resolve_home_path(rel_path);
+        resolved = session.interp().resolve_home_path(rel_path);
         if (resolved.empty()) {
             nlohmann::json content_array = nlohmann::json::array();
             content_array.push_back({

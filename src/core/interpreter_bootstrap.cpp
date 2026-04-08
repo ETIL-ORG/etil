@@ -57,25 +57,4 @@ std::unique_ptr<InterpreterBundle> bootstrap_interpreter(
     return bundle;
 }
 
-// --- Legacy compatibility ---
-
-InterpreterEngines::InterpreterEngines() = default;
-InterpreterEngines::~InterpreterEngines() = default;
-
-std::unique_ptr<InterpreterEngines> bootstrap_engines(
-    Dictionary& dict, Interpreter& interp) {
-    auto bundle = std::make_unique<InterpreterEngines>();
-
-    bundle->selection = std::make_unique<etil::selection::SelectionEngine>();
-
-    etil::evolution::EvolutionConfig evo_config;
-    bundle->evolution = std::make_unique<etil::evolution::EvolutionEngine>(
-        evo_config, dict);
-
-    interp.context().set_selection_engine(bundle->selection.get());
-    interp.context().set_evolution_engine(bundle->evolution.get());
-
-    return bundle;
-}
-
 } // namespace etil::core

@@ -372,34 +372,18 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Capture interpreter output so we can colorize it
-    std::ostringstream interp_out;
-    std::ostringstream interp_err;
-    Dictionary dict;
-    register_primitives(dict);
-    Interpreter interp(dict, interp_out, interp_err);
-
-    // Wire selection and evolution engines for select-*/evolve-* primitives
-    auto engines = etil::core::bootstrap_engines(dict, interp);
-
-    // Register handler words as concepts so help.til can attach metadata
-    interp.register_handler_words();
-
     // Resolve data directory: -d flag > ETIL_DATA_DIR env > "data" (CWD-relative)
     if (data_dir.empty()) {
         const char* env = std::getenv("ETIL_DATA_DIR");
         if (env && env[0] != '\0') data_dir = env;
     }
 
-    // Default startup files when no config specifies them
+    // Resolve startup file paths before bootstrap
     if (config.startup_files.empty()) {
         std::string base = data_dir.empty() ? "data" : data_dir;
-        // Strip trailing slash
         if (!base.empty() && base.back() == '/') base.pop_back();
         config.startup_files = {base + "/builtins.til", base + "/help.til"};
     } else if (!data_dir.empty()) {
-        // If config specified startup files AND --data-dir was given,
-        // prepend data_dir to relative paths
         std::string base = data_dir;
         if (!base.empty() && base.back() == '/') base.pop_back();
         for (auto& f : config.startup_files) {
@@ -409,12 +393,22 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Load startup .til files (before CLI args and interactive loop)
-    if (!config.startup_files.empty()) {
-        interp.load_startup_files(config.startup_files);
-        flush_output(interp_out, std::cout, "", "");
-        flush_output(interp_err, std::cerr, "", "");
-    }
+    // Capture interpreter output so we can colorize it
+    std::ostringstream interp_out;
+    std::ostringstream interp_err;
+
+    // Unified bootstrap — same entry point as MCP server and WASM
+    auto bundle = etil::core::bootstrap_interpreter(
+        etil::core::BootstrapMode::Repl,
+        interp_out, interp_err,
+        config.startup_files);
+
+    // Convenience reference (bundle owns the objects)
+    auto& interp = *bundle->interp;
+
+    // Flush any startup output
+    flush_output(interp_out, std::cout, "", "");
+    flush_output(interp_err, std::cerr, "", "");
 
     bool interactive = isatty(STDIN_FILENO);
 

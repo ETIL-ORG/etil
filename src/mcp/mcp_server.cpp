@@ -232,7 +232,7 @@ std::string McpServer::create_session(const std::string& user_id,
             }
         }
 #endif
-        session->interp->context().set_mongo_client_state(
+        session->interp().context().set_mongo_client_state(
             session->mongo_state.get());
     }
 #endif
@@ -443,7 +443,7 @@ etil::core::Interpreter& McpServer::interpreter() {
                 id, sessions_base_dir_, library_dir_));
             default_session_id_ = id;
         }
-        return *sessions_.at(default_session_id_)->interp;
+        return sessions_.at(default_session_id_)->interp();
     }
 }
 

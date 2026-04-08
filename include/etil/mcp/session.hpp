@@ -15,7 +15,7 @@
 namespace etil::core {
 class Dictionary;
 class Interpreter;
-struct InterpreterEngines;
+struct InterpreterBundle;
 }
 
 namespace etil::lvfs {
@@ -49,13 +49,15 @@ namespace etil::mcp {
 struct Session {
     std::string id;
     std::string home_dir;  // Actual filesystem path, empty if no volume
-    std::unique_ptr<etil::core::Dictionary> dict;
     CappedStringBuf out_buf;
     CappedStringBuf err_buf;
     std::ostream interp_out{&out_buf};
     std::ostream interp_err{&err_buf};
-    std::unique_ptr<etil::core::Interpreter> interp;
-    std::unique_ptr<etil::core::InterpreterEngines> engines;
+    std::unique_ptr<etil::core::InterpreterBundle> bundle;
+
+    /// Convenience accessors — all code should use these, not bundle-> directly.
+    etil::core::Dictionary& dict();
+    etil::core::Interpreter& interp();
     std::unique_ptr<etil::lvfs::Lvfs> lvfs;
     std::unique_ptr<etil::fileio::UvSession> uv_session;
 #ifdef ETIL_HTTP_CLIENT_ENABLED
