@@ -875,11 +875,10 @@ nlohmann::json McpServer::tool_reset(const nlohmann::json& /*params*/) {
     session.err_buf.reset();
     session.interp_err.clear();
 
-    // Recreate via unified bootstrap (same entry point as constructor)
+    // Recreate via unified bootstrap — no startup files yet (same as constructor)
     session.bundle = etil::core::bootstrap_interpreter(
         etil::core::BootstrapMode::Mcp,
-        session.interp_out, session.interp_err,
-        {"data/builtins.til", "data/help.til"});
+        session.interp_out, session.interp_err, {});
 
     // Re-wire platform-specific subsystems
     if (!session.home_dir.empty()) {
@@ -920,6 +919,9 @@ nlohmann::json McpServer::tool_reset(const nlohmann::json& /*params*/) {
         ctx.set_permissions(session.permissions_ptr);
     }
 #endif
+
+    // Load startup files after ALL primitives are registered
+    session.interp().load_startup_files({"data/builtins.til", "data/help.til"});
 
     // Discard startup output
     session.out_buf.reset();

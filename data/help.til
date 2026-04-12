@@ -697,6 +697,24 @@ s" evolve-chain" s" description" s" text" s" Round-robin evolution of sub-concep
 s" evolve-chain" s" stack-effect" s" text" s" ( chain-str sub-concepts-array generations -- )" meta! drop
 s" evolve-chain" s" category" s" text" s" evolution" meta! drop
 
+s" evolve-mce-select" s" description" s" text" s" Toggle weighted-random selection during fitness evaluation. When true, Call instructions use the SelectionEngine instead of latest-impl lookup" meta! drop
+s" evolve-mce-select" s" stack-effect" s" text" s" ( flag -- )" meta! drop
+s" evolve-mce-select" s" category" s" text" s" evolution" meta! drop
+
+# Internal MCE helpers (underscore prefix = not for direct end-user use)
+
+s" _mce-subs" s" description" s" text" s" Internal variable: holds sub-concepts array for evolve-chain" meta! drop
+s" _mce-subs" s" stack-effect" s" text" s" ( -- addr )" meta! drop
+s" _mce-subs" s" category" s" text" s" evolution" meta! drop
+
+s" _mce-chain" s" description" s" text" s" Internal variable: holds chain word name for evolve-chain" meta! drop
+s" _mce-chain" s" stack-effect" s" text" s" ( -- addr )" meta! drop
+s" _mce-chain" s" category" s" text" s" evolution" meta! drop
+
+s" _evolve-round" s" description" s" text" s" Internal: one round-robin pass evolving each sub-concept via chain fitness" meta! drop
+s" _evolve-round" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" _evolve-round" s" category" s" text" s" evolution" meta! drop
+
 s" evolve-dag-register" s" description" s" text" s" Build ConceptDAG from call graph and register tests on root" meta! drop
 s" evolve-dag-register" s" stack-effect" s" text" s" ( root-str tests-array -- flag )" meta! drop
 s" evolve-dag-register" s" category" s" text" s" evolution" meta! drop

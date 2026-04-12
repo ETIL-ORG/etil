@@ -43,11 +43,12 @@ Session::Session(const std::string& session_id,
         fs::create_directories(home_dir, ec);
     }
 
-    // Unified bootstrap — same entry point as native REPL and WASM
+    // Unified bootstrap — same entry point as native REPL and WASM.
+    // Startup files are loaded AFTER platform-specific primitives so that
+    // help.til can attach metadata to HTTP/MongoDB words.
     bundle = etil::core::bootstrap_interpreter(
         etil::core::BootstrapMode::Mcp,
-        interp_out, interp_err,
-        {"data/builtins.til", "data/help.til"});
+        interp_out, interp_err, {});
 
     // Platform-specific post-bootstrap wiring
     if (!home_dir.empty()) {
@@ -81,6 +82,10 @@ Session::Session(const std::string& session_id,
 #ifdef ETIL_MONGODB_ENABLED
     etil::db::register_mongo_primitives(dict());
 #endif
+
+    // Load startup files now that ALL primitives (including HTTP/MongoDB)
+    // are registered — help.til meta! calls can find every word.
+    interp().load_startup_files({"data/builtins.til", "data/help.til"});
 
     // Discard any startup output
     out_buf.reset();

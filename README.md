@@ -2607,6 +2607,7 @@ These words drive the evolutionary pipeline. Available in both the REPL and MCP 
 | `evolve-status` | `( word-str -- n )` | Return number of generations evolved |
 | `evolve-sub` | `( sub-str chain-str -- n )` | MCE: mutate sub-concept, evaluate chain for fitness |
 | `evolve-chain` | `( chain-str subs-array gens -- )` | MCE: round-robin evolution of sub-concepts |
+| `evolve-mce-select` | `( flag -- )` | Toggle weighted-random selection during fitness evaluation |
 | `evolve-seed!` | `( n -- )` | Seed all evolution RNGs for reproducible runs |
 | `evolve-dag-register` | `( root-str tests-array -- flag )` | Build ConceptDAG from call graph, register tests |
 | `evolve-dag` | `( root-str generations -- )` | Run DAG-aware contribution-weighted evolution |
