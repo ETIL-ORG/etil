@@ -1,0 +1,105 @@
+# MCE-monolithic Tier B benchmark — monolithic evolution of int-norm
+# Target: int-norm(x, y, z) = floor(sqrt(x^2 + y^2 + z^2))
+#
+# This is the baseline: evolve-word directly on the root word with no
+# sub-concept decomposition. target-fn-equivalent for the integer-norm
+# benchmark.
+#
+# The root impl here is the full int-norm body inlined (instead of
+# calling sq, sum3, sqrt-approx), so mutations operate on one large
+# AST rather than on small sub-concepts.
+
+# --- Scratch variables for test-case construction only ---
+
+variable _tc-x
+variable _tc-y
+variable _tc-z
+variable _tc-expected
+
+# --- Monolithic int-norm ---
+# Inlined: sq swap sq rot sq sum3 sqrt-approx
+#   sq -> dup *
+#   sum3 -> + +
+#   sqrt-approx -> the Newton loop
+
+: int-norm
+  dup *
+  swap dup *
+  rot dup *
+  + +
+  dup 1 < if
+    drop 0
+  else
+    dup 2 / 1 +
+    5 0 do
+      over over
+      /
+      over
+      +
+      2 /
+      nip
+    loop
+    nip
+  then
+;
+
+# --- Test case construction ---
+
+: mk-tc
+  _tc-expected !
+  _tc-z !
+  _tc-y !
+  _tc-x !
+  array-new _tc-x @ array-push _tc-y @ array-push _tc-z @ array-push
+  array-new _tc-expected @ array-push
+  swap
+  map-new
+  rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: tests
+  array-new
+  0 0 0    0 mk-tc array-push
+  3 4 0    5 mk-tc array-push
+  1 2 2    3 mk-tc array-push
+  2 3 6    7 mk-tc array-push
+  1 4 8    9 mk-tc array-push
+  5 12 0  13 mk-tc array-push
+  0 0 10  10 mk-tc array-push
+  8 15 0  17 mk-tc array-push
+  6 8 0   10 mk-tc array-push
+;
+
+# --- Configure evolution ---
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+42 evolve-seed!
+
+# --- Logging ---
+
+s" /tmp/" evolve-log-dir
+1 65535 evolve-log-start
+
+# --- Register tests on root and evolve monolithically ---
+
+s" int-norm" tests evolve-register drop
+
+." === Monolithic Tier B: 100 generations ===" cr
+
+: run-monolithic
+  100 0 do
+    s" int-norm" evolve-word drop
+  loop
+;
+
+run-monolithic
+
+." Generations: " s" int-norm" evolve-status . cr
+
+evolve-log-stop
+." Log closed" cr

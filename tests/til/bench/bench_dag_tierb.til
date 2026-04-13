@@ -1,0 +1,118 @@
+# ConceptDAG Tier B benchmark — integer norm with variance differentiation
+# Target: int-norm(x, y, z) = floor(sqrt(x^2 + y^2 + z^2))
+# Decomposed as: int-norm = sq swap sq rot sq sum3 sqrt-approx
+#
+# Structural asymmetry: sq and sum3 are 2-instruction utilities,
+# sqrt-approx is a 14-instruction stack-only Newton's-method loop.
+# This is the benchmark the Tier B plan requires: at least one
+# sub-concept with 10+ instructions so variance-based contribution
+# weighting has something differentiated to measure.
+#
+# sqrt-approx uses only data-stack manipulation (over, nip) rather
+# than named variables. Named variables would be captured as
+# evolvable "concepts" by the ConceptDAG extractor (they compile to
+# push-data-ptr bytecode), polluting the evolvable set.
+#
+# Compare with bench_mce_tierb_chain.til (round-robin) and
+# bench_mce_tierb_monolithic.til (single-concept baseline).
+
+# --- Scratch variables for test-case construction only ---
+# These are NOT in the int-norm call graph so they won't appear
+# in the ConceptDAG.
+
+variable _tc-x
+variable _tc-y
+variable _tc-z
+variable _tc-expected
+
+# --- Sub-concept definitions ---
+
+: sq      dup * ;
+: sum3    + + ;
+
+# sqrt-approx: integer Newton's method, 5 fixed iterations.
+# Stack-only; no variables. Returns floor(sqrt(n)) for n >= 1,
+# or 0 for n <= 0. One Newton iteration:
+#   ( n g -- n g' )  where g' = (n/g + g) / 2
+: sqrt-approx
+  dup 1 < if
+    drop 0
+  else
+    dup 2 / 1 +
+    5 0 do
+      over over
+      /
+      over
+      +
+      2 /
+      nip
+    loop
+    nip
+  then
+;
+
+# int-norm: the root concept. Orchestrates the three sub-concepts.
+: int-norm   sq swap sq rot sq sum3 sqrt-approx ;
+
+# --- Test case construction ---
+# mk-tc builds a single test case map: { in: [x y z], out: [expected] }
+# Stack effect: ( x y z expected -- map )
+
+: mk-tc
+  _tc-expected !
+  _tc-z !
+  _tc-y !
+  _tc-x !
+  array-new _tc-x @ array-push _tc-y @ array-push _tc-z @ array-push
+  array-new _tc-expected @ array-push
+  swap
+  map-new
+  rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: tests
+  array-new
+  0 0 0    0 mk-tc array-push
+  3 4 0    5 mk-tc array-push
+  1 2 2    3 mk-tc array-push
+  2 3 6    7 mk-tc array-push
+  1 4 8    9 mk-tc array-push
+  5 12 0  13 mk-tc array-push
+  0 0 10  10 mk-tc array-push
+  8 15 0  17 mk-tc array-push
+  6 8 0   10 mk-tc array-push
+;
+
+# --- Configure evolution ---
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+42 evolve-seed!
+
+5 evolve-dag-variance-k!
+1.0e0 evolve-dag-depth-discount!
+
+# --- Logging ---
+
+s" /tmp/" evolve-log-dir
+1 65535 evolve-log-start
+
+# --- Register ConceptDAG and evolve ---
+
+s" int-norm" tests evolve-dag-register drop
+
+." === ConceptDAG Tier B: 100 generations (contribution-weighted) ===" cr
+
+s" int-norm" 100 evolve-dag
+
+." int-norm generations: " s" int-norm" evolve-status . cr
+
+." === DAG structure after evolution ===" cr
+s" int-norm" evolve-dag-show
+
+evolve-log-stop
+." Log closed" cr

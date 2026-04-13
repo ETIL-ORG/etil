@@ -20,6 +20,17 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
     size_t ip = 0;
     std::vector<Value> local_rstack;  // Local return stack for DO/LOOP params
 
+    // RAII guard: on any exit path (success, failure, exception), release
+    // any heap references left on local_rstack. Without this, values pushed
+    // via >r and never popped via r> (because of early error return) leak
+    // their heap references when local_rstack destructs POD-style.
+    struct LocalRStackGuard {
+        std::vector<Value>& stack;
+        ~LocalRStackGuard() {
+            for (auto& v : stack) value_release(v);
+        }
+    } _rstack_guard{local_rstack};
+
     while (ip < instrs.size()) {
         if (!ctx.tick()) {
             if (!ctx.abort_requested())
@@ -120,6 +131,7 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
                           << (flag->type == Value::Type::Integer ? "integer" :
                               flag->type == Value::Type::Float ? "float" : "non-boolean")
                           << "\n";
+                value_release(*flag);
                 return false;
             }
             if (!flag->as_bool()) {
@@ -164,10 +176,14 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
         case Instruction::Op::DoPlusLoop: {
             auto opt_inc = ctx.data_stack().pop();
             if (!opt_inc) return false;
-            if (local_rstack.size() < 2) return false;
+            if (local_rstack.size() < 2) {
+                value_release(*opt_inc);
+                return false;
+            }
             int64_t increment = opt_inc->as_int;
             if (increment == 0) {
                 ctx.err() << "Error: +LOOP increment is zero\n";
+                value_release(*opt_inc);
                 return false;
             }
             int64_t index = local_rstack.back().as_int;
@@ -190,7 +206,11 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
 
         case Instruction::Op::DoI: {
             if (local_rstack.empty()) return false;
-            ctx.data_stack().push(local_rstack.back());
+            // Loop index is always Integer but addref is a no-op for
+            // non-heap values and protects against pattern drift.
+            Value v = local_rstack.back();
+            value_addref(v);
+            ctx.data_stack().push(v);
             ++ip;
             break;
         }
@@ -219,7 +239,12 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
                 ctx.err() << "Error: return stack underflow\n";
                 return false;
             }
-            ctx.data_stack().push(local_rstack.back());
+            // r@ copies (not moves) the top of the return stack to the
+            // data stack, so both locations now reference the same value.
+            // Addref so each has its own ref count.
+            Value v = local_rstack.back();
+            value_addref(v);
+            ctx.data_stack().push(v);
             ++ip;
             break;
         }
@@ -232,7 +257,9 @@ bool execute_compiled(ByteCode& code, ExecutionContext& ctx) {
                 ctx.err() << "Error: j requires nested DO loop\n";
                 return false;
             }
-            ctx.data_stack().push(local_rstack[local_rstack.size() - 3]);
+            Value v = local_rstack[local_rstack.size() - 3];
+            value_addref(v);
+            ctx.data_stack().push(v);
             ++ip;
             break;
         }

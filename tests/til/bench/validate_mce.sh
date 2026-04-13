@@ -4,13 +4,20 @@
 #
 # MCE / ConceptDAG validation — 3-way comparison across 5 seeds.
 #
-# Monolithic: evolve-word on target-fn directly
-# MCE-chain:  evolve-chain with round-robin sub-concept scheduling
-# MCE-DAG:    evolve-dag with contribution-weighted sub-concept scheduling
+# Monolithic: evolve-word on the root word directly
+# MCE-chain:  evolve-chain round-robin scheduling over sub-concepts
+# MCE-DAG:    evolve-dag contribution-weighted scheduling over sub-concepts
 #
-# For each benchmark and seed, the script generates a temp copy with the
-# seed and log directory substituted, runs it, and parses the evolution
-# log for the best fitness and highest test-pass count observed.
+# Supports two benchmark suites:
+#
+#   validate_mce.sh quad    — quadratic (x^2 + 3x + 5), 3 trivial sub-concepts
+#   validate_mce.sh tierb   — integer norm, sqrt-approx is the heavy lifter
+#   validate_mce.sh all     — run both suites (default)
+#
+# For each benchmark and seed, the script generates a temp copy with
+# the seed and log directory substituted, runs it, and parses the
+# evolution log for the best fitness and highest test-pass count
+# observed.
 
 set -uo pipefail
 
@@ -25,7 +32,7 @@ if [[ ! -x "$REPL" ]]; then
 fi
 
 SEEDS=(42 123 7 999 314159)
-TOTAL_TESTS=9
+SUITE="${1:-all}"
 
 # --- Helpers ---
 
@@ -35,7 +42,6 @@ run_benchmark() {
     local tmp
     tmp=$(mktemp /tmp/bench_XXXXXX.til)
 
-    # Substitute seed and log directory without risking regex collisions
     sed -e "s|^42 evolve-seed!|$seed evolve-seed!|" \
         -e "s|s\" /tmp/\" evolve-log-dir|s\" $logdir/\" evolve-log-dir|" \
         "$template" > "$tmp"
@@ -43,13 +49,12 @@ run_benchmark() {
     rm -f "$logdir"/*.log
     ( cd "$PROJECT_DIR" && \
       printf 'include %s\n' "$tmp" | \
-      timeout 180 "$REPL" --quiet --data-dir data >/dev/null 2>/dev/null ) || true
+      timeout 300 "$REPL" --quiet --data-dir data >/dev/null 2>/dev/null ) || true
 
     rm -f "$tmp"
 }
 
 best_fitness() {
-    # Extract highest fitness value from log, or 0 if none
     local log=$1
     grep -oE 'fitness=[0-9.]+' "$log" 2>/dev/null \
         | sed 's/fitness=//' \
@@ -58,7 +63,6 @@ best_fitness() {
 }
 
 max_passes() {
-    # Extract highest N/TOTAL pass count observed, or 0 if none
     local log=$1 total=$2
     grep -oE "[0-9]+/$total pass" "$log" 2>/dev/null \
         | sed "s|/$total pass||" \
@@ -80,36 +84,74 @@ fmt_result() {
     printf "%s/%s f=%s" "${bp:-0}" "$total" "${fp:-0}"
 }
 
+run_suite() {
+    # $1 = suite label, $2 = monolithic .til, $3 = chain .til, $4 = dag .til, $5 = total tests
+    local label=$1 mono=$2 chain=$3 dag=$4 total=$5
+
+    local mono_log=/tmp/validate-$label-mono
+    local chain_log=/tmp/validate-$label-chain
+    local dag_log=/tmp/validate-$label-dag
+    mkdir -p "$mono_log" "$chain_log" "$dag_log"
+
+    echo ""
+    echo "=== $label benchmark ==="
+    echo ""
+    printf "%-8s  %-18s  %-18s  %-18s\n" "Seed" "Monolithic" "MCE-chain" "MCE-DAG"
+    printf "%-8s  %-18s  %-18s  %-18s\n" "----" "----------" "---------" "-------"
+
+    for seed in "${SEEDS[@]}"; do
+        run_benchmark "$SCRIPT_DIR/$mono"  "$seed" "$mono_log"
+        run_benchmark "$SCRIPT_DIR/$chain" "$seed" "$chain_log"
+        run_benchmark "$SCRIPT_DIR/$dag"   "$seed" "$dag_log"
+
+        printf "%-8s  %-18s  %-18s  %-18s\n" \
+            "$seed" \
+            "$(fmt_result "$mono_log" "$total")" \
+            "$(fmt_result "$chain_log" "$total")" \
+            "$(fmt_result "$dag_log"   "$total")"
+    done
+}
+
 # --- Main ---
 
 echo "=== MCE / ConceptDAG Validation ==="
 echo "Seeds: ${SEEDS[*]}"
-echo "Target: f(x) = x^2 + 3x + 5 — Integer→Integer, 9 test cases, 100 generations"
+
+case "$SUITE" in
+    quad)
+        run_suite "quadratic" \
+            bench_mce_monolithic.til \
+            bench_mce_quad.til \
+            bench_dag_quad.til \
+            9
+        ;;
+    tierb)
+        run_suite "tier-b-integer-norm" \
+            bench_mce_tierb_monolithic.til \
+            bench_mce_tierb_chain.til \
+            bench_dag_tierb.til \
+            9
+        ;;
+    all)
+        run_suite "quadratic" \
+            bench_mce_monolithic.til \
+            bench_mce_quad.til \
+            bench_dag_quad.til \
+            9
+        run_suite "tier-b-integer-norm" \
+            bench_mce_tierb_monolithic.til \
+            bench_mce_tierb_chain.til \
+            bench_dag_tierb.til \
+            9
+        ;;
+    *)
+        echo "Usage: $0 [quad|tierb|all]" >&2
+        exit 1
+        ;;
+esac
+
 echo ""
-
-MONO_LOG=/tmp/validate-mce-mono
-CHAIN_LOG=/tmp/validate-mce-chain
-DAG_LOG=/tmp/validate-mce-dag
-mkdir -p "$MONO_LOG" "$CHAIN_LOG" "$DAG_LOG"
-
-printf "%-8s  %-18s  %-18s  %-18s\n" "Seed" "Monolithic" "MCE-chain" "MCE-DAG"
-printf "%-8s  %-18s  %-18s  %-18s\n" "----" "----------" "---------" "-------"
-
-for seed in "${SEEDS[@]}"; do
-    run_benchmark "$SCRIPT_DIR/bench_mce_monolithic.til" "$seed" "$MONO_LOG"
-    run_benchmark "$SCRIPT_DIR/bench_mce_quad.til"       "$seed" "$CHAIN_LOG"
-    run_benchmark "$SCRIPT_DIR/bench_dag_quad.til"       "$seed" "$DAG_LOG"
-
-    printf "%-8s  %-18s  %-18s  %-18s\n" \
-        "$seed" \
-        "$(fmt_result "$MONO_LOG" "$TOTAL_TESTS")" \
-        "$(fmt_result "$CHAIN_LOG" "$TOTAL_TESTS")" \
-        "$(fmt_result "$DAG_LOG"   "$TOTAL_TESTS")"
-done
-
+echo "Legend: N/9 = best test-pass count observed, f=X.XX = best fitness observed"
 echo ""
-echo "Legend: N/9 = best test-pass count observed in log, f=X.XX = best fitness"
-echo ""
-echo "Monolithic: evolve-word directly mutates target-fn"
-echo "MCE-chain:  evolve-chain round-robin over [square-term, linear-term, offset]"
-echo "MCE-DAG:    evolve-dag contribution-weighted scheduling over the same concepts"
+echo "Quadratic:  f(x) = x^2 + 3x + 5 — 3 trivial sub-concepts (1-3 instr each)"
+echo "Tier B:     f(x,y,z) = floor(sqrt(x^2+y^2+z^2)) — sqrt-approx is 15+ instr"
