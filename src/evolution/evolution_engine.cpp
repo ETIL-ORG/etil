@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <random>
 #include <sstream>
 
@@ -517,52 +519,59 @@ size_t EvolutionEngine::evolve_dag_generation(const std::string& root_concept) {
         node->stats.impl_count = impls ? impls->size() : 0;
     }
 
-    // Compute variance-based contribution weights for all evolvable concepts
-    // by running K evaluations of the root chain with selection engine active
-    auto chain_it = word_state_.find(root_concept);
-    if (chain_it != word_state_.end() && !chain_it->second.tests.empty()) {
-        auto chain_impls = dict_.get_implementations(root_concept);
-        if (chain_impls && !chain_impls->empty()) {
-            // Find best chain impl
-            WordImplPtr chain_impl;
-            double best_w = -1.0;
-            for (auto& impl : *chain_impls) {
-                if (impl->bytecode() && impl->weight() > best_w) {
-                    chain_impl = impl;
-                    best_w = impl->weight();
-                }
-            }
+    // Compute contribution weights from per-concept impl-weight variance.
+    // Impl weights were set by evolve_sub_concept() using chain-level fitness,
+    // so their variance directly measures how much this concept's mutation
+    // space affects root fitness. Zero variance (e.g. offset constant with
+    // converged impls) → low contribution. High variance → high contribution.
+    for (auto& concept_name : dag.evolvable_concepts()) {
+        auto impls = dict_.get_implementations(concept_name);
+        auto* cn = dag.node(concept_name);
+        if (!cn) continue;
 
-            if (chain_impl) {
-                auto& tests = chain_it->second.tests;
-                // Run K evaluations with selection engine for variance sampling
-                fitness_.set_selection_engine(&parent_selector_);
-                for (auto& concept_name : dag.evolvable_concepts()) {
-                    double sum = 0.0, sum_sq = 0.0;
-                    for (size_t k = 0; k < config_.dag_variance_k; ++k) {
-                        auto fr = fitness_.evaluate(*chain_impl, tests, dict_,
-                                                     config_.instruction_budget,
-                                                     config_.fitness_mode,
-                                                     config_.distance_alpha);
-                        sum += fr.fitness;
-                        sum_sq += fr.fitness * fr.fitness;
-
-                        auto* cn = dag.node(concept_name);
-                        if (cn) cn->stats.record_fitness(fr.fitness);
-                    }
-                    double mean = sum / static_cast<double>(config_.dag_variance_k);
-                    double var = (sum_sq / static_cast<double>(config_.dag_variance_k))
-                                 - (mean * mean);
-                    if (var < 0.0) var = 0.0;  // numerical guard
-
-                    auto* cn = dag.node(concept_name);
-                    if (cn) cn->contribution = var + 1e-6;  // floor prevents zero
-                }
-                fitness_.set_selection_engine(nullptr);  // restore
-                dag.normalize_contributions();
-            }
+        if (!impls || impls->size() < 2) {
+            // Not enough samples for variance — use a small floor so the
+            // concept still gets some evolution but doesn't dominate.
+            cn->contribution = 1e-6;
+            continue;
         }
+
+        // Compute sample variance of impl weights, skipping NaN/inf
+        double sum = 0.0;
+        double best = -std::numeric_limits<double>::infinity();
+        double worst = std::numeric_limits<double>::infinity();
+        size_t n = 0;
+        for (const auto& impl : *impls) {
+            double w = impl->weight();
+            if (std::isnan(w) || std::isinf(w)) continue;
+            sum += w;
+            if (w > best) best = w;
+            if (w < worst) worst = w;
+            n++;
+        }
+        if (n < 2) { cn->contribution = 1e-6; continue; }
+
+        double mean = sum / static_cast<double>(n);
+        double sum_sq_diff = 0.0;
+        for (const auto& impl : *impls) {
+            double w = impl->weight();
+            if (std::isnan(w) || std::isinf(w)) continue;
+            double d = w - mean;
+            sum_sq_diff += d * d;
+        }
+        double var = sum_sq_diff / static_cast<double>(n - 1);
+        if (var < 0.0 || std::isnan(var)) var = 0.0;
+
+        // Update display stats from impl-weight distribution
+        cn->stats.best_fitness = best;
+        cn->stats.worst_fitness = worst;
+        cn->stats.mean_fitness = mean;
+        cn->stats.fitness_variance = sum_sq_diff;
+        cn->stats.eval_count = n;
+
+        cn->contribution = var + 1e-6;  // floor prevents zero
     }
+    dag.normalize_contributions();
 
     return children;
 }

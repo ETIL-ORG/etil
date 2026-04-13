@@ -1646,8 +1646,8 @@ bool prim_evolve_register(ExecutionContext& ctx) {
     std::vector<etil::evolution::TestCase> tests;
     for (size_t i = 0; i < arr->length(); ++i) {
         Value map_val;
-        arr->get(i, map_val);
-        if (map_val.type != Value::Type::Map) continue;
+        arr->get(i, map_val);  // addrefs map_val
+        if (map_val.type != Value::Type::Map) { value_release(map_val); continue; }
         auto* m = map_val.as_map();
 
         etil::evolution::TestCase tc;
@@ -1658,7 +1658,7 @@ bool prim_evolve_register(ExecutionContext& ctx) {
             auto* in_arr = in_it->second.as_array();
             for (size_t j = 0; j < in_arr->length(); ++j) {
                 Value v;
-                in_arr->get(j, v);
+                in_arr->get(j, v);  // addrefs v; tc.inputs takes ownership
                 tc.inputs.push_back(v);
             }
         }
@@ -1669,12 +1669,13 @@ bool prim_evolve_register(ExecutionContext& ctx) {
             auto* out_arr = out_it->second.as_array();
             for (size_t j = 0; j < out_arr->length(); ++j) {
                 Value v;
-                out_arr->get(j, v);
+                out_arr->get(j, v);  // addrefs v; tc.expected takes ownership
                 tc.expected.push_back(v);
             }
         }
 
         tests.push_back(std::move(tc));
+        value_release(map_val);
     }
     arr->release();
 
@@ -1719,8 +1720,8 @@ bool prim_evolve_register_pool(ExecutionContext& ctx) {
     std::vector<etil::evolution::TestCase> tests;
     for (size_t i = 0; i < test_arr->length(); ++i) {
         Value map_val;
-        test_arr->get(i, map_val);
-        if (map_val.type != Value::Type::Map) continue;
+        test_arr->get(i, map_val);  // addrefs map_val
+        if (map_val.type != Value::Type::Map) { value_release(map_val); continue; }
         auto* m = map_val.as_map();
         etil::evolution::TestCase tc;
         auto in_it = m->entries().find("in");
@@ -1738,6 +1739,7 @@ bool prim_evolve_register_pool(ExecutionContext& ctx) {
             }
         }
         tests.push_back(std::move(tc));
+        value_release(map_val);
     }
     test_arr->release();
 
@@ -2108,8 +2110,8 @@ bool prim_evolve_dag_register(ExecutionContext& ctx) {
     std::vector<etil::evolution::TestCase> tests;
     for (size_t i = 0; i < arr->length(); ++i) {
         Value map_val;
-        arr->get(i, map_val);
-        if (map_val.type != Value::Type::Map) continue;
+        arr->get(i, map_val);  // addrefs map_val
+        if (map_val.type != Value::Type::Map) { value_release(map_val); continue; }
         auto* m = map_val.as_map();
 
         etil::evolution::TestCase tc;
@@ -2119,7 +2121,7 @@ bool prim_evolve_dag_register(ExecutionContext& ctx) {
             auto* in_arr = in_it->second.as_array();
             for (size_t j = 0; j < in_arr->length(); ++j) {
                 Value v;
-                in_arr->get(j, v);
+                in_arr->get(j, v);  // addrefs v; tc.inputs takes ownership
                 tc.inputs.push_back(v);
             }
         }
@@ -2129,12 +2131,13 @@ bool prim_evolve_dag_register(ExecutionContext& ctx) {
             auto* out_arr = out_it->second.as_array();
             for (size_t j = 0; j < out_arr->length(); ++j) {
                 Value v;
-                out_arr->get(j, v);
+                out_arr->get(j, v);  // addrefs v; tc.expected takes ownership
                 tc.expected.push_back(v);
             }
         }
 
         tests.push_back(std::move(tc));
+        value_release(map_val);
     }
     arr->release();
 

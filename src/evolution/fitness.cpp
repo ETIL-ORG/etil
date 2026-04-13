@@ -43,8 +43,15 @@ double value_distance(const Value& actual, const Value& expected) {
     bool expected_numeric = (expected.type == Value::Type::Integer ||
                              expected.type == Value::Type::Float);
 
+    auto safe_distance = [](double a, double b) -> double {
+        if (std::isnan(a) || std::isnan(b)) return 1000.0;
+        double d = std::abs(a - b);
+        if (std::isnan(d) || std::isinf(d)) return 1000.0;
+        return d;
+    };
+
     if (actual_numeric && expected_numeric) {
-        return std::abs(as_double(actual) - as_double(expected));
+        return safe_distance(as_double(actual), as_double(expected));
     }
 
     // Boolean
@@ -55,7 +62,7 @@ double value_distance(const Value& actual, const Value& expected) {
     // Numeric vs boolean: treat bool as 0/1
     if ((actual_numeric && expected.type == Value::Type::Boolean) ||
         (actual.type == Value::Type::Boolean && expected_numeric)) {
-        return std::abs(as_double(actual) - as_double(expected));
+        return safe_distance(as_double(actual), as_double(expected));
     }
 
     // Type mismatch
@@ -75,7 +82,12 @@ bool Fitness::run_single_test(
     if (sel_engine_) ctx.set_selection_engine(sel_engine_);
     fitness_out_.str("");
     ctx.set_out(&fitness_out_);
-    ctx.set_limits(instruction_budget, 10000, SIZE_MAX, 10.0);
+    // set_limits signature: (budget, stack_depth, call_depth, timeout).
+    // Previous code passed (budget, 10000, SIZE_MAX, 10.0) which set
+    // call_depth=UNLIMITED — a recursion guard bypass. Cap call_depth at
+    // 256: plenty for realistic recursion, low enough that a pathological
+    // evolved word hits the limit before the C++ stack does.
+    ctx.set_limits(instruction_budget, 10000, 256, 10.0);
 
     // Push inputs
     for (const auto& val : tc.inputs) {
@@ -153,7 +165,12 @@ double Fitness::run_single_test_distance(
     if (sel_engine_) ctx.set_selection_engine(sel_engine_);
     fitness_out_.str("");
     ctx.set_out(&fitness_out_);
-    ctx.set_limits(instruction_budget, 10000, SIZE_MAX, 10.0);
+    // set_limits signature: (budget, stack_depth, call_depth, timeout).
+    // Previous code passed (budget, 10000, SIZE_MAX, 10.0) which set
+    // call_depth=UNLIMITED — a recursion guard bypass. Cap call_depth at
+    // 256: plenty for realistic recursion, low enough that a pathological
+    // evolved word hits the limit before the C++ stack does.
+    ctx.set_limits(instruction_budget, 10000, 256, 10.0);
 
     // Push inputs
     for (const auto& val : tc.inputs) {
@@ -258,8 +275,8 @@ FitnessResult Fitness::evaluate(
             if (exact) result.tests_passed++;
             total_time += elapsed;
 
-            if (std::isinf(dist)) {
-                // Execution failure → score 0
+            if (std::isinf(dist) || std::isnan(dist)) {
+                // Execution failure or undefined math → score 0
                 total_distance += 1e6;
             } else {
                 total_distance += dist;
@@ -276,6 +293,11 @@ FitnessResult Fitness::evaluate(
     double speed_score = 1.0 / (1.0 + result.speed / 1e6);
     result.fitness = result.correctness * (1.0 - speed_weight_)
                    + speed_score * speed_weight_;
+
+    // Final guard: NaN/inf fitness must never escape this function
+    if (std::isnan(result.fitness) || std::isinf(result.fitness)) {
+        result.fitness = 0.0;
+    }
 
     return result;
 }

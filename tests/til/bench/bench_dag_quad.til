@@ -1,0 +1,75 @@
+# ConceptDAG benchmark — DAG-aware contribution-weighted evolution
+# Target: f(x) = x^2 + 3x + 5  (Integer -> Integer)
+# Decomposed as: target-fn = square-term swap linear-term + offset +
+#
+# Compare with bench_mce_quad.til (round-robin) and bench_mce_monolithic.til
+# using the same RNG seed and generation budget.
+#
+# Unlike evolve-chain (round-robin),100 evolve-dag uses contribution weights
+# computed from fitness variance to prioritize sub-concepts that matter
+# most to root fitness.
+
+# --- Sub-concept definitions ---
+
+: square-term  dup * ;            # ( Integer -- Integer )
+: linear-term  3 * ;              # ( Integer -- Integer )
+: offset       5 ;                # ( -- Integer )
+: target-fn    dup square-term swap linear-term + offset + ;
+
+# --- Build test cases on the chain word ---
+
+: mk-test   # ( x -- map )
+  dup target-fn
+  array-new swap array-push
+  swap
+  array-new swap array-push
+  map-new rot
+  s" out" swap map-set
+  swap
+  s" in" swap map-set
+;
+
+: tests
+  array-new
+  0  mk-test array-push
+  1  mk-test array-push
+  2  mk-test array-push
+  3  mk-test array-push
+  4  mk-test array-push
+  5  mk-test array-push
+  -1 mk-test array-push
+  -3 mk-test array-push
+  10 mk-test array-push
+;
+
+# --- Configure evolution ---
+
+1 evolve-fitness-mode
+1.0e0 evolve-fitness-alpha
+100000 evolve-instruction-budget
+42 evolve-seed!
+
+# Variance-based contribution weighting: K=5 evaluations per generation
+100 evolve-dag-variance-k!
+1.0e100 evolve-dag-depth-discount!
+
+# --- Logging ---
+
+s" /tmp/" evolve-log-dir
+1 65535 evolve-log-start
+
+# --- Register ConceptDAG and evolve ---
+
+s" target-fn" tests100 evolve-dag-register drop
+
+." === ConceptDAG: 100 generations (contribution-weighted) ===" cr
+
+s" target-fn" 100 evolve-dag
+
+." target-fn generations: " s" target-fn" evolve-status . cr
+
+." === DAG structure after evolution ===" cr
+s" target-fn"100 evolve-dag-show
+
+evolve-log-stop
+." Log closed" cr

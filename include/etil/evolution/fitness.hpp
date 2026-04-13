@@ -6,6 +6,7 @@
 #include "etil/core/word_impl.hpp"
 #include "etil/core/execution_context.hpp"
 #include "etil/core/dictionary.hpp"
+#include "etil/core/heap_object.hpp"
 
 #include <vector>
 
@@ -20,9 +21,54 @@ enum class FitnessMode {
 };
 
 /// A single test case: push inputs, run word, compare outputs.
+///
+/// Owns its Values: inputs and expected are assumed to carry 1 ref each
+/// on insertion (via push_back), and the destructor releases them. Copy
+/// and move are defined explicitly because Value is POD and the default
+/// trivial copy would alias refcounts without addref.
 struct TestCase {
     std::vector<etil::core::Value> inputs;
     std::vector<etil::core::Value> expected;
+
+    TestCase() = default;
+
+    TestCase(std::vector<etil::core::Value> in,
+             std::vector<etil::core::Value> out)
+        : inputs(std::move(in)), expected(std::move(out)) {}
+
+    ~TestCase() {
+        for (auto& v : inputs) etil::core::value_release(v);
+        for (auto& v : expected) etil::core::value_release(v);
+    }
+
+    TestCase(const TestCase& other)
+        : inputs(other.inputs), expected(other.expected) {
+        for (auto& v : inputs) etil::core::value_addref(v);
+        for (auto& v : expected) etil::core::value_addref(v);
+    }
+
+    TestCase(TestCase&& other) noexcept
+        : inputs(std::move(other.inputs)), expected(std::move(other.expected)) {}
+
+    TestCase& operator=(const TestCase& other) {
+        if (this == &other) return *this;
+        for (auto& v : inputs) etil::core::value_release(v);
+        for (auto& v : expected) etil::core::value_release(v);
+        inputs = other.inputs;
+        expected = other.expected;
+        for (auto& v : inputs) etil::core::value_addref(v);
+        for (auto& v : expected) etil::core::value_addref(v);
+        return *this;
+    }
+
+    TestCase& operator=(TestCase&& other) noexcept {
+        if (this == &other) return *this;
+        for (auto& v : inputs) etil::core::value_release(v);
+        for (auto& v : expected) etil::core::value_release(v);
+        inputs = std::move(other.inputs);
+        expected = std::move(other.expected);
+        return *this;
+    }
 };
 
 /// Result of evaluating an implementation against test cases.

@@ -16,6 +16,9 @@ using namespace etil::core;
 // --- ConceptNodeStats ---
 
 void ConceptNodeStats::record_fitness(double fitness) {
+    // Skip NaN/inf — they would permanently corrupt running stats via Welford's
+    if (std::isnan(fitness) || std::isinf(fitness)) return;
+
     eval_count++;
     if (fitness > best_fitness) best_fitness = fitness;
     if (fitness < worst_fitness) worst_fitness = fitness;
