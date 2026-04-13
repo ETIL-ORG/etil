@@ -5,7 +5,7 @@
 # Compare with bench_mce_quad.til (round-robin) and bench_mce_monolithic.til
 # using the same RNG seed and generation budget.
 #
-# Unlike evolve-chain (round-robin),100 evolve-dag uses contribution weights
+# Unlike evolve-chain (round-robin), evolve-dag uses contribution weights
 # computed from fitness variance to prioritize sub-concepts that matter
 # most to root fitness.
 
@@ -50,8 +50,8 @@
 42 evolve-seed!
 
 # Variance-based contribution weighting: K=5 evaluations per generation
-100 evolve-dag-variance-k!
-1.0e100 evolve-dag-depth-discount!
+5 evolve-dag-variance-k!
+1.0e0 evolve-dag-depth-discount!
 
 # --- Logging ---
 
@@ -60,7 +60,7 @@ s" /tmp/" evolve-log-dir
 
 # --- Register ConceptDAG and evolve ---
 
-s" target-fn" tests100 evolve-dag-register drop
+s" target-fn" tests evolve-dag-register drop
 
 ." === ConceptDAG: 100 generations (contribution-weighted) ===" cr
 
@@ -69,7 +69,7 @@ s" target-fn" 100 evolve-dag
 ." target-fn generations: " s" target-fn" evolve-status . cr
 
 ." === DAG structure after evolution ===" cr
-s" target-fn"100 evolve-dag-show
+s" target-fn" evolve-dag-show
 
 evolve-log-stop
 ." Log closed" cr
