@@ -357,6 +357,20 @@ size_t EvolutionEngine::evolve_sub_concept(
             + std::to_string(tests.size()) + " test cases)");
     }
 
+    // Look up the DAG node for this sub-concept (if the chain is DAG-registered).
+    // When this function is called from evolve-dag, the chain's DAG exists and the
+    // sub-concept has a node; when called from evolve-chain, no DAG is registered.
+    // Every chain-fitness observation during evolution of this concept is fed into
+    // the node's running stats, and the accumulated best_fitness becomes the
+    // contribution-weight signal in evolve_dag_generation.
+    ConceptDAGNode* concept_node = nullptr;
+    {
+        auto dag_it = dags_.find(chain_word);
+        if (dag_it != dags_.end()) {
+            concept_node = dag_it->second.node(sub_concept);
+        }
+    }
+
     // Evaluate baselines: run chain impl (which calls sub-concept through dictionary)
     // This gives implicit credit — the sub-concept impl that happens to be selected
     // contributes to the chain's fitness.
@@ -367,6 +381,7 @@ size_t EvolutionEngine::evolve_sub_concept(
                                      config_.fitness_mode, config_.distance_alpha);
         impl->set_weight(std::max(fr.fitness, config_.prune_threshold));
         results.push_back({impl, fr});
+        if (concept_node) concept_node->stats.record_fitness(fr.fitness);
     }
 
     // Generate children by mutating sub-concept impls
@@ -425,6 +440,7 @@ size_t EvolutionEngine::evolve_sub_concept(
 
         child->set_weight(std::max(fr.fitness, config_.prune_threshold));
         results.push_back({child, fr});
+        if (concept_node) concept_node->stats.record_fitness(fr.fitness);
 
         if (logger_.enabled(EvolveLogCategory::Fitness)) {
             logger_.log(EvolveLogCategory::Fitness,
@@ -519,57 +535,52 @@ size_t EvolutionEngine::evolve_dag_generation(const std::string& root_concept) {
         node->stats.impl_count = impls ? impls->size() : 0;
     }
 
-    // Compute contribution weights from per-concept impl-weight variance.
-    // Impl weights were set by evolve_sub_concept() using chain-level fitness,
-    // so their variance directly measures how much this concept's mutation
-    // space affects root fitness. Zero variance (e.g. offset constant with
-    // converged impls) → low contribution. High variance → high contribution.
+    // Compute contribution weights using a UCB-style exploit + explore blend.
+    //
+    // The exploit signal is best_fitness: the highest chain fitness ever
+    // observed while evolving this concept. This directly measures "upper
+    // bound on what this concept's mutation space can produce" and does not
+    // degrade over time the way history-variance does.
+    //
+    // Pure best_fitness creates a winner-take-all feedback loop: once one
+    // concept has a non-zero signal, it dominates selection, preventing
+    // exploration of other concepts that haven't yet had a chance to find
+    // a good mutation. The fix is UCB1-style exploration: add an
+    // exploration bonus that shrinks as a concept accumulates generations.
+    //
+    //   contribution = best_fitness + c * sqrt(ln(total_gens + e) / (1 + gens))
+    //
+    // The ln() ensures the bonus grows slowly as total evolution advances,
+    // and 1/sqrt(gens) shrinks it for concepts that have already had many
+    // generations. Untried concepts get a large bonus and are scheduled
+    // promptly, then the signal shifts toward exploit as they accumulate
+    // observations.
+    //
+    // c = 0.5 chosen empirically: large enough to keep all concepts in
+    // rotation, small enough that differentiation remains meaningful.
+    size_t total_gens = 0;
     for (auto& concept_name : dag.evolvable_concepts()) {
-        auto impls = dict_.get_implementations(concept_name);
+        auto* cn = dag.node(concept_name);
+        if (cn) total_gens += cn->stats.generations_evolved;
+    }
+    const double c_explore = 0.5;
+    const double ln_total = std::log(static_cast<double>(total_gens) + std::exp(1.0));
+
+    for (auto& concept_name : dag.evolvable_concepts()) {
         auto* cn = dag.node(concept_name);
         if (!cn) continue;
 
-        if (!impls || impls->size() < 2) {
-            // Not enough samples for variance — use a small floor so the
-            // concept still gets some evolution but doesn't dominate.
-            cn->contribution = 1e-6;
-            continue;
-        }
+        // Update impl_count for display
+        auto impls = dict_.get_implementations(concept_name);
+        cn->stats.impl_count = impls ? impls->size() : 0;
 
-        // Compute sample variance of impl weights, skipping NaN/inf
-        double sum = 0.0;
-        double best = -std::numeric_limits<double>::infinity();
-        double worst = std::numeric_limits<double>::infinity();
-        size_t n = 0;
-        for (const auto& impl : *impls) {
-            double w = impl->weight();
-            if (std::isnan(w) || std::isinf(w)) continue;
-            sum += w;
-            if (w > best) best = w;
-            if (w < worst) worst = w;
-            n++;
-        }
-        if (n < 2) { cn->contribution = 1e-6; continue; }
+        double exploit = cn->stats.best_fitness;
+        if (exploit < 0.0 || std::isnan(exploit) || std::isinf(exploit)) exploit = 0.0;
 
-        double mean = sum / static_cast<double>(n);
-        double sum_sq_diff = 0.0;
-        for (const auto& impl : *impls) {
-            double w = impl->weight();
-            if (std::isnan(w) || std::isinf(w)) continue;
-            double d = w - mean;
-            sum_sq_diff += d * d;
-        }
-        double var = sum_sq_diff / static_cast<double>(n - 1);
-        if (var < 0.0 || std::isnan(var)) var = 0.0;
+        double explore = c_explore * std::sqrt(
+            ln_total / static_cast<double>(1 + cn->stats.generations_evolved));
 
-        // Update display stats from impl-weight distribution
-        cn->stats.best_fitness = best;
-        cn->stats.worst_fitness = worst;
-        cn->stats.mean_fitness = mean;
-        cn->stats.fitness_variance = sum_sq_diff;
-        cn->stats.eval_count = n;
-
-        cn->contribution = var + 1e-6;  // floor prevents zero
+        cn->contribution = exploit + explore + 1e-6;
     }
     dag.normalize_contributions();
 

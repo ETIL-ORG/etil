@@ -96,6 +96,15 @@ variable _tc-expected
 5 evolve-dag-variance-k!
 1.0e0 evolve-dag-depth-discount!
 
+# Enable weighted-random selection during fitness evaluation.
+# Without this, "latest wins" dictionary lookup locks the chain into
+# the most-recently-mutated (often broken) impl, and chain fitness
+# collapses to ~0.07 after the first mutation. With weighted-random
+# selection, the fitness evaluator picks among all impls of each
+# concept by weight, so the chain can still see correct combinations
+# and the per-concept fitness-variance signal has meaningful range.
+true evolve-mce-select
+
 # --- Logging ---
 
 s" /tmp/" evolve-log-dir
