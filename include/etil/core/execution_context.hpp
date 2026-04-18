@@ -12,6 +12,7 @@
 #include <istream>
 #include <memory>
 #include <ostream>
+#include <string>
 #include <vector>
 
 namespace etil::lvfs { class Lvfs; }
@@ -21,6 +22,7 @@ namespace etil::db { struct MongoClientState; }
 namespace etil::mcp { struct RolePermissions; }
 namespace etil::selection { class SelectionEngine; }
 namespace etil::evolution { class EvolutionEngine; }
+namespace etil::manifold { class ChannelService; }
 
 namespace etil::core
 {
@@ -313,6 +315,17 @@ namespace etil::core {
         const etil::mcp::RolePermissions* permissions() const { return permissions_; }
         void set_permissions(const etil::mcp::RolePermissions* p) { permissions_ = p; }
 
+        // Manifold channel service (non-owning, nullptr = no channel access).
+        // Installed per-session by the MCP layer; TIL channel-* primitives
+        // consult this to publish / add routes / introspect.
+        etil::manifold::ChannelService* channels() const { return channels_; }
+        void set_channels(etil::manifold::ChannelService* c) { channels_ = c; }
+
+        // Session ID associated with this context, for origin stamping on
+        // outbound channel messages. Empty when not set.
+        const std::string& session_id() const { return session_id_; }
+        void set_session_id(std::string id) { session_id_ = std::move(id); }
+
         // Output/error streams (non-owning, defaults to std::cout/std::cerr)
         std::ostream& out() { return *out_; }
         std::ostream& err() { return *err_; }
@@ -492,6 +505,12 @@ namespace etil::core {
 
         // Role permissions (nullptr = standalone = all permitted)
         const etil::mcp::RolePermissions* permissions_ = nullptr;
+
+        // Manifold channel service (non-owning; nullptr disables channel-* ops)
+        etil::manifold::ChannelService* channels_ = nullptr;
+
+        // Session id for origin stamping on outbound messages
+        std::string session_id_;
 
         // Output/error streams
         std::ostream* out_ = &std::cout;

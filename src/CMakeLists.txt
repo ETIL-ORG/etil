@@ -6,6 +6,7 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/sinks.cpp
     manifold/transforms.cpp
     manifold/default_service.cpp
+    manifold/til_primitives.cpp
 )
 
 # Core library sources

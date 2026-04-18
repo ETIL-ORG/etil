@@ -516,6 +516,8 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     // the McpServer constructor bridges back to emit_notification.
     std::string session_id = session.id;
     auto* channels = channels_.get();
+    ctx.set_channels(channels);
+    ctx.set_session_id(session_id);
     ctx.set_notification_sender([channels, session_id](const std::string& msg) {
         if (!channels) return;  // standalone path without channels — shouldn't happen
         etil::manifold::Message m;
@@ -564,6 +566,8 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     // Clear notification senders and restore unlimited defaults
     ctx.clear_notification_sender();
     ctx.clear_targeted_notification_sender();
+    ctx.set_channels(nullptr);
+    ctx.set_session_id("");
     ctx.reset_limits();
 
     // Check dictionary concept count limit
