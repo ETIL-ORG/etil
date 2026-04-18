@@ -3,6 +3,10 @@ include(GoogleTest)
 # Unit tests
 add_executable(etil_tests
     unit/test_logging.cpp
+    unit/test_manifold_service.cpp
+    unit/test_manifold_rbac.cpp
+    unit/test_manifold_sinks.cpp
+    unit/test_manifold_cycle.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
     unit/test_primitives.cpp

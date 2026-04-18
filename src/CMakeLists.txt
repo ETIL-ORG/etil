@@ -1,3 +1,13 @@
+# Manifold library sources (I/O channel pipeline — doc B)
+set(ETIL_MANIFOLD_SOURCES
+    manifold/origin.cpp
+    manifold/channel_name.cpp
+    manifold/rbac.cpp
+    manifold/sinks.cpp
+    manifold/transforms.cpp
+    manifold/default_service.cpp
+)
+
 # Core library sources
 set(ETIL_CORE_SOURCES
     core/logging.cpp
@@ -76,6 +86,7 @@ add_library(etil
     ${ETIL_EVOLUTION_SOURCES}
     ${ETIL_JIT_SOURCES}
     ${ETIL_UTILS_SOURCES}
+    ${ETIL_MANIFOLD_SOURCES}
 )
 
 target_include_directories(etil

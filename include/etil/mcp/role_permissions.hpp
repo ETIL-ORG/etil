@@ -8,9 +8,11 @@
 #include <string>
 #include <vector>
 
+#include "etil/manifold/channel_action.hpp"
+
 namespace etil::mcp {
 
-/// Per-role permission set covering 6 resource domains.
+/// Per-role permission set covering 7 resource domains.
 ///
 /// Plain data struct — no #ifdef guards, no JWT dependencies.
 /// Standalone mode (permissions pointer is nullptr) means "all permitted".
@@ -50,6 +52,15 @@ struct RolePermissions {
     // --- Database (MongoDB) ---
     bool mongo_access = false;
     int  mongo_query_quota = 1000;  // queries per session
+
+    // --- Channels (Manifold I/O pipeline) ---
+    // See docs/claude-design/20260418B-IO-Channel-Pipeline-Architecture.md §15
+    bool channels_enabled = false;              // primary on/off master switch
+    std::vector<etil::manifold::ChannelGrant> channel_grants;
+    int  channel_publish_quota = 1000;          // messages published per session
+    int  channel_subscribe_quota = 10;          // concurrent subscriptions per session
+    bool channels_route_admin = false;          // add/remove routes (dangerous)
+    bool channels_network_sink = false;         // attach udp/tcp sinks (very dangerous)
 };
 
 } // namespace etil::mcp
