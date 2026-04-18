@@ -449,6 +449,70 @@ bool prim_channel_tap_observable(ExecutionContext& ctx) {
     return prim_channel_subscribe(ctx);
 }
 
+// ---------------------------------------------------------------------------
+// MCP SSE inbound — convenience wrappers over channel-subscribe for
+// specific inbound channels (doc B §21.3 / §17.3).
+// ---------------------------------------------------------------------------
+
+bool mcp_on_channel_internal(ExecutionContext& ctx, const std::string& channel) {
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: mcp-on: no channel service\n";
+        return false;
+    }
+    auto obs_sp = svc->observe(channel, ctx.permissions());
+    if (!obs_sp) {
+        ctx.err() << "Error: mcp-on: observe denied or pattern invalid\n";
+        return false;
+    }
+    auto* raw = obs_sp.get();
+    raw->add_ref();
+    ctx.data_stack().push(Value::from(raw));
+    return true;
+}
+
+// mcp-on-notification ( method-pattern -- observable )
+// method-pattern is a subchannel under etil.mcp.in.notification.* —
+// e.g., "foo.bar" subscribes to etil.mcp.in.notification.foo.bar.
+// Pass "**" for all inbound notifications.
+bool prim_mcp_on_notification(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string channel = "etil.mcp.in.notification.";
+    if (pattern == "**" || pattern.empty()) channel += "**";
+    else channel += pattern;
+    return mcp_on_channel_internal(ctx, channel);
+}
+
+bool prim_mcp_on_progress(ExecutionContext& ctx) {
+    return mcp_on_channel_internal(ctx, "etil.mcp.in.progress");
+}
+
+bool prim_mcp_on_cancelled(ExecutionContext& ctx) {
+    return mcp_on_channel_internal(ctx, "etil.mcp.in.cancelled");
+}
+
+bool prim_mcp_on_roots_changed(ExecutionContext& ctx) {
+    return mcp_on_channel_internal(ctx, "etil.mcp.in.roots.changed");
+}
+
+// mcp-on-request ( method-pattern -- observable )
+// Inbound client-initiated requests routed onto etil.mcp.in.request.*.
+// Phase 2c publishes notifications only; request-routing lands when
+// the server gains sampling / roots/list support (Phase 3+). The
+// word exists now as a stable entry point — it just observes an
+// (initially empty) channel tree.
+bool prim_mcp_on_request(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string channel = "etil.mcp.in.request.";
+    if (pattern == "**" || pattern.empty()) channel += "**";
+    else channel += pattern;
+    return mcp_on_channel_internal(ctx, channel);
+}
+
 // --- channel-perm-list ( -- array ) -----------------------------------------
 
 bool prim_channel_perm_list(ExecutionContext& ctx) {
@@ -540,6 +604,26 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
 
     dict.register_word("channel-tap-observable",
         make_primitive("channel-tap-observable", prim_channel_tap_observable,
+            {T::String}, {T::Observable}));
+
+    dict.register_word("mcp-on-notification",
+        make_primitive("mcp-on-notification", prim_mcp_on_notification,
+            {T::String}, {T::Observable}));
+
+    dict.register_word("mcp-on-progress",
+        make_primitive("mcp-on-progress", prim_mcp_on_progress,
+            {}, {T::Observable}));
+
+    dict.register_word("mcp-on-cancelled",
+        make_primitive("mcp-on-cancelled", prim_mcp_on_cancelled,
+            {}, {T::Observable}));
+
+    dict.register_word("mcp-on-roots-changed",
+        make_primitive("mcp-on-roots-changed", prim_mcp_on_roots_changed,
+            {}, {T::Observable}));
+
+    dict.register_word("mcp-on-request",
+        make_primitive("mcp-on-request", prim_mcp_on_request,
             {T::String}, {T::Observable}));
 }
 

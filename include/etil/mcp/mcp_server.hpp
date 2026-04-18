@@ -233,6 +233,20 @@ public:
     bool send_targeted_notification(const std::string& user_id,
                                     const std::string& msg);
 
+    /// §17 Phase B — publish an inbound client notification onto the
+    /// appropriate etil.mcp.in.* channel. Channel is derived from the
+    /// JSON-RPC method name:
+    ///   notifications/progress            → etil.mcp.in.progress
+    ///   notifications/cancelled           → etil.mcp.in.cancelled
+    ///   notifications/roots/list_changed  → etil.mcp.in.roots.changed
+    ///   notifications/initialized         → etil.mcp.in.initialized
+    ///   notifications/<other>             → etil.mcp.in.notification.<other>
+    /// The payload is the JSON-encoded params (string); the Message's
+    /// session_id tag carries the current session so subscribers can
+    /// filter. No-op if channels_ is null.
+    void publish_inbound_notification(const std::string& method,
+                                      const nlohmann::json& params);
+
 private:
     // Protocol handlers
     nlohmann::json handle_initialize(const nlohmann::json& id,

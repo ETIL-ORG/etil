@@ -59,6 +59,16 @@ const std::vector<HardwiredEntry>& table() {
         {"etil.manifold.sink.**",
          ChannelAction::Write | ChannelAction::None,
          DeliveryMode::RingBuffered},
+
+        // §17.5 — etil.mcp.in.cancelled Read hard-wired for the owning
+        // session. A role cannot suppress reception of cancellation
+        // notifications for its own session. Cancellation must always
+        // be honored. RingBuffered delivery is acceptable since the
+        // arriving notification triggers a downstream interpreter
+        // abort, not an immediate action.
+        {"etil.mcp.in.cancelled",
+         ChannelAction::Read | ChannelAction::None,
+         DeliveryMode::RingBuffered},
     };
     return kTable;
 }

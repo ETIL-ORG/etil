@@ -8,6 +8,7 @@
 #include "etil/core/logging.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/version.hpp"
+#include "etil/manifold/message.hpp"
 #include "etil/manifold/service.hpp"
 
 #include "etil/mcp/http_transport.hpp"
@@ -27,8 +28,10 @@
 #endif
 
 #include <cstdlib>
+#include <cstring>
 #include <random>
 #include <sstream>
+#include <typeindex>
 #include <iomanip>
 
 namespace etil::mcp {
@@ -493,6 +496,18 @@ std::optional<nlohmann::json> McpServer::dispatch_request(const nlohmann::json& 
         }
 
         if (req->method == "notifications/initialized") {
+            publish_inbound_notification(req->method, req->params);
+            return std::nullopt;
+        }
+
+        // §17 Phase B — route inbound client notifications onto
+        // etil.mcp.in.** channels. notifications/progress,
+        // notifications/cancelled, notifications/roots/list_changed,
+        // and arbitrary notifications/* become channel messages
+        // tagged with session_id. No response; clients MUST NOT expect
+        // one per JSON-RPC.
+        if (is_notification && req->method.rfind("notifications/", 0) == 0) {
+            publish_inbound_notification(req->method, req->params);
             return std::nullopt;
         }
 
@@ -575,6 +590,41 @@ void McpServer::emit_notification(const std::string& msg) {
         {"params", {{"level", "info"}, {"data", msg}}}
     };
     transport_->send(notif);
+}
+
+void McpServer::publish_inbound_notification(
+    const std::string& method, const nlohmann::json& params) {
+    if (!channels_) return;
+
+    // Derive channel from method.
+    std::string channel;
+    if (method == "notifications/progress") {
+        channel = "etil.mcp.in.progress";
+    } else if (method == "notifications/cancelled") {
+        channel = "etil.mcp.in.cancelled";
+    } else if (method == "notifications/roots/list_changed") {
+        channel = "etil.mcp.in.roots.changed";
+    } else if (method == "notifications/initialized") {
+        channel = "etil.mcp.in.initialized";
+    } else if (method.rfind("notifications/", 0) == 0) {
+        std::string tail = method.substr(std::strlen("notifications/"));
+        // Replace '/' with '.' so the MCP method tree maps cleanly onto
+        // the channel dotted-namespace grammar.
+        for (auto& c : tail) if (c == '/') c = '.';
+        channel = "etil.mcp.in.notification." + tail;
+    } else {
+        return;  // not a notifications/* method
+    }
+
+    etil::manifold::Message m;
+    m.channel = std::move(channel);
+    m.payload = params.is_null() ? std::string() : params.dump();
+    m.payload_type = std::type_index(typeid(std::string));
+    m.tags["method"] = method;
+    if (current_session_ != nullptr) {
+        m.tags["session_id"] = current_session_->id;
+    }
+    channels_->publish(std::move(m));
 }
 
 bool McpServer::send_targeted_notification(const std::string& user_id,
