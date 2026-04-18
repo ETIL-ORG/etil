@@ -1,5 +1,6 @@
 # Core library sources
 set(ETIL_CORE_SOURCES
+    core/logging.cpp
     core/word_impl.cpp
     core/execution_context.cpp
     core/dictionary.cpp

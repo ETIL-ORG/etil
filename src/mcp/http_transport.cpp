@@ -3,6 +3,7 @@
 
 #include "etil/mcp/http_transport.hpp"
 #include "etil/mcp/json_rpc.hpp"
+#include "etil/core/logging.hpp"
 
 #ifdef ETIL_JWT_ENABLED
 #include "etil/mcp/auth_config.hpp"
@@ -28,6 +29,11 @@ thread_local std::vector<nlohmann::json> HttpTransport::pending_notifications_;
 // streaming instead of buffering into pending_notifications_.
 namespace {
 thread_local httplib::DataSink* active_sink = nullptr;
+
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.http");
+    return logger;
+}
 }
 
 HttpTransport::HttpTransport(HttpTransportConfig config)
@@ -84,8 +90,8 @@ void HttpTransport::run(MessageHandler handler) {
     handler_ = std::move(handler);
     setup_routes();
 
-    fprintf(stderr, "ETIL MCP server listening on %s:%d\n",
-            config_.host.c_str(), config_.port);
+    log()->info("ETIL MCP server listening on {}:{}",
+                config_.host, config_.port);
 
     server_->listen(config_.host, config_.port);
 }
@@ -95,8 +101,8 @@ void HttpTransport::run(SessionMessageHandler handler, SessionCallbacks callback
     session_callbacks_ = std::move(callbacks);
     setup_session_routes();
 
-    fprintf(stderr, "ETIL MCP server listening on %s:%d (multi-session)\n",
-            config_.host.c_str(), config_.port);
+    log()->info("ETIL MCP server listening on {}:{} (multi-session)",
+                config_.host, config_.port);
 
     server_->listen(config_.host, config_.port);
 }
@@ -756,11 +762,11 @@ std::optional<nlohmann::json> HttpTransport::dispatch(const nlohmann::json& msg)
     try {
         return handler_(msg);
     } catch (const std::exception& e) {
-        fprintf(stderr, "MCP handler exception: %s\n", e.what());
+        log()->error("MCP handler exception: {}", e.what());
         return make_error(nullptr, JsonRpcError::InternalError,
                           std::string("Server error: ") + e.what());
     } catch (...) {
-        fprintf(stderr, "MCP handler unknown exception\n");
+        log()->error("MCP handler unknown exception");
         return make_error(nullptr, JsonRpcError::InternalError,
                           "Unknown internal server error");
     }

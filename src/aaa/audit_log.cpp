@@ -4,6 +4,7 @@
 #ifdef ETIL_MONGODB_ENABLED
 
 #include "etil/aaa/audit_log.hpp"
+#include "etil/core/logging.hpp"
 #include "etil/db/mongo_client.hpp"
 
 #include <bsoncxx/builder/basic/document.hpp>
@@ -14,9 +15,15 @@
 #include <mongocxx/options/index.hpp>
 
 #include <chrono>
-#include <cstdio>
 
 namespace etil::aaa {
+
+namespace {
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.aaa");
+    return logger;
+}
+} // namespace
 
 AuditLog::AuditLog(etil::db::MongoClient& client) : client_(client) {}
 
@@ -50,7 +57,7 @@ void AuditLog::log_event(const std::string& event,
         auto doc_json = bsoncxx::to_json(builder.view());
         client_.insert("audit_log", doc_json);
     } catch (const std::exception& e) {
-        fprintf(stderr, "AuditLog error: %s\n", e.what());
+        log()->error("AuditLog error: {}", e.what());
     }
 }
 

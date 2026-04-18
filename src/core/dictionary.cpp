@@ -2,10 +2,17 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/core/dictionary.hpp"
+#include "etil/core/logging.hpp"
 #include "etil/selection/selection_engine.hpp"
-#include <spdlog/spdlog.h>
 
 namespace etil::core {
+
+namespace {
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.dict");
+    return logger;
+}
+} // namespace
 
 std::atomic<uint64_t> Dictionary::next_id_{1};
 
@@ -32,7 +39,7 @@ void Dictionary::register_word(const std::string& word, WordImplPtr impl) {
     }
     wc.implementations.push_back(std::move(impl));
     generation_.fetch_add(1, std::memory_order_release);
-    spdlog::debug("Registered implementation for concept '{}'", word);
+    log()->debug("Registered implementation for concept '{}'", word);
 }
 
 std::optional<WordImplPtr>

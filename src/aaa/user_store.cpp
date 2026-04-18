@@ -5,6 +5,7 @@
 
 #include "etil/aaa/user_store.hpp"
 #include "etil/aaa/audit_log.hpp"
+#include "etil/core/logging.hpp"
 #include "etil/db/mongo_client.hpp"
 
 #include <bsoncxx/builder/basic/array.hpp>
@@ -16,9 +17,15 @@
 #include <mongocxx/options/index.hpp>
 
 #include <chrono>
-#include <cstdio>
 
 namespace etil::aaa {
+
+namespace {
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.aaa");
+    return logger;
+}
+} // namespace
 
 UserStore::UserStore(etil::db::MongoClient& client) : client_(client) {}
 
@@ -99,7 +106,7 @@ std::optional<UserRecord> UserStore::find_by_email(const std::string& email) {
         }
         return rec;
     } catch (const std::exception& e) {
-        fprintf(stderr, "UserStore find_by_email error: %s\n", e.what());
+        log()->error("UserStore find_by_email error: {}", e.what());
         return std::nullopt;
     }
 }
@@ -135,7 +142,7 @@ std::optional<UserRecord> UserStore::create(const std::string& email,
         rec.login_count = 1;
         return rec;
     } catch (const std::exception& e) {
-        fprintf(stderr, "UserStore create error: %s\n", e.what());
+        log()->error("UserStore create error: {}", e.what());
         return std::nullopt;
     }
 }
@@ -162,7 +169,7 @@ bool UserStore::record_login(const std::string& email,
         auto count = client_.update("users", filter.view(), update.view());
         return count > 0;
     } catch (const std::exception& e) {
-        fprintf(stderr, "UserStore record_login error: %s\n", e.what());
+        log()->error("UserStore record_login error: {}", e.what());
         return false;
     }
 }

@@ -2,6 +2,7 @@ include(GoogleTest)
 
 # Unit tests
 add_executable(etil_tests
+    unit/test_logging.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
     unit/test_primitives.cpp

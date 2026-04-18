@@ -5,13 +5,19 @@
 
 #include "etil/mcp/oauth_provider.hpp"
 #include "etil/mcp/oauth_github.hpp"
+#include "etil/core/logging.hpp"
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
-#include <cstdio>
-
 namespace etil::mcp {
+
+namespace {
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.oauth");
+    return logger;
+}
+} // namespace
 
 GitHubProvider::GitHubProvider(std::string client_id)
     : client_id_(std::move(client_id)) {}
@@ -33,8 +39,8 @@ std::optional<DeviceCodeResponse> GitHubProvider::request_device_code() {
     auto res = cli.Post("/login/device/code", headers, body,
                         "application/x-www-form-urlencoded");
     if (!res || res->status != 200) {
-        fprintf(stderr, "GitHub device code request failed: %s\n",
-                res ? std::to_string(res->status).c_str() : "network error");
+        log()->warn("GitHub device code request failed: {}",
+                    res ? std::to_string(res->status) : std::string("network error"));
         return std::nullopt;
     }
 
@@ -50,8 +56,8 @@ std::optional<DeviceCodeResponse> GitHubProvider::request_device_code() {
     }
 
     if (j.contains("error")) {
-        fprintf(stderr, "GitHub device code error: %s\n",
-                j.value("error_description", j.value("error", "unknown")).c_str());
+        log()->warn("GitHub device code error: {}",
+                    j.value("error_description", j.value("error", "unknown")));
         return std::nullopt;
     }
 

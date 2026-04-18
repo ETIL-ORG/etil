@@ -4,11 +4,11 @@
 #include "etil/mcp/mcp_server.hpp"
 #include "etil/mcp/session.hpp"
 #include "etil/mcp/json_rpc.hpp"
+#include "etil/core/logging.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/version.hpp"
 
 #include "etil/mcp/http_transport.hpp"
-#include <spdlog/spdlog.h>
 
 #ifdef ETIL_JWT_ENABLED
 #include "etil/mcp/auth_config.hpp"
@@ -24,13 +24,23 @@
 #include "etil/aaa/audit_log.hpp"
 #endif
 
-#include <cstdio>
 #include <cstdlib>
 #include <random>
 #include <sstream>
 #include <iomanip>
 
 namespace etil::mcp {
+
+namespace {
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.mcp");
+    return logger;
+}
+auto& session_log() {
+    static auto logger = etil::core::logging::get("etil.session");
+    return logger;
+}
+} // namespace
 
 // Static thread_local definition — each HTTP worker thread gets its own copy.
 thread_local Session* McpServer::current_session_ = nullptr;
@@ -67,11 +77,10 @@ void McpServer::init_auth() {
                 auth_config_->jwt_private_key,
                 auth_config_->jwt_public_key,
                 auth_config_->jwt_ttl_seconds);
-            fprintf(stderr, "JWT authentication enabled (config: %s)\n",
-                    auth_config_env);
+            log()->info("JWT authentication enabled (config: {})",
+                        auth_config_env);
         } else {
-            fprintf(stderr, "Warning: auth config loaded but JWT keys "
-                            "not configured\n");
+            log()->warn("auth config loaded but JWT keys not configured");
         }
         // Create OAuth providers from config
         for (const auto& [name, prov_cfg] : auth_config_->providers) {
@@ -80,26 +89,23 @@ void McpServer::init_auth() {
             if (name == "github") {
                 oauth_providers_[name] =
                     std::make_unique<GitHubProvider>(prov_cfg.client_id);
-                fprintf(stderr, "OAuth provider enabled: github\n");
+                log()->info("OAuth provider enabled: github");
             } else if (name == "google") {
                 if (prov_cfg.client_secret.empty()) {
-                    fprintf(stderr,
-                            "Warning: Google OAuth requires client_secret "
-                            "(skipping)\n");
+                    log()->warn("Google OAuth requires client_secret (skipping)");
                     continue;
                 }
                 oauth_providers_[name] =
                     std::make_unique<GoogleProvider>(prov_cfg.client_id,
                                                     prov_cfg.client_secret);
-                fprintf(stderr, "OAuth provider enabled: google\n");
+                log()->info("OAuth provider enabled: google");
             } else {
-                fprintf(stderr, "Warning: unknown OAuth provider '%s' "
-                                "(skipping)\n", name.c_str());
+                log()->warn("unknown OAuth provider '{}' (skipping)", name);
             }
         }
     } catch (const std::exception& e) {
-        fprintf(stderr, "Warning: failed to load auth config '%s': %s\n",
-                auth_config_env, e.what());
+        log()->warn("failed to load auth config '{}': {}",
+                    auth_config_env, e.what());
     }
 #endif
 }
@@ -112,7 +118,7 @@ void McpServer::init_database() {
     // User-data client (wired to TIL mongo-* primitives)
     mongo_client_ = std::make_unique<etil::db::MongoClient>();
     if (!mongo_client_->connect(mongo_cfg.uri, mongo_cfg.database)) {
-        fprintf(stderr, "Warning: MongoDB connection failed\n");
+        log()->warn("MongoDB connection failed");
         mongo_client_.reset();
     }
 
@@ -123,7 +129,7 @@ void McpServer::init_database() {
     }
     aaa_client_ = std::make_unique<etil::db::MongoClient>();
     if (!aaa_client_->connect(mongo_cfg.uri, aaa_db)) {
-        fprintf(stderr, "Warning: MongoDB AAA connection failed\n");
+        log()->warn("MongoDB AAA connection failed");
         aaa_client_.reset();
     }
 
@@ -133,7 +139,7 @@ void McpServer::init_database() {
         audit_log_ = std::make_unique<etil::aaa::AuditLog>(*aaa_client_);
         user_store_->ensure_indexes();
         audit_log_->ensure_indexes();
-        fprintf(stderr, "AAA database: %s\n", aaa_db.c_str());
+        log()->info("AAA database: {}", aaa_db);
     }
 #endif
 }
@@ -267,9 +273,10 @@ std::string McpServer::create_session(const std::string& user_id,
                     }
                 }
                 if (!oldest_sid.empty()) {
-                    spdlog::info("Evicting oldest session {} for user {} "
-                                 "(per-user quota {})",
-                                 oldest_sid, user_id, max_user);
+                    session_log()->info(
+                        "Evicting oldest session {} for user {} "
+                        "(per-user quota {})",
+                        oldest_sid, user_id, max_user);
                     sessions_.erase(oldest_sid);
                 } else {
                     return {};  // shouldn't happen, but fail safe
@@ -496,11 +503,11 @@ std::optional<nlohmann::json> McpServer::dispatch_request(const nlohmann::json& 
         return make_error(id, JsonRpcError::MethodNotFound,
                           "Method not found: " + req->method);
     } catch (const std::exception& e) {
-        fprintf(stderr, "MCP server error: %s\n", e.what());
+        log()->error("MCP server error: {}", e.what());
         return make_error(nullptr, JsonRpcError::InternalError,
                           std::string("Server error: ") + e.what());
     } catch (...) {
-        fprintf(stderr, "MCP server unknown error\n");
+        log()->error("MCP server unknown error");
         return make_error(nullptr, JsonRpcError::InternalError,
                           "Unknown internal server error");
     }
