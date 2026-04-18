@@ -315,6 +315,14 @@ namespace etil::core {
         const etil::mcp::RolePermissions* permissions() const { return permissions_; }
         void set_permissions(const etil::mcp::RolePermissions* p) { permissions_ = p; }
 
+        // Mutable access for role-admin TIL words (role-grant-channel,
+        // role-channel-enable!, etc). Nullptr when permissions are
+        // read-only (const-set) or standalone. McpServer sets this
+        // when the current session's permissions are mutable
+        // (session-local copy, not the shared AuthConfig entry).
+        etil::mcp::RolePermissions* mutable_permissions() const { return mutable_permissions_; }
+        void set_mutable_permissions(etil::mcp::RolePermissions* p) { mutable_permissions_ = p; }
+
         // Manifold channel service (non-owning, nullptr = no channel access).
         // Installed per-session by the MCP layer; TIL channel-* primitives
         // consult this to publish / add routes / introspect.
@@ -505,6 +513,10 @@ namespace etil::core {
 
         // Role permissions (nullptr = standalone = all permitted)
         const etil::mcp::RolePermissions* permissions_ = nullptr;
+
+        // Mutable-permissions slot used by role-admin TIL words. Null
+        // when the session's permissions are shared/read-only.
+        etil::mcp::RolePermissions* mutable_permissions_ = nullptr;
 
         // Manifold channel service (non-owning; nullptr disables channel-* ops)
         etil::manifold::ChannelService* channels_ = nullptr;

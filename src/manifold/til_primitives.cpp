@@ -8,8 +8,10 @@
 
 #include "etil/manifold/til_primitives.hpp"
 
+#include <algorithm>
 #include <any>
 #include <string>
+#include <string_view>
 #include <typeindex>
 #include <vector>
 
@@ -454,10 +456,32 @@ bool prim_channel_tap_observable(ExecutionContext& ctx) {
 // specific inbound channels (doc B §21.3 / §17.3).
 // ---------------------------------------------------------------------------
 
+/// §17.4 receive_* gate. Returns true if the current role is allowed
+/// to subscribe to the given etil.mcp.in.* channel. Standalone and
+/// hard-wired channels bypass the check.
+bool inbound_receive_allowed(const etil::mcp::RolePermissions* p,
+                             std::string_view channel) {
+    if (p == nullptr) return true;  // standalone
+    if (channel == "etil.mcp.in.progress")
+        return p->receive_progress;
+    if (channel == "etil.mcp.in.cancelled")
+        return true;  // hard-wired Read — see kHardwiredChannels
+    if (channel == "etil.mcp.in.roots.changed")
+        return p->receive_roots_changed;
+    if (channel.rfind("etil.mcp.in.notification.", 0) == 0)
+        return p->receive_client_notification;
+    return true;  // other channels fall through to generic RBAC
+}
+
 bool mcp_on_channel_internal(ExecutionContext& ctx, const std::string& channel) {
     auto* svc = ctx.channels();
     if (!svc) {
         ctx.err() << "Error: mcp-on: no channel service\n";
+        return false;
+    }
+    if (!inbound_receive_allowed(ctx.permissions(), channel)) {
+        ctx.err() << "Error: mcp-on: role lacks the receive_* permission "
+                     "for channel " << channel << "\n";
         return false;
     }
     auto obs_sp = svc->observe(channel, ctx.permissions());
@@ -511,6 +535,125 @@ bool prim_mcp_on_request(ExecutionContext& ctx) {
     if (pattern == "**" || pattern.empty()) channel += "**";
     else channel += pattern;
     return mcp_on_channel_internal(ctx, channel);
+}
+
+// ---------------------------------------------------------------------------
+// Role-admin words (doc B §15.8 / §21.2). Mutate the session's
+// mutable_permissions() block. Target is always the CURRENT session's
+// role record — distributed role registries or cross-session grant
+// propagation are out of scope for Phase 2d (AuthConfig persistence
+// lands with Phase 3). The role-name argument is recorded as a tag
+// on the audit record but does not select a remote target.
+// ---------------------------------------------------------------------------
+
+/// Require role_admin + a mutable permissions slot. Returns nullptr
+/// and prints an error if either is missing.
+etil::mcp::RolePermissions* require_role_admin(ExecutionContext& ctx,
+                                               const char* word) {
+    const auto* perms = ctx.permissions();
+    // Standalone mode allows everything including role admin.
+    bool role_admin_ok = (perms == nullptr) || perms->role_admin;
+    if (!role_admin_ok) {
+        ctx.err() << "Error: " << word
+                  << ": role_admin permission required\n";
+        return nullptr;
+    }
+    auto* mut = ctx.mutable_permissions();
+    if (!mut) {
+        ctx.err() << "Error: " << word
+                  << ": mutable permissions slot not configured "
+                     "(this context's role record is read-only)\n";
+        return nullptr;
+    }
+    return mut;
+}
+
+// role-grant-channel ( actions pattern role-name -- )
+bool prim_role_grant_channel(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string role_name = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, role_name); return false; }
+    std::string actions_str = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, pattern); push_string(ctx, role_name); return false; }
+
+    auto* mut = require_role_admin(ctx, "role-grant-channel");
+    if (!mut) return false;
+    if (!validate_pattern(pattern)) {
+        ctx.err() << "Error: role-grant-channel: invalid pattern '"
+                  << pattern << "'\n";
+        return false;
+    }
+    uint8_t mask = parse_actions(actions_str);
+    if (mask == 0) {
+        ctx.err() << "Error: role-grant-channel: unknown actions '"
+                  << actions_str << "'\n";
+        return false;
+    }
+    ChannelGrant g;
+    g.pattern = std::move(pattern);
+    g.actions = mask;
+    g.effect = ChannelGrant::Effect::Allow;
+    mut->channel_grants.push_back(std::move(g));
+    (void)role_name;  // audit recording is Phase 3 — role arg ignored for now
+    return true;
+}
+
+// role-revoke-channel ( pattern role-name -- )
+bool prim_role_revoke_channel(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string role_name = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, role_name); return false; }
+
+    auto* mut = require_role_admin(ctx, "role-revoke-channel");
+    if (!mut) return false;
+    auto& grants = mut->channel_grants;
+    grants.erase(std::remove_if(grants.begin(), grants.end(),
+        [&pattern](const ChannelGrant& g) { return g.pattern == pattern; }),
+        grants.end());
+    (void)role_name;
+    return true;
+}
+
+// role-channel-enable! ( bool role-name -- )
+bool prim_role_channel_enable(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string role_name = pop_string(ctx, &ok);
+    if (!ok) return false;
+    auto bval = ctx.data_stack().pop();
+    if (!bval) { push_string(ctx, role_name); return false; }
+    if (bval->type != Value::Type::Boolean) {
+        ctx.data_stack().push(*bval);
+        push_string(ctx, role_name);
+        return false;
+    }
+    auto* mut = require_role_admin(ctx, "role-channel-enable!");
+    if (!mut) return false;
+    mut->channels_enabled = (bval->as_int != 0);
+    (void)role_name;
+    return true;
+}
+
+// role-network-sink! ( bool role-name -- )
+bool prim_role_network_sink(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string role_name = pop_string(ctx, &ok);
+    if (!ok) return false;
+    auto bval = ctx.data_stack().pop();
+    if (!bval) { push_string(ctx, role_name); return false; }
+    if (bval->type != Value::Type::Boolean) {
+        ctx.data_stack().push(*bval);
+        push_string(ctx, role_name);
+        return false;
+    }
+    auto* mut = require_role_admin(ctx, "role-network-sink!");
+    if (!mut) return false;
+    mut->channels_network_sink = (bval->as_int != 0);
+    (void)role_name;
+    return true;
 }
 
 // --- channel-perm-list ( -- array ) -----------------------------------------
@@ -625,6 +768,22 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
     dict.register_word("mcp-on-request",
         make_primitive("mcp-on-request", prim_mcp_on_request,
             {T::String}, {T::Observable}));
+
+    dict.register_word("role-grant-channel",
+        make_primitive("role-grant-channel", prim_role_grant_channel,
+            {T::String, T::String, T::String}, {}));
+
+    dict.register_word("role-revoke-channel",
+        make_primitive("role-revoke-channel", prim_role_revoke_channel,
+            {T::String, T::String}, {}));
+
+    dict.register_word("role-channel-enable!",
+        make_primitive("role-channel-enable!", prim_role_channel_enable,
+            {T::Boolean, T::String}, {}));
+
+    dict.register_word("role-network-sink!",
+        make_primitive("role-network-sink!", prim_role_network_sink,
+            {T::Boolean, T::String}, {}));
 }
 
 } // namespace etil::manifold

@@ -571,6 +571,7 @@ void McpServer::run_http(HttpTransport& transport) {
     };
     callbacks.destroy_session = [this](const std::string& id) { destroy_session(id); };
     callbacks.has_session = [this](const std::string& id) { return has_session(id); };
+    callbacks.channels = channels_.get();
 
     transport.run(
         [this](const std::string& session_id,
