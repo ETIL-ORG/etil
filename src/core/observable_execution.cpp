@@ -11,6 +11,7 @@
 #include "etil/core/heap_map.hpp"
 #include "etil/core/compiled_body.hpp"
 #include "etil/lvfs/lvfs.hpp"
+#include "etil/manifold/subject.hpp"
 #include "etil/net/http_client_config.hpp"
 #include "etil/net/url_validation.hpp"
 #include "etil/mcp/role_permissions.hpp"
@@ -1436,6 +1437,50 @@ bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observ
             fallback->release();
         }
         return result;
+    }
+
+    case K::ChannelSubscription: {
+        // Drain messages from the subject, emitting each as a HeapMap
+        // with keys: channel, payload, session, seq, tags.
+        // Loop blocks briefly in pop_wait() to amortize cv latency, and
+        // yields via ctx.tick() between pulls so a long-running
+        // subscription cooperates with session abort / time limits.
+        auto* holder = reinterpret_cast<
+            std::shared_ptr<etil::manifold::ChannelSubject>*>(obs->param());
+        if (!holder || !*holder) return true;
+        auto subject = *holder;
+        while (true) {
+            if (!ctx.tick()) return false;
+            etil::manifold::Message msg;
+            bool got = subject->pop_wait(msg, /*wait_ms=*/20);
+            if (!got) {
+                if (subject->is_closed()) break;
+                continue;  // spurious wake or timeout — loop
+            }
+            auto* hm = new HeapMap();
+            hm->set("channel",
+                    Value::from(HeapString::create(msg.channel)));
+            std::string payload_str;
+            if (msg.payload.type() == typeid(std::string)) {
+                try {
+                    payload_str = std::any_cast<std::string>(msg.payload);
+                } catch (...) {}
+            }
+            hm->set("payload",
+                    Value::from(HeapString::create(payload_str)));
+            hm->set("session",
+                    Value::from(HeapString::create(msg.origin.session_id)));
+            hm->set("seq", Value(msg.origin.seq));
+            auto* tags = new HeapMap();
+            for (auto& [k, v] : msg.tags) {
+                tags->set(k, Value::from(HeapString::create(v)));
+            }
+            hm->set("tags", Value::from(tags));
+            if (!observer(Value::from(hm), ctx)) {
+                return true;  // downstream asked to stop
+            }
+        }
+        return true;
     }
 
     default:

@@ -57,7 +57,7 @@ struct PublishOutcome {
     size_t routes_dropped = 0;   // overflow drops at matched routes
 };
 
-class ChannelService {
+class ChannelService : public std::enable_shared_from_this<ChannelService> {
 public:
     virtual ~ChannelService() = default;
 

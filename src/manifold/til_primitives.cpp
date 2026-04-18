@@ -18,6 +18,7 @@
 #include "etil/core/heap_array.hpp"
 #include "etil/core/heap_map.hpp"
 #include "etil/core/heap_object.hpp"
+#include "etil/core/heap_observable.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/word_impl.hpp"
@@ -27,6 +28,7 @@
 #include "etil/manifold/rbac.hpp"
 #include "etil/manifold/service.hpp"
 #include "etil/manifold/sinks.hpp"
+#include "etil/manifold/subject.hpp"
 #include "etil/mcp/role_permissions.hpp"
 
 namespace etil::manifold {
@@ -410,6 +412,43 @@ bool prim_channel_perm_check(ExecutionContext& ctx) {
     return true;
 }
 
+// --- channel-subscribe ( pattern-str -- observable ) ------------------------
+
+bool prim_channel_subscribe(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-subscribe: no channel service\n";
+        return false;
+    }
+    auto obs_sp = svc->observe(pattern, ctx.permissions());
+    if (!obs_sp) {
+        ctx.err() << "Error: channel-subscribe: observe() denied or "
+                     "pattern invalid\n";
+        return false;
+    }
+    // shared_ptr → raw ptr: observe() returned a shared_ptr with a
+    // release() deleter, which decrements the HeapObservable's
+    // intrusive refcount. We need to transfer ownership to the data
+    // stack — addref once and let the shared_ptr's deleter release
+    // its own ref when it goes out of scope.
+    auto* raw = obs_sp.get();
+    raw->add_ref();
+    ctx.data_stack().push(Value::from(raw));
+    return true;
+}
+
+// --- channel-tap-observable ( pattern-str -- observable ) -------------------
+// Alias for channel-subscribe — the plan (doc B §21.1) lists both
+// names; they share an implementation since both return a live
+// observable of the channel.
+
+bool prim_channel_tap_observable(ExecutionContext& ctx) {
+    return prim_channel_subscribe(ctx);
+}
+
 // --- channel-perm-list ( -- array ) -----------------------------------------
 
 bool prim_channel_perm_list(ExecutionContext& ctx) {
@@ -494,6 +533,14 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
     dict.register_word("channel-perm-list",
         make_primitive("channel-perm-list", prim_channel_perm_list,
             {}, {T::Array}));
+
+    dict.register_word("channel-subscribe",
+        make_primitive("channel-subscribe", prim_channel_subscribe,
+            {T::String}, {T::Observable}));
+
+    dict.register_word("channel-tap-observable",
+        make_primitive("channel-tap-observable", prim_channel_tap_observable,
+            {T::String}, {T::Observable}));
 }
 
 } // namespace etil::manifold

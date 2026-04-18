@@ -13,10 +13,12 @@
 #include <absl/container/flat_hash_set.h>
 #include <absl/synchronization/mutex.h>
 
+#include "etil/core/heap_observable.hpp"
 #include "etil/core/logging.hpp"
 #include "etil/manifold/channel_name.hpp"
 #include "etil/manifold/origin.hpp"
 #include "etil/manifold/rbac.hpp"
+#include "etil/manifold/subject.hpp"
 #include "etil/mcp/role_permissions.hpp"
 
 namespace etil::manifold {
@@ -145,10 +147,31 @@ public:
     }
 
     std::shared_ptr<etil::core::HeapObservable>
-    observe(const std::string& /*pattern*/,
-            const etil::mcp::RolePermissions* /*principal*/) override {
-        // Phase 2 deliverable — return nullptr for now.
-        return nullptr;
+    observe(const std::string& pattern,
+            const etil::mcp::RolePermissions* principal) override {
+        // RBAC — observing is a Read on the channel.
+        auto access = evaluate_access(principal, pattern, ChannelAction::Read);
+        if (!access.allowed) {
+            log()->warn("observe denied: pattern={} reason={}",
+                        pattern, static_cast<int>(access.reason));
+            return nullptr;
+        }
+
+        // Create a fresh subject + feeder route. The subject's dtor
+        // removes the route when its last ref dies.
+        auto subject = std::make_shared<ChannelSubject>();
+        RouteSpec spec;
+        spec.channel_pattern = pattern;
+        spec.sink = make_subject_sink(subject);
+        auto handle = add_route(std::move(spec), /*principal*/ nullptr);
+        if (!handle.valid()) return nullptr;
+        subject->set_cleanup(weak_from_this(), handle);
+
+        // Wrap the subject in a HeapObservable. See
+        // include/etil/core/heap_observable.hpp Kind::ChannelSubscription.
+        return std::shared_ptr<etil::core::HeapObservable>(
+            etil::core::HeapObservable::channel_subscription(subject),
+            [](etil::core::HeapObservable* p) { if (p) p->release(); });
     }
 
     std::vector<SinkStats> all_sink_stats() const override {

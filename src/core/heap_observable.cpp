@@ -10,6 +10,7 @@
 #include "etil/core/heap_map.hpp"
 #include "etil/core/word_impl.hpp"
 #include "etil/core/value_helpers.hpp"
+#include "etil/manifold/subject.hpp"
 
 namespace etil::core {
 
@@ -25,6 +26,13 @@ HeapObservable::~HeapObservable() {
     if (operator_xt_) operator_xt_->release();
     if (source_array_) source_array_->release();
     state_.release();
+    if (obs_kind_ == Kind::ChannelSubscription && param_ != 0) {
+        auto* holder = reinterpret_cast<
+            std::shared_ptr<etil::manifold::ChannelSubject>*>(param_);
+        if (*holder) (*holder)->close();
+        delete holder;
+        param_ = 0;
+    }
 }
 
 const char* HeapObservable::kind_name() const {
@@ -81,8 +89,17 @@ const char* HeapObservable::kind_name() const {
     case Kind::Finalize:      return "finalize";
     case Kind::SwitchMap:     return "switch-map";
     case Kind::Catch:         return "catch";
+    case Kind::ChannelSubscription: return "channel-subscription";
     }
     return "unknown";
+}
+
+HeapObservable* HeapObservable::channel_subscription(
+    std::shared_ptr<etil::manifold::ChannelSubject> subject) {
+    auto* o = new HeapObservable(Kind::ChannelSubscription);
+    auto* holder = new std::shared_ptr<etil::manifold::ChannelSubject>(std::move(subject));
+    o->param_ = reinterpret_cast<int64_t>(holder);
+    return o;
 }
 
 // --- Factory methods ---

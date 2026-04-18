@@ -8,6 +8,7 @@ add_executable(etil_tests
     unit/test_manifold_sinks.cpp
     unit/test_manifold_cycle.cpp
     unit/test_manifold_til.cpp
+    unit/test_manifold_observable.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
     unit/test_primitives.cpp

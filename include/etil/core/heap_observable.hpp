@@ -7,6 +7,10 @@
 #include "etil/core/execution_context.hpp"
 #include "etil/core/value_helpers.hpp"
 
+#include <memory>
+
+namespace etil::manifold { class ChannelSubject; }
+
 namespace etil::core {
 
 class HeapArray;
@@ -84,6 +88,13 @@ public:
         Finalize,       // cleanup xt in operator_xt_
         SwitchMap,      // mapping xt in operator_xt_
         Catch,          // recovery xt in operator_xt_
+
+        // Manifold subject observable — hot/push, backed by
+        // a ChannelSubject shared with a feeder route. The shared_ptr
+        // is held through a heap-allocated indirection in param_ (see
+        // HeapObservable::channel_subscription). Execution drains the
+        // subject's queue and emits each message as a HeapMap.
+        ChannelSubscription,
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -161,6 +172,14 @@ public:
     static HeapObservable* http_get(HeapArray* url_data);
     static HeapObservable* http_post(HeapArray* url_data, HeapByteArray* body, HeapString* content_type);
     static HeapObservable* http_sse(HeapArray* url_data);
+
+    // Manifold subject — hot/push observable backed by a ChannelSubject
+    // provided by the caller (ChannelService::observe). The returned
+    // observable takes ownership of a heap-allocated shared_ptr holder;
+    // destruction releases it (closing the subject, which in turn removes
+    // the feeder route — see include/etil/manifold/subject.hpp).
+    static HeapObservable* channel_subscription(
+        std::shared_ptr<etil::manifold::ChannelSubject> subject);
 
     // Gap fill — high-value RxJS operators
     static HeapObservable* tap(HeapObservable* source, WordImpl* xt);

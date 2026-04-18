@@ -5,6 +5,7 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/rbac.cpp
     manifold/sinks.cpp
     manifold/transforms.cpp
+    manifold/subject.cpp
     manifold/default_service.cpp
     manifold/til_primitives.cpp
 )
