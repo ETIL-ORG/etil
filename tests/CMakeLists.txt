@@ -41,6 +41,7 @@ add_executable(etil_mcp_tests
     unit/test_json_rpc.cpp
     unit/test_mcp_server.cpp
     unit/test_mcp_tools.cpp
+    unit/test_manifold_sse_out.cpp
 )
 
 target_link_libraries(etil_mcp_tests

@@ -66,11 +66,23 @@ public:
             return outcome;
         }
 
-        // Stamp origin (seq counter) now, after RBAC passes.
+        // Stamp origin (seq counter) now, after RBAC passes. Promote
+        // tags["session_id"] into origin.session_id per doc B §18.3 —
+        // origin is identity, tags are routing/filtering, both should
+        // carry the session.
+        std::string session_for_origin = msg.origin.session_id;
+        if (session_for_origin.empty()) {
+            auto it = msg.tags.find("session_id");
+            if (it != msg.tags.end()) session_for_origin = it->second;
+        }
         if (msg.origin.seq == 0 && msg.origin.hostname.empty()) {
-            msg.origin = current_origin(msg.origin.session_id);
+            msg.origin = current_origin(session_for_origin);
         } else if (msg.origin.seq == 0) {
-            msg.origin.seq = current_origin(msg.origin.session_id).seq;
+            auto o = current_origin(session_for_origin);
+            msg.origin.seq = o.seq;
+            if (msg.origin.session_id.empty()) {
+                msg.origin.session_id = o.session_id;
+            }
         }
 
         dispatch(msg, outcome);

@@ -4,9 +4,11 @@
 #include "etil/mcp/mcp_server.hpp"
 #include "etil/mcp/session.hpp"
 #include "etil/mcp/json_rpc.hpp"
+#include "etil/mcp/mcp_sse_out_sink.hpp"
 #include "etil/core/logging.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/version.hpp"
+#include "etil/manifold/service.hpp"
 
 #include "etil/mcp/http_transport.hpp"
 
@@ -55,6 +57,18 @@ McpServer::McpServer() {
     if (library_env && library_env[0] != '\0') {
         library_dir_ = library_env;
     }
+
+    // Manifold channel service — §17 Phase A outbound SSE. A route on
+    // etil.mcp.out.notification.** is attached whose terminal sink
+    // bridges back to the MCP transport via emit_notification /
+    // send_targeted_notification. sys-notification and
+    // user-notification TIL words publish onto these channels through
+    // the notification_sender_ closures set in tool_handlers.cpp.
+    channels_ = etil::manifold::make_default_channel_service();
+    etil::manifold::RouteSpec sse_spec;
+    sse_spec.channel_pattern = "etil.mcp.out.notification.**";
+    sse_spec.sink = make_mcp_sse_out_sink(this);
+    sse_out_route_handle_ = channels_->add_route(std::move(sse_spec));
 
     init_auth();
     init_database();
@@ -144,7 +158,13 @@ void McpServer::init_database() {
 #endif
 }
 
-McpServer::~McpServer() = default;
+McpServer::~McpServer() {
+    // Tear down the SSE out-route before the server goes away — the
+    // sink holds a raw `this` pointer.
+    if (channels_ && sse_out_route_handle_.valid()) {
+        channels_->remove_route(sse_out_route_handle_);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Session lifecycle

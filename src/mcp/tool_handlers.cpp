@@ -6,6 +6,8 @@
 #include "etil/core/interpreter_bootstrap.hpp"
 #include "etil/core/metadata_json.hpp"
 #include "etil/core/primitives.hpp"
+#include "etil/manifold/service.hpp"
+#include "etil/manifold/message.hpp"
 #include "etil/core/heap_json.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_matrix.hpp"
@@ -509,15 +511,39 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     }
 #endif
 
-    // Wire real-time notification sender
-    ctx.set_notification_sender([this](const std::string& msg) {
-        emit_notification(msg);
+    // Wire real-time notification sender — §17 Phase A: publishes onto
+    // the Manifold outbound channel; the mcp_sse_out_sink registered in
+    // the McpServer constructor bridges back to emit_notification.
+    std::string session_id = session.id;
+    auto* channels = channels_.get();
+    ctx.set_notification_sender([channels, session_id](const std::string& msg) {
+        if (!channels) return;  // standalone path without channels — shouldn't happen
+        etil::manifold::Message m;
+        m.channel = "etil.mcp.out.notification.system";
+        m.payload = msg;
+        m.payload_type = std::type_index(typeid(std::string));
+        m.tags["session_id"] = session_id;
+        channels->publish(std::move(m));
     });
 
-    // Wire targeted notification sender (for user-notification primitive)
+    // Wire targeted notification sender — publishes to
+    // etil.mcp.out.notification.user with a target_user_id tag; the
+    // sink dispatches via send_targeted_notification.
     ctx.set_targeted_notification_sender(
-        [this](const std::string& user_id, const std::string& msg) -> bool {
-            return send_targeted_notification(user_id, msg);
+        [channels, session_id](const std::string& user_id,
+                               const std::string& msg) -> bool {
+            if (!channels) return false;
+            etil::manifold::Message m;
+            m.channel = "etil.mcp.out.notification.user";
+            m.payload = msg;
+            m.payload_type = std::type_index(typeid(std::string));
+            m.tags["session_id"] = session_id;
+            m.tags["target_user_id"] = user_id;
+            auto outcome = channels->publish(std::move(m));
+            // Treat "message was delivered to at least one route" as
+            // success, matching the prior semantics of
+            // send_targeted_notification returning true on any match.
+            return outcome.accepted && outcome.routes_matched > 0;
         });
 
     // Execute with wall/CPU timing

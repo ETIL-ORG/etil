@@ -193,6 +193,7 @@ set(ETIL_MCP_SOURCES
     mcp/http_transport.cpp
     mcp/session.cpp
     mcp/mcp_server.cpp
+    mcp/mcp_sse_out_sink.cpp
     mcp/tool_handlers.cpp
     mcp/resource_handlers.cpp
 )
