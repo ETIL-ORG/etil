@@ -1,0 +1,24 @@
+# Manifold NATS E2E — simple publish loop
+#
+# Installs a NATS sink on etil.test.nats via channel-tap-nats,
+# then publishes 10 messages in a loop. Drive this from etil-tui:
+#
+#   etil-tui --log --logdir /tmp --exec tests/til/manifold-e2e/nats_loop.til
+#
+# Assumes a NATS broker is reachable at nats://nats:4222 from the
+# etil-mcp-http container (requires etil-net bridge attachment).
+# Verify receipt with a subscriber on the same network:
+#
+#   docker run --rm --network etil-net natsio/nats-box:latest \
+#     nats sub --server=nats://nats:4222 'etil.test.>'
+
+: run-nats-loop   # ( -- )
+  s" nats://nats:4222" s" json" s" etil.test.nats" channel-tap-nats drop
+  s" NATS tap installed on etil.test.nats" type cr
+  10 0 do
+    s" hello-from-etil" s" etil.test.nats" channel-publish
+  loop
+  s" published 10 messages to etil.test.nats" type cr
+;
+
+run-nats-loop
