@@ -170,35 +170,79 @@ private:
     std::atomic<uint64_t> counter_{0};
 };
 
+nlohmann::json build_envelope(const Message& msg) {
+    nlohmann::json j;
+    j["channel"] = msg.channel;
+    j["origin"] = {
+        {"host", std::string(msg.origin.hostname)},
+        {"app_start_us", msg.origin.app_startup_us},
+        {"session", msg.origin.session_id},
+        {"seq", msg.origin.seq},
+        {"origin_type",
+         msg.origin.origin_type == OriginType::Browser ? "browser" : "native"},
+    };
+    j["ts_us"] = std::chrono::duration_cast<std::chrono::microseconds>(
+        msg.timestamp.time_since_epoch()).count();
+    nlohmann::json tags = nlohmann::json::object();
+    for (auto& [k, v] : msg.tags) tags[k] = v;
+    j["tags"] = std::move(tags);
+    if (msg.payload.type() == typeid(std::string)) {
+        try {
+            j["payload"] = std::any_cast<std::string>(msg.payload);
+        } catch (...) {
+            j["payload"] = nullptr;
+        }
+    } else {
+        j["payload"] = nullptr;
+    }
+    return j;
+}
+
 class JsonEncoder : public ITransform {
 public:
     std::vector<Message> apply(Message msg) override {
-        nlohmann::json j;
-        j["channel"] = msg.channel;
-        j["origin"] = {
-            {"host", std::string(msg.origin.hostname)},
-            {"app_start_us", msg.origin.app_startup_us},
-            {"session", msg.origin.session_id},
-            {"seq", msg.origin.seq},
-            {"origin_type",
-             msg.origin.origin_type == OriginType::Browser ? "browser" : "native"},
-        };
-        j["ts_us"] = std::chrono::duration_cast<std::chrono::microseconds>(
-            msg.timestamp.time_since_epoch()).count();
-        nlohmann::json tags = nlohmann::json::object();
-        for (auto& [k, v] : msg.tags) tags[k] = v;
-        j["tags"] = std::move(tags);
-        if (msg.payload.type() == typeid(std::string)) {
-            try {
-                j["payload"] = std::any_cast<std::string>(msg.payload);
-            } catch (...) {
-                j["payload"] = nullptr;
-            }
-        } else {
-            j["payload"] = nullptr;
-        }
+        auto j = build_envelope(msg);
         msg.payload = j.dump();
         msg.payload_type = std::type_index(typeid(std::string));
+        return {std::move(msg)};
+    }
+};
+
+class MsgpackEncoder : public ITransform {
+public:
+    std::vector<Message> apply(Message msg) override {
+        auto j = build_envelope(msg);
+        std::vector<uint8_t> bytes = nlohmann::json::to_msgpack(j);
+        msg.payload = std::move(bytes);
+        msg.payload_type = std::type_index(typeid(std::vector<uint8_t>));
+        return {std::move(msg)};
+    }
+};
+
+class CborEncoder : public ITransform {
+public:
+    std::vector<Message> apply(Message msg) override {
+        auto j = build_envelope(msg);
+        std::vector<uint8_t> bytes = nlohmann::json::to_cbor(j);
+        msg.payload = std::move(bytes);
+        msg.payload_type = std::type_index(typeid(std::vector<uint8_t>));
+        return {std::move(msg)};
+    }
+};
+
+class RawPassthrough : public ITransform {
+public:
+    std::vector<Message> apply(Message msg) override {
+        if (msg.payload_type != std::type_index(typeid(std::vector<uint8_t>))) {
+            auto log = etil::core::logging::get("etil.manifold");
+            if (log) {
+                log->error(
+                    "raw_passthrough: expected std::vector<uint8_t> "
+                    "payload on channel '{}', got type_index mismatch — dropping",
+                    msg.channel);
+            }
+            return {};
+        }
         return {std::move(msg)};
     }
 };
@@ -239,6 +283,18 @@ std::shared_ptr<ITransform> make_sampler(uint64_t one_in_n) {
 
 std::shared_ptr<ITransform> make_json_encoder() {
     return std::make_shared<JsonEncoder>();
+}
+
+std::shared_ptr<ITransform> make_msgpack_encoder() {
+    return std::make_shared<MsgpackEncoder>();
+}
+
+std::shared_ptr<ITransform> make_cbor_encoder() {
+    return std::make_shared<CborEncoder>();
+}
+
+std::shared_ptr<ITransform> make_raw_passthrough() {
+    return std::make_shared<RawPassthrough>();
 }
 
 } // namespace etil::manifold

@@ -60,4 +60,23 @@ std::shared_ptr<ITransform> make_sampler(uint64_t one_in_n);
 /// sinks in Phase 3.
 std::shared_ptr<ITransform> make_json_encoder();
 
+/// Encode the message to MessagePack. Same envelope shape as
+/// make_json_encoder, but the payload becomes a std::vector<uint8_t>
+/// holding the MessagePack byte sequence. Used by broker sinks
+/// (Phase 3b/3c) when the operator opts in to a compact binary
+/// codec. Input payload must be JSON-convertible (string or empty);
+/// non-string payloads are encoded as JSON null to stay
+/// schema-compatible with the JSON encoder.
+std::shared_ptr<ITransform> make_msgpack_encoder();
+
+/// Encode the message to CBOR. Same envelope shape and constraints
+/// as make_msgpack_encoder; payload replaced with std::vector<uint8_t>.
+std::shared_ptr<ITransform> make_cbor_encoder();
+
+/// Pass-through codec — asserts the incoming payload is already a
+/// std::vector<uint8_t> and forwards the message unchanged. Emits a
+/// diagnostic via the logging facade when the type check fails and
+/// drops the message. Use when the producer already serialized.
+std::shared_ptr<ITransform> make_raw_passthrough();
+
 } // namespace etil::manifold

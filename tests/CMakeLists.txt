@@ -11,6 +11,8 @@ add_executable(etil_tests
     unit/test_manifold_observable.cpp
     unit/test_manifold_roleadmin.cpp
     unit/test_manifold_integration.cpp
+    unit/test_manifold_codecs.cpp
+    unit/test_manifold_session_hmac.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
     unit/test_primitives.cpp

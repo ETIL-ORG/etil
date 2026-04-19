@@ -18,6 +18,7 @@
 #include "etil/manifold/channel_name.hpp"
 #include "etil/manifold/origin.hpp"
 #include "etil/manifold/rbac.hpp"
+#include "etil/manifold/session_hmac.hpp"
 #include "etil/manifold/subject.hpp"
 #include "etil/mcp/role_permissions.hpp"
 
@@ -201,6 +202,10 @@ public:
         return c;
     }
 
+    std::string session_hmac(std::string_view session_id) const override {
+        return etil::manifold::session_hmac(process_key_, session_id);
+    }
+
 private:
     /// Core dispatch — for each matching route, apply transforms then
     /// deliver to the sink. Transforms may emit onto different
@@ -372,6 +377,10 @@ private:
     std::atomic<uint64_t> ttl_exhausted_{0};
     std::atomic<uint64_t> echo_dropped_{0};
     std::atomic<uint64_t> static_warnings_{0};
+
+    // Process-local HMAC key for Session-Hmac header (A-5). Generated
+    // once at construction, never leaves the process.
+    ProcessKey process_key_ = generate_process_key();
 };
 
 } // namespace

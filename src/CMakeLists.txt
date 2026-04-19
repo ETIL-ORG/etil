@@ -8,6 +8,9 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/subject.cpp
     manifold/default_service.cpp
     manifold/til_primitives.cpp
+    manifold/session_hmac.cpp
+    manifold/codec_resolver.cpp
+    manifold/broker_sink.cpp
 )
 
 # Core library sources
