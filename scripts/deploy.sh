@@ -26,6 +26,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
+# --- Resolve compose command (plugin vs. legacy hyphenated binary) ---
+# Prefer the `docker compose` plugin where present (Docker 20.10+); fall
+# back to the legacy `docker-compose` v1 binary, which is what ships in
+# older Ubuntu images and the current etil-ci container.
+if docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo "ERROR: neither 'docker compose' plugin nor 'docker-compose' binary found" >&2
+    exit 1
+fi
+
 # --- Derived constants ---
 SSH_CMD="ssh $ETIL_SSH_HOST"
 SCP_CMD="scp"
@@ -221,8 +234,8 @@ if [ "$LOCAL_DEPLOY" = true ]; then
         docker volume create etil-sessions 2>/dev/null || true
         docker volume create etil-library 2>/dev/null || true
 
-        docker compose -f "$COMPOSE_FILE_LOCAL" --env-file "$LOCAL_DEPLOY_ENV" up -d
-        echo "docker compose up -d completed"
+        $DOCKER_COMPOSE -f "$COMPOSE_FILE_LOCAL" --env-file "$LOCAL_DEPLOY_ENV" up -d
+        echo "$DOCKER_COMPOSE up -d completed"
     fi
     echo ""
 else
@@ -353,10 +366,17 @@ chmod 600 "\$DEPLOY_ENV_FILE"
 echo "Env file keys (values masked):"
 sed 's/=.*/=***/' "\$DEPLOY_ENV_FILE"
 
-echo "--- docker compose up -d ---"
-docker compose -f "\$COMPOSE_FILE" --env-file "\$DEPLOY_ENV_FILE" up -d
+echo "--- compose up -d ---"
+if docker compose version >/dev/null 2>&1; then
+    docker compose -f "\$COMPOSE_FILE" --env-file "\$DEPLOY_ENV_FILE" up -d
+elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose -f "\$COMPOSE_FILE" --env-file "\$DEPLOY_ENV_FILE" up -d
+else
+    echo "ERROR: neither 'docker compose' plugin nor 'docker-compose' binary on target" >&2
+    exit 1
+fi
 
-echo "docker compose up -d completed"
+echo "compose up -d completed"
 REMOTE_DEPLOY
     fi
     echo ""
