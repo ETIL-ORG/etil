@@ -22,6 +22,7 @@ set(ETIL_CORE_SOURCES
     core/logging.cpp
     core/word_impl.cpp
     core/execution_context.cpp
+    core/execution_output_tee.cpp
     core/dictionary.cpp
     core/primitives.cpp
     core/compiled_body.cpp
