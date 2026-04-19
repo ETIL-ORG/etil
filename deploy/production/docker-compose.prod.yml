@@ -65,21 +65,20 @@ services:
       - etil-net
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # All ${VAR:?} references are required: compose will fail loudly if
-    # the env file fed to `--env-file` omits any of them. This keeps host-
-    # specific paths out of the tracked compose file (and out of commits).
-    environment:
-      - ETIL_MCP_API_KEY=${ETIL_MCP_API_KEY:?}
-      - ETIL_HTTP_ALLOWLIST=${ETIL_HTTP_ALLOWLIST:-}
-      - ETIL_AUTH_CONFIG=${ETIL_AUTH_CONTAINER_DIR:?}
-      - ETIL_MONGODB_URI=${ETIL_MONGODB_URI:?}
-      - ETIL_MONGODB_DATABASE=${ETIL_MONGODB_DATABASE:?}
-      - ETIL_SESSIONS_DIR=${ETIL_SESSIONS_DIR:?}
-      - ETIL_LIBRARY_DIR=${ETIL_LIBRARY_DIR:?}
+    # Runtime env vars come from an env_file: — compose passes each
+    # line to the container VERBATIM (no ${VAR} interpolation on values),
+    # so MongoDB URIs containing `$external`, API keys with special
+    # chars, etc. reach the server intact. The same file is also fed
+    # to `docker compose --env-file` on the CLI so ${ETIL_CERT_GID} /
+    # ${ETIL_MONGO_GID} / ${ETIL_AUTH_HOST_DIR} / ${ETIL_MONGO_*_HOST}
+    # / ${ETIL_MONGO_*_CONTAINER} / ${ETIL_AUTH_CONTAINER_DIR} can
+    # interpolate below for bind-mount sources and group IDs.
+    env_file:
+      - /tmp/etil-compose-deploy.env
     volumes:
       - etil-sessions:${ETIL_SESSIONS_DIR}
       - etil-library:${ETIL_LIBRARY_DIR}:ro
-      - ${ETIL_AUTH_HOST_DIR:?}:${ETIL_AUTH_CONTAINER_DIR}
+      - ${ETIL_AUTH_HOST_DIR:?}:${ETIL_AUTH_CONFIG:?}
       - ${ETIL_MONGO_CLIENT_CERT_HOST:?}:${ETIL_MONGO_CLIENT_CERT_CONTAINER:?}:ro
       - ${ETIL_MONGO_CA_CERT_HOST:?}:${ETIL_MONGO_CA_CERT_CONTAINER:?}:ro
     group_add:
