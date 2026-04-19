@@ -247,6 +247,19 @@ public:
     void publish_inbound_notification(const std::string& method,
                                       const nlohmann::json& params);
 
+    /// Phase 4b: publish lifecycle events on etil.mcp.request.** and
+    /// etil.mcp.session.**. Subscribers can reconstruct the request
+    /// timeline without scraping log lines. No-op when channels_ is
+    /// null. See plan doc 20260419A §Phase 4b.
+    void publish_request_event(const std::string& stage,          // "received"|"completed"|"failed"
+                               const std::string& session_id,
+                               const std::string& method,
+                               int64_t latency_us,
+                               const std::string& error = {});
+    void publish_session_event(const std::string& stage,          // "opened"|"closed"
+                               const std::string& session_id,
+                               const std::string& user_id = {});
+
 private:
     // Protocol handlers
     nlohmann::json handle_initialize(const nlohmann::json& id,
