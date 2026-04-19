@@ -6,7 +6,10 @@
 #include "etil/core/logging.hpp"
 
 #ifdef ETIL_NATS_SINK_ENABLED
-#include <nats/nats.h>
+// nats.c source-tree layout has nats.h at src/nats.h (no subfolder);
+// distro-installed package uses <nats/nats.h>. We use the FetchContent
+// build so include the source-tree path.
+#include <nats.h>
 #include <mutex>
 #endif
 

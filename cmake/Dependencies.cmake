@@ -343,14 +343,18 @@ else()
     endif()
 endif()
 
-# nats.c — NATS broker client (Phase 3b, gated by ETIL_BUILD_NATS_SINK)
+# nats.c — NATS broker client (Phase 3b, gated by ETIL_BUILD_NATS_SINK).
+# Local dev builds use pre-built deps from $ETIL_DEPS_PREFIX (installed
+# via ci/deps superbuild); CI and Docker builds rely on the same path.
+# The inline FetchContent below is the fallback when find_package doesn't
+# find the prefix install — matches the pattern of other optional deps.
 if(ETIL_BUILD_NATS_SINK AND NOT ETIL_WASM_TARGET)
     find_package(nats QUIET CONFIG)
     if(NOT nats_FOUND)
         FetchContent_Declare(
             nats_c
             URL https://github.com/nats-io/nats.c/archive/refs/tags/v3.8.2.tar.gz
-            URL_HASH SHA256=7b094de3ca85a6b4f64ce9d03e9a05bfd9cafa8aa6ae7df5ee8e28b47cb10ada
+            URL_HASH SHA256=083ee03cf5a413629d56272e88ad3229720c5006c286e8180c9e5b745c10f37d
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         )
         set(NATS_BUILD_STATIC ON CACHE BOOL "")

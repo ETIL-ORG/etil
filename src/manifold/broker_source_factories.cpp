@@ -4,9 +4,10 @@
 #include "etil/manifold/broker_source_factories.hpp"
 
 #include "etil/core/logging.hpp"
+#include "etil/manifold/broker_sink.hpp"  // broker_headers constants
 
 #ifdef ETIL_NATS_SINK_ENABLED
-#include <nats/nats.h>
+#include <nats.h>
 #include <atomic>
 #include <mutex>
 #endif
