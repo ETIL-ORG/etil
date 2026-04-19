@@ -9,6 +9,10 @@
 #include <limits>
 #include <random>
 #include <sstream>
+#include <typeindex>
+
+#include "etil/manifold/message.hpp"
+#include "etil/manifold/service.hpp"
 
 namespace etil::evolution {
 
@@ -70,6 +74,31 @@ std::vector<std::string> EvolutionEngine::registered_words() const {
     return words;
 }
 
+void EvolutionEngine::publish_generation_event(const char* stage,
+                                                  const std::string& word,
+                                                  size_t generation,
+                                                  size_t children,
+                                                  double best_fitness) {
+    if (!channels_) return;
+    etil::manifold::Message m;
+    if (std::string(stage) == "start") {
+        m.channel = "etil.evolution.generation.start";
+    } else if (std::string(stage) == "end") {
+        m.channel = "etil.evolution.generation.end";
+    } else {
+        return;
+    }
+    m.payload = std::string{};
+    m.payload_type = std::type_index(typeid(std::string));
+    m.tags["word"]        = word;
+    m.tags["generation"]  = std::to_string(generation);
+    if (std::string(stage) == "end") {
+        m.tags["children"]     = std::to_string(children);
+        m.tags["best_fitness"] = std::to_string(best_fitness);
+    }
+    channels_->publish(std::move(m));
+}
+
 size_t EvolutionEngine::evolve_word(const std::string& word) {
     auto state_it = word_state_.find(word);
     if (state_it == word_state_.end() || state_it->second.tests.empty()) {
@@ -77,6 +106,8 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
     }
     auto& state = state_it->second;
     auto& tests = state.tests;
+
+    publish_generation_event("start", word, state.generations, 0, 0.0);
 
     // Route fitness evaluation errors to the evolution log file
     fitness_.set_error_stream(logger_.stream());
@@ -238,6 +269,18 @@ size_t EvolutionEngine::evolve_word(const std::string& word) {
 
     // TBBP: log bridge weight summary at end of each generation
     bridge_map_.log_weight_summary(10);
+
+    // Compute best post-evaluation fitness for the end event. Walk
+    // current implementations and take the max weight (impls were
+    // re-weighted by update_weights just above).
+    double best = 0.0;
+    if (auto impls_opt = dict_.get_implementations(word)) {
+        for (const auto& impl : *impls_opt) {
+            if (impl->weight() > best) best = impl->weight();
+        }
+    }
+    publish_generation_event("end", word, state.generations,
+                              children_created, best);
 
     state.generations++;
     return children_created;

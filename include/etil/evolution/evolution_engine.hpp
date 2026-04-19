@@ -4,6 +4,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "etil/evolution/genetic_ops.hpp"
+
+namespace etil::manifold { class ChannelService; }
+
 #include "etil/evolution/ast_genetic_ops.hpp"
 #include "etil/evolution/bridge_map.hpp"
 #include "etil/evolution/concept_dag.hpp"
@@ -106,6 +109,12 @@ public:
     BridgeMap& bridge_map() { return bridge_map_; }
     const BridgeMap& bridge_map() const { return bridge_map_; }
 
+    /// Phase 4c: optional ChannelService to publish generation
+    /// lifecycle events onto etil.evolution.**. Null means no
+    /// channel output (existing EvolveLogger path unchanged).
+    etil::manifold::ChannelService* channels() const { return channels_; }
+    void set_channels(etil::manifold::ChannelService* c) { channels_ = c; }
+
     /// Seed all RNGs for deterministic, reproducible evolution runs.
     void seed_rng(uint64_t seed);
 
@@ -151,6 +160,15 @@ private:
     std::unordered_map<std::string, WordEvolution> word_state_;
     std::unordered_map<std::string, ConceptDAG> dags_;
     bool accumulate_contributions_ = false;
+
+    // Phase 4c: non-owning; null means no channel emissions.
+    etil::manifold::ChannelService* channels_ = nullptr;
+
+    void publish_generation_event(const char* stage,
+                                  const std::string& word,
+                                  size_t generation,
+                                  size_t children,
+                                  double best_fitness);
 
     void update_weights(
         const std::string& word,

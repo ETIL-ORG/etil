@@ -150,6 +150,7 @@ gtest_discover_tests(etil_selection_tests)
 # Evolution engine unit tests
 add_executable(etil_evolution_tests
     unit/test_evolution.cpp
+    unit/test_evolution_channels.cpp
 )
 
 target_link_libraries(etil_evolution_tests
