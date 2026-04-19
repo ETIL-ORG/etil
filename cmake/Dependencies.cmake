@@ -343,6 +343,42 @@ else()
     endif()
 endif()
 
+# nats.c — NATS broker client (Phase 3b, gated by ETIL_BUILD_NATS_SINK)
+if(ETIL_BUILD_NATS_SINK AND NOT ETIL_WASM_TARGET)
+    find_package(nats QUIET CONFIG)
+    if(NOT nats_FOUND)
+        FetchContent_Declare(
+            nats_c
+            URL https://github.com/nats-io/nats.c/archive/refs/tags/v3.8.2.tar.gz
+            URL_HASH SHA256=7b094de3ca85a6b4f64ce9d03e9a05bfd9cafa8aa6ae7df5ee8e28b47cb10ada
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        )
+        set(NATS_BUILD_STATIC ON CACHE BOOL "")
+        set(NATS_BUILD_EXAMPLES OFF CACHE BOOL "")
+        set(NATS_BUILD_STREAMING OFF CACHE BOOL "")
+        set(NATS_BUILD_WITH_TLS ON CACHE BOOL "")
+        FetchContent_MakeAvailable(nats_c)
+        if(TARGET nats_static AND NOT TARGET nats::nats)
+            add_library(nats::nats ALIAS nats_static)
+        endif()
+    else()
+        message(STATUS "Using pre-built nats.c")
+    endif()
+endif()
+
+# Qpid Proton-C++ — AMQP 1.0 client (Phase 3c, gated by ETIL_BUILD_AMQP_SINK)
+if(ETIL_BUILD_AMQP_SINK AND NOT ETIL_WASM_TARGET)
+    find_package(Proton QUIET CONFIG)
+    if(NOT Proton_FOUND)
+        message(FATAL_ERROR
+            "ETIL_BUILD_AMQP_SINK=ON requires Qpid Proton-C++ via "
+            "find_package(Proton) — install via distro package "
+            "(libqpid-proton-cpp-dev) or build from ci/deps/.")
+    else()
+        message(STATUS "Using pre-built Qpid Proton-C++")
+    endif()
+endif()
+
 # Optional: jemalloc for better memory performance
 if(ETIL_USE_JEMALLOC)
     find_package(PkgConfig REQUIRED)

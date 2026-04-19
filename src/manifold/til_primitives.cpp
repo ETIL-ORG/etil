@@ -26,6 +26,8 @@
 #include "etil/core/word_impl.hpp"
 #include "etil/manifold/channel_action.hpp"
 #include "etil/manifold/channel_name.hpp"
+#include "etil/manifold/codec_resolver.hpp"
+#include "etil/manifold/nats_sink.hpp"
 #include "etil/manifold/origin.hpp"
 #include "etil/manifold/rbac.hpp"
 #include "etil/manifold/service.hpp"
@@ -676,6 +678,84 @@ bool prim_channel_perm_list(ExecutionContext& ctx) {
     return true;
 }
 
+// --- channel-tap-nats ( url codec pattern -- handle ) -----------------------
+//
+// Install a NATS broker sink on `pattern` that serializes via `codec`
+// and publishes to `url`. Returns the route handle or 0 on failure
+// (unknown codec, connect failure, or binary not built with
+// ETIL_BUILD_NATS_SINK). Plan doc 20260419A §Phase 3b.
+
+bool prim_channel_tap_nats(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string codec = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, pattern); return false; }
+    std::string url = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, codec); push_string(ctx, pattern); return false; }
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-tap-nats: no channel service\n";
+        return false;
+    }
+
+    auto codec_xform = resolve_codec(codec);
+    if (!codec_xform) {
+        ctx.err() << "Error: channel-tap-nats: unknown codec '"
+                  << codec << "' (use json|msgpack|cbor|raw)\n";
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    BrokerSinkConfig cfg;
+    cfg.broker_url = std::move(url);
+    cfg.codec = codec.empty() ? std::string("json") : codec;
+    auto channels_sp = svc->shared_from_this();
+    auto sink = make_nats_sink(std::move(cfg),
+                               std::weak_ptr<ChannelService>(channels_sp));
+    if (!sink) {
+        // make_nats_sink logs the reason.
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    RouteSpec spec;
+    spec.channel_pattern = std::move(pattern);
+    spec.transforms.push_back(std::move(codec_xform));
+    spec.sink = std::move(sink);
+
+    auto h = svc->add_route(std::move(spec), ctx.permissions());
+    if (!h.valid()) {
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+    ctx.data_stack().push(Value(static_cast<int64_t>(h.id)));
+    return true;
+}
+
+// --- channel-session-hmac ( session-str -- hmac-str ) -----------------------
+//
+// Compute the Session-Hmac token the broker sinks put on outbound
+// messages for this session_id. Local subscribers that know the
+// plaintext session_id call this to obtain the same token and
+// filter inbound broker traffic by it. Raw session_id never leaves
+// the process (A-5). Empty input yields empty output.
+
+bool prim_channel_session_hmac(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string session_id = pop_string(ctx, &ok);
+    if (!ok) return false;
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-session-hmac: no channel service\n";
+        return false;
+    }
+    std::string hmac = svc->session_hmac(session_id);
+    ctx.data_stack().push(Value::from(HeapString::create(hmac)));
+    return true;
+}
+
 } // namespace
 
 void register_manifold_primitives(etil::core::Dictionary& dict) {
@@ -696,6 +776,14 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
     dict.register_word("channel-tap-file",
         make_primitive("channel-tap-file", prim_channel_tap_file,
             {T::String, T::String}, {T::Integer}));
+
+    dict.register_word("channel-tap-nats",
+        make_primitive("channel-tap-nats", prim_channel_tap_nats,
+            {T::String, T::String, T::String}, {T::Integer}));
+
+    dict.register_word("channel-session-hmac",
+        make_primitive("channel-session-hmac", prim_channel_session_hmac,
+            {T::String}, {T::String}));
 
     dict.register_word("channel-list",
         make_primitive("channel-list", prim_channel_list, {}, {T::Array}));
