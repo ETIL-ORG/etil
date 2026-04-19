@@ -2,6 +2,15 @@ include(GoogleTest)
 
 # Unit tests
 add_executable(etil_tests
+    unit/test_logging.cpp
+    unit/test_manifold_service.cpp
+    unit/test_manifold_rbac.cpp
+    unit/test_manifold_sinks.cpp
+    unit/test_manifold_cycle.cpp
+    unit/test_manifold_til.cpp
+    unit/test_manifold_observable.cpp
+    unit/test_manifold_roleadmin.cpp
+    unit/test_manifold_integration.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
     unit/test_primitives.cpp
@@ -36,6 +45,8 @@ add_executable(etil_mcp_tests
     unit/test_json_rpc.cpp
     unit/test_mcp_server.cpp
     unit/test_mcp_tools.cpp
+    unit/test_manifold_sse_out.cpp
+    unit/test_manifold_sse_in.cpp
 )
 
 target_link_libraries(etil_mcp_tests

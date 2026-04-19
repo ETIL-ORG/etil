@@ -17,6 +17,7 @@
 #include "etil/fileio/async_file_io.hpp"
 #include "etil/fileio/file_io_primitives.hpp"
 #include "etil/lvfs/lvfs.hpp"
+#include "etil/manifold/til_primitives.hpp"
 #include "etil/mcp/role_permissions.hpp"
 #include "etil/core/heap_string.hpp"
 #include "etil/core/interpreter.hpp"
@@ -3853,6 +3854,7 @@ void register_primitives(Dictionary& dict) {
     etil::fileio::register_file_io_primitives(dict);
     etil::fileio::register_async_file_io_primitives(dict);
     register_observable_primitives(dict);
+    etil::manifold::register_manifold_primitives(dict);
 }
 
 } // namespace etil::core

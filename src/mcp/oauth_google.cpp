@@ -5,13 +5,19 @@
 
 #include "etil/mcp/oauth_provider.hpp"
 #include "etil/mcp/oauth_google.hpp"
+#include "etil/core/logging.hpp"
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
-#include <cstdio>
-
 namespace etil::mcp {
+
+namespace {
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.oauth");
+    return logger;
+}
+} // namespace
 
 GoogleProvider::GoogleProvider(std::string client_id,
                                std::string client_secret)
@@ -31,8 +37,8 @@ std::optional<DeviceCodeResponse> GoogleProvider::request_device_code() {
     auto res = cli.Post("/device/code", body,
                         "application/x-www-form-urlencoded");
     if (!res || res->status != 200) {
-        fprintf(stderr, "Google device code request failed: %s\n",
-                res ? std::to_string(res->status).c_str() : "network error");
+        log()->warn("Google device code request failed: {}",
+                    res ? std::to_string(res->status) : std::string("network error"));
         return std::nullopt;
     }
 
@@ -40,14 +46,14 @@ std::optional<DeviceCodeResponse> GoogleProvider::request_device_code() {
     try {
         j = nlohmann::json::parse(res->body);
     } catch (...) {
-        fprintf(stderr, "Google device code: invalid JSON response\n");
+        log()->warn("Google device code: invalid JSON response");
         return std::nullopt;
     }
 
     if (j.contains("error")) {
-        fprintf(stderr, "Google device code error: %s\n",
-                j.value("error_description",
-                        j.value("error", "unknown")).c_str());
+        log()->warn("Google device code error: {}",
+                    j.value("error_description",
+                            j.value("error", "unknown")));
         return std::nullopt;
     }
 

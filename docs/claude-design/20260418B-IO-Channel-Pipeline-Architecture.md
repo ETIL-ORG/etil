@@ -2347,74 +2347,68 @@ Default-constructed `RouteSpec` therefore gets `RingBuffered / 16 /
 DropFirst`, matching Answer A1. Hard-wired channels register
 themselves with `Inline` explicitly.
 
-### 22.3 Remaining ambiguities — to be addressed in planning
+### 22.3 Ambiguity resolution log
 
-Unresolved after the §22 answers and §22.2 overflow spec. Not blocking
-the design-doc phase; each gets a concrete resolution during Phase 1
-planning before the affected subsystem ships.
+Original entries updated with their Phase 1-2 resolutions. Four of six
+items (A-1, A-3, A-4, A-6) are fully resolved and shipped; A-2 and A-5
+remain deferred to post-sprint work.
 
-- **A-1 — Channel name version-segment format (Q6, §14).** Answer Q6
-  accepts `etil.<module>.<event>.<detail>[.version]` with "integer or
-  semver" — but dots are the namespace separator, so `.v2.0.0` parses
-  as three segments, not one. Resolution needed: (a) forbid semver and
-  allow only integer versions; (b) use a non-dot separator inside the
-  segment (e.g., `.v2_0_0`); or (c) treat version as a tag rather than
-  a name segment. Also: does `etil.foo.*` match `etil.foo.v2` or only
-  `etil.foo`? Wildcard semantics with versioned channels need nailing
-  down.
+- **A-1 — Channel name version-segment format. RESOLVED (Phase 1a,
+  commit 57159fc): integer-only.** No dotted-semver support.
+  `etil.foo.bar.2` is a legal versioned channel; `etil.foo.bar.2.0.0`
+  is not — parsed as four segments, no special version handling.
+  Wildcards (`*` / `**`) match version segments as normal segments.
+  Enforced by `validate_channel_name()` in
+  `include/etil/manifold/channel_name.hpp`.
 
-- **A-2 — EvolveLogger absorption mechanics (Q7, §14).** Answer says
-  "integrate and absorb; mask bits convert to channels then go away."
-  Still to specify: (a) the 17-bit-category → channel-name mapping
-  (e.g., `Engine` → `etil.evolution.engine`, `Substitute` →
-  `etil.evolution.substitute`) and any collisions with existing §8
-  channels like `etil.evolution.fitness`; (b) fate of the four
-  `evolve-log-*` TIL words — replaced, wrapped as sugar, or deleted;
-  (c) disposition of `EvolveLogger::stream()` accessor; (d) phasing —
-  now Phase 1 not Phase 4, but §22.1 still lists Q7 as Phase 2 work.
+- **A-2 — EvolveLogger absorption mechanics.** DEFERRED to a dedicated
+  post-sprint migration. The 105 EvolveLogger call sites across five
+  files need a separate plan covering: (a) the 17-bit-category →
+  channel-name mapping, (b) the fate of the four `evolve-log-*` TIL
+  words (keep as convenience wrappers vs delete and require
+  `channel-publish`), (c) migration sequence (big-bang vs dual-
+  running), and (d) impact on existing benchmark scripts that parse
+  EvolveLogger's per-run files directly.
 
-- **A-3 — spdlog-in-WASM foundation story (Q14, §19.9 + survey doc A
-  §8).** Answer is "replace in WASM — spdlog adds little value in web
-  context." Survey doc A §8.1 positions `src/core/logging.{hpp,cpp}`
-  as the spdlog foundation for the no-direct-stdio migration. Still
-  to specify: does the `logging::` factory become a façade with two
-  backends (spdlog native, console WASM), or is the module entirely
-  WASM-absent with a parallel `manifold::console_sink`-direct path?
-  Affects how the 41 stderr migration lands in a WASM build.
+- **A-3 — spdlog-in-WASM foundation story. RESOLVED (Phase 0, commit
+  52a0913): dual-backend façade.** `src/core/logging.{hpp,cpp}`
+  presents a single public API — `logging::get(name)` returns a
+  `std::shared_ptr<spdlog::logger>` on both backends. Native links
+  spdlog with a rotating file sink + stderr sink for WARN+. WASM
+  (`ETIL_WASM_BUILD`) skips the file sink and relies on Emscripten's
+  built-in stdout/stderr → `console.log`/`console.error` mapping.
+  Callers see the same `->info()` / `->warn()` / `->error()` surface
+  in both builds. The 41 raw-stderr sites from survey doc A were
+  migrated to this façade, not to parallel per-build paths.
 
-- **A-4 — MessageOrigin.hostname format divergence (§18 vs §19.5).**
-  Native fills `hostname` from `gethostname()` (e.g., `etil-host`);
-  browser fills it from `location.origin` (e.g.,
-  `https://etil-org.github.io`). Different schemas in the same field
-  make dedup keys and sort orders mix when a broker carries messages
-  from both contexts. Resolution options: (a) normalize native to
-  `host://etil-host` form; (b) add an `origin_type: {Native, Browser}`
-  discriminator field; (c) accept the divergence and document that
-  consumers must not compare `hostname` across deployments without
-  context-awareness.
+- **A-4 — MessageOrigin.hostname format divergence. RESOLVED
+  (Phase 1a, commit 57159fc): accept divergence; add `origin_type`
+  discriminator.** Native fills `hostname` from `gethostname()`;
+  browser fills it from `location.origin`. Every `MessageOrigin` also
+  carries an `origin_type: {Native, Browser}` enum field so
+  cross-deployment consumers can discriminate without string-parsing
+  hostname. The enum is propagated through broker serialization
+  (§16.5) and exposed in the TIL `channel-origin` introspection word
+  (see A-6).
 
-- **A-5 — Broker-backed subscribers and session scoping (§17,
-  §19.6).** `mcp_sse_out_sink` filters outbound by `session_id` so
-  each MCP client sees only its own session's notifications. A broker
-  sink attached to the same channel fans out unfiltered — a NATS
-  consumer sees every session's messages. Intentional for monitoring
-  dashboards, but a cross-user leak for notification payloads that
-  might contain user-specific data. Resolution needed: should broker
-  sinks default to the same session-filter as SSE sinks, with an
-  explicit `broadcast_all_sessions: true` opt-in for monitor use
-  cases? Or default to the dashboard pattern and require `session_id`
-  tag filters to be added explicitly?
+- **A-5 — Broker-backed subscribers and session scoping.** DEFERRED to
+  Phase 3. Not applicable until broker sinks land — the in-process
+  SSE sinks already filter by `session_id` per §17 and Phase 1b's
+  implementation (commit 3530862). Resolution will accompany the
+  `amqp_sink` / `nats_sink` work in Phase 3: default policy
+  (session-scoped with opt-in broadcast, vs broadcast with opt-in
+  session-scope), the config surface for the override, and audit
+  behaviour when a monitor-style sink receives cross-user payloads.
 
-- **A-6 — `channel-origin` return shape.** Currently declared as
-  triple-return `( -- host-str startup-us session-str )`. A
-  structured-map alternative (`channel-origin-map ( -- map )`) may be
-  more ergonomic for callers that want to pass the origin around as a
-  single value. Low impact; answer at TIL-word-finalization time.
-
-Each of these maps to an issue / task during Phase 1 planning. Default
-recommendations exist in the referenced sections; planning either
-adopts or overrides them with explicit decisions recorded back into
-this document.
+- **A-6 — `channel-origin` return shape. RESOLVED (Phase 2a, commit
+  d80123a): HeapMap with alphanumeric keys.** `channel-origin ( -- map )`
+  returns a single `HeapMap` with keys `host` (string), `startup`
+  (int microseconds), `session` (string), and `origintype` (string:
+  `"native"` or `"browser"`). Three stack items was too much for a
+  single introspection word. The separate
+  `channel-seq ( -- seq )` and
+  `channel-last-published ( -- msg-id-str )` words remain single-
+  value returns per the plan.
 
 ---
 

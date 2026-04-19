@@ -2277,3 +2277,114 @@ s" bytes-length" s" semantic-tags" s" text" s" bytearray" meta! drop
 s" bytes-resize" s" semantic-tags" s" text" s" bytearray" meta! drop
 s" bytes->string" s" semantic-tags" s" text" s" bytearray conversion" meta! drop
 s" string->bytes" s" semantic-tags" s" text" s" bytearray conversion" meta! drop
+
+# --- Manifold: I/O channel pipeline (doc B §21) ---
+
+s" channel-publish" s" description" s" text" s" Publish a message string on a named channel" meta! drop
+s" channel-publish" s" stack-effect" s" text" s" ( msg channel -- )" meta! drop
+s" channel-publish" s" category" s" text" s" manifold" meta! drop
+s" channel-publish" s" semantic-tags" s" text" s" manifold channel io" meta! drop
+
+s" channel-subscribe" s" description" s" text" s" Return a live observable that emits each message on the matching channel pattern" meta! drop
+s" channel-subscribe" s" stack-effect" s" text" s" ( pattern -- observable )" meta! drop
+s" channel-subscribe" s" category" s" text" s" manifold" meta! drop
+
+s" channel-tap-observable" s" description" s" text" s" Alias for channel-subscribe: open an observable tap on a channel pattern" meta! drop
+s" channel-tap-observable" s" stack-effect" s" text" s" ( pattern -- observable )" meta! drop
+s" channel-tap-observable" s" category" s" text" s" manifold" meta! drop
+
+s" channel-route-add" s" description" s" text" s" Install a route whose sink of the given kind receives messages matching pattern. kind is one of null stderr spdlog file ring observable; detail is a sink-specific argument" meta! drop
+s" channel-route-add" s" stack-effect" s" text" s" ( detail kind pattern -- handle )" meta! drop
+s" channel-route-add" s" category" s" text" s" manifold" meta! drop
+
+s" channel-route-remove" s" description" s" text" s" Remove a previously-added route by handle" meta! drop
+s" channel-route-remove" s" stack-effect" s" text" s" ( handle -- )" meta! drop
+s" channel-route-remove" s" category" s" text" s" manifold" meta! drop
+
+s" channel-tap-file" s" description" s" text" s" Shortcut for a route with a file sink that appends messages to path" meta! drop
+s" channel-tap-file" s" stack-effect" s" text" s" ( path pattern -- handle )" meta! drop
+s" channel-tap-file" s" category" s" text" s" manifold" meta! drop
+
+s" channel-list" s" description" s" text" s" Return an array of channel patterns this role can introspect" meta! drop
+s" channel-list" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" channel-list" s" category" s" text" s" manifold" meta! drop
+
+s" channel-list-routes" s" description" s" text" s" Return an array of per-route stats maps (one per registered route)" meta! drop
+s" channel-list-routes" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" channel-list-routes" s" category" s" text" s" manifold" meta! drop
+
+s" channel-origin" s" description" s" text" s" Return a map with keys host startup session origintype identifying this process's message origin" meta! drop
+s" channel-origin" s" stack-effect" s" text" s" ( -- map )" meta! drop
+s" channel-origin" s" category" s" text" s" manifold" meta! drop
+
+s" channel-seq" s" description" s" text" s" Return the next sequence counter value without consuming it" meta! drop
+s" channel-seq" s" stack-effect" s" text" s" ( -- seq )" meta! drop
+s" channel-seq" s" category" s" text" s" manifold" meta! drop
+
+s" channel-last-published" s" description" s" text" s" Return an id string for the most recent publish on this session" meta! drop
+s" channel-last-published" s" stack-effect" s" text" s" ( -- msg-id-str )" meta! drop
+s" channel-last-published" s" category" s" text" s" manifold" meta! drop
+
+s" channel-cycle-stats" s" description" s" text" s" Return a map of aggregate cycle-detection counters (cycles-detected ttl-exhausted echo-dropped static-warnings)" meta! drop
+s" channel-cycle-stats" s" stack-effect" s" text" s" ( -- map )" meta! drop
+s" channel-cycle-stats" s" category" s" text" s" manifold" meta! drop
+
+s" channel-sink-stats" s" description" s" text" s" Return a stats map for one route by handle (accepted-count dropped-count delivery-mode ...)" meta! drop
+s" channel-sink-stats" s" stack-effect" s" text" s" ( handle -- map )" meta! drop
+s" channel-sink-stats" s" category" s" text" s" manifold" meta! drop
+
+s" channel-all-sink-stats" s" description" s" text" s" Snapshot of stats for every registered route" meta! drop
+s" channel-all-sink-stats" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" channel-all-sink-stats" s" category" s" text" s" manifold" meta! drop
+
+s" channel-trace" s" description" s" text" s" Return the current message's route_trace (only meaningful inside a subscription handler)" meta! drop
+s" channel-trace" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" channel-trace" s" category" s" text" s" manifold" meta! drop
+
+s" channel-hops-left" s" description" s" text" s" Return the current message's hops_remaining (only meaningful inside a subscription handler)" meta! drop
+s" channel-hops-left" s" stack-effect" s" text" s" ( -- n )" meta! drop
+s" channel-hops-left" s" category" s" text" s" manifold" meta! drop
+
+s" channel-perm-check" s" description" s" text" s" True if this role may perform action on the given channel pattern. action is one of read write route introspect" meta! drop
+s" channel-perm-check" s" stack-effect" s" text" s" ( action pattern -- bool )" meta! drop
+s" channel-perm-check" s" category" s" text" s" manifold" meta! drop
+
+s" channel-perm-list" s" description" s" text" s" Return an array of maps describing this role's channel grants (pattern actions effect)" meta! drop
+s" channel-perm-list" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" channel-perm-list" s" category" s" text" s" manifold" meta! drop
+
+s" role-grant-channel" s" description" s" text" s" Add a grant of the given actions on pattern to the current session's mutable role. Requires role_admin" meta! drop
+s" role-grant-channel" s" stack-effect" s" text" s" ( actions pattern role-name -- )" meta! drop
+s" role-grant-channel" s" category" s" text" s" manifold" meta! drop
+
+s" role-revoke-channel" s" description" s" text" s" Remove all grants matching pattern from the current session's mutable role. Requires role_admin" meta! drop
+s" role-revoke-channel" s" stack-effect" s" text" s" ( pattern role-name -- )" meta! drop
+s" role-revoke-channel" s" category" s" text" s" manifold" meta! drop
+
+s" role-channel-enable!" s" description" s" text" s" Set the channels_enabled master switch for the current session's mutable role. Requires role_admin" meta! drop
+s" role-channel-enable!" s" stack-effect" s" text" s" ( bool role-name -- )" meta! drop
+s" role-channel-enable!" s" category" s" text" s" manifold" meta! drop
+
+s" role-network-sink!" s" description" s" text" s" Set the channels_network_sink flag (allow UDP/TCP sinks) for the current session's mutable role. Requires role_admin" meta! drop
+s" role-network-sink!" s" stack-effect" s" text" s" ( bool role-name -- )" meta! drop
+s" role-network-sink!" s" category" s" text" s" manifold" meta! drop
+
+s" mcp-on-notification" s" description" s" text" s" Subscribe to inbound MCP notifications matching method-pattern. Returns an observable of messages on etil.mcp.in.notification.<pattern>" meta! drop
+s" mcp-on-notification" s" stack-effect" s" text" s" ( method-pattern -- observable )" meta! drop
+s" mcp-on-notification" s" category" s" text" s" manifold" meta! drop
+
+s" mcp-on-progress" s" description" s" text" s" Subscribe to inbound progress notifications from MCP clients" meta! drop
+s" mcp-on-progress" s" stack-effect" s" text" s" ( -- observable )" meta! drop
+s" mcp-on-progress" s" category" s" text" s" manifold" meta! drop
+
+s" mcp-on-cancelled" s" description" s" text" s" Subscribe to inbound cancellation notifications. Always allowed for the owning session (hard-wired Read)" meta! drop
+s" mcp-on-cancelled" s" stack-effect" s" text" s" ( -- observable )" meta! drop
+s" mcp-on-cancelled" s" category" s" text" s" manifold" meta! drop
+
+s" mcp-on-roots-changed" s" description" s" text" s" Subscribe to inbound notifications/roots/list_changed notifications" meta! drop
+s" mcp-on-roots-changed" s" stack-effect" s" text" s" ( -- observable )" meta! drop
+s" mcp-on-roots-changed" s" category" s" text" s" manifold" meta! drop
+
+s" mcp-on-request" s" description" s" text" s" Subscribe to inbound client-initiated requests matching method-pattern (etil.mcp.in.request subtree; populated in Phase 3+)" meta! drop
+s" mcp-on-request" s" stack-effect" s" text" s" ( method-pattern -- observable )" meta! drop
+s" mcp-on-request" s" category" s" text" s" manifold" meta! drop

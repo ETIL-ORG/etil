@@ -3,6 +3,11 @@
 
 #include "etil/mcp/http_transport.hpp"
 #include "etil/mcp/json_rpc.hpp"
+#include "etil/core/logging.hpp"
+#include "etil/manifold/service.hpp"
+#include "etil/manifold/subject.hpp"
+#include "etil/manifold/sink.hpp"
+#include "etil/manifold/route_spec.hpp"
 
 #ifdef ETIL_JWT_ENABLED
 #include "etil/mcp/auth_config.hpp"
@@ -28,6 +33,11 @@ thread_local std::vector<nlohmann::json> HttpTransport::pending_notifications_;
 // streaming instead of buffering into pending_notifications_.
 namespace {
 thread_local httplib::DataSink* active_sink = nullptr;
+
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.http");
+    return logger;
+}
 }
 
 HttpTransport::HttpTransport(HttpTransportConfig config)
@@ -84,8 +94,8 @@ void HttpTransport::run(MessageHandler handler) {
     handler_ = std::move(handler);
     setup_routes();
 
-    fprintf(stderr, "ETIL MCP server listening on %s:%d\n",
-            config_.host.c_str(), config_.port);
+    log()->info("ETIL MCP server listening on {}:{}",
+                config_.host, config_.port);
 
     server_->listen(config_.host, config_.port);
 }
@@ -95,8 +105,8 @@ void HttpTransport::run(SessionMessageHandler handler, SessionCallbacks callback
     session_callbacks_ = std::move(callbacks);
     setup_session_routes();
 
-    fprintf(stderr, "ETIL MCP server listening on %s:%d (multi-session)\n",
-            config_.host.c_str(), config_.port);
+    log()->info("ETIL MCP server listening on {}:{} (multi-session)",
+                config_.host, config_.port);
 
     server_->listen(config_.host, config_.port);
 }
@@ -361,12 +371,110 @@ void HttpTransport::setup_session_routes() {
         }
     });
 
-    // GET /mcp — SSE endpoint (not yet implemented)
-    server_->Get("/mcp", [](const httplib::Request& /*req*/, httplib::Response& res) {
-        res.status = 405;
-        res.set_header("Allow", "POST, DELETE");
-        res.set_content(R"({"error":"Method Not Allowed: SSE not yet supported"})",
-                        "application/json");
+    // GET /mcp — §17 Phase B long-lived SSE stream. Client connects
+    // with its Mcp-Session-Id and receives etil.mcp.out.notification.**
+    // messages filtered by session as SSE events. Heartbeats every 15s
+    // keep intermediaries from closing the connection. Stream exits
+    // cleanly when the client disconnects (write fails).
+    server_->Get("/mcp", [this](const httplib::Request& req, httplib::Response& res) {
+        res.set_header("Access-Control-Allow-Origin", "*");
+
+        // Auth + session-id checks. GET SSE is only useful after a
+        // POST /mcp initialize has allocated a session.
+        if (!config_.api_key.empty()) {
+            auto auth = req.get_header_value("Authorization");
+            if (!validate_api_key(auth)) {
+                res.status = 401;
+                res.set_content(
+                    R"({"error":"Unauthorized: invalid or missing API key"})",
+                    "application/json");
+                return;
+            }
+        }
+        auto client_session = req.get_header_value("Mcp-Session-Id");
+        if (client_session.empty() ||
+            !session_callbacks_.has_session(client_session)) {
+            res.status = 400;
+            res.set_content(
+                R"({"error":"Missing or unknown Mcp-Session-Id"})",
+                "application/json");
+            return;
+        }
+
+        // ChannelService must be wired for SSE streaming; if absent,
+        // fall back to the legacy 405 so clients don't hang forever
+        // against a server that can't actually publish.
+        auto* channels = session_callbacks_.channels;
+        if (!channels) {
+            res.status = 405;
+            res.set_header("Allow", "POST, DELETE");
+            res.set_content(
+                R"({"error":"GET /mcp SSE requires ChannelService wiring"})",
+                "application/json");
+            return;
+        }
+
+        res.set_header("Cache-Control", "no-cache");
+        res.set_header("X-Accel-Buffering", "no");
+
+        res.set_chunked_content_provider(
+            "text/event-stream",
+            [channels, session_id = client_session]
+            (size_t /*offset*/, httplib::DataSink& sink) -> bool {
+                // Install a per-connection subject route on
+                // etil.mcp.out.notification.** filtered by session_id,
+                // plus etil.mcp.out.log / .progress / .resource.updated
+                // / .tools.list_changed for the richer MCP notification
+                // set. The sink pushes messages onto the subject; the
+                // loop below drains them and writes SSE events.
+                auto subject = std::make_shared<etil::manifold::ChannelSubject>();
+                etil::manifold::RouteSpec spec;
+                spec.channel_pattern = "etil.mcp.out.**";
+                spec.tag_filter["session_id"] = session_id;
+                spec.sink = etil::manifold::make_subject_sink(subject);
+                auto handle = channels->add_route(std::move(spec));
+
+                // Poll cadence: 500ms means heartbeat roughly every
+                // 15s (30 ticks) while giving us prompt detection of
+                // client disconnect via sink.is_writable().
+                int ticks_since_heartbeat = 0;
+                const int kHeartbeatEvery = 30;  // ~15s at 500ms/tick
+                while (true) {
+                    etil::manifold::Message msg;
+                    bool got = subject->pop_wait(msg, /*wait_ms=*/500);
+                    if (!sink.is_writable()) break;
+                    if (got) {
+                        std::string payload;
+                        if (msg.payload.type() == typeid(std::string)) {
+                            try {
+                                payload = std::any_cast<std::string>(msg.payload);
+                            } catch (...) {}
+                        }
+                        // Send the JSON-RPC notification envelope
+                        // synthesized from the channel + payload string.
+                        // emit_notification-produced payloads are raw
+                        // strings; wrap them for MCP clients.
+                        nlohmann::json envelope = {
+                            {"jsonrpc", "2.0"},
+                            {"method", "notifications/message"},
+                            {"params", {{"level", "info"}, {"data", payload}}}
+                        };
+                        std::string event = "data: " + envelope.dump() + "\n\n";
+                        if (!sink.write(event.c_str(), event.size())) break;
+                        ticks_since_heartbeat = 0;
+                    } else if (++ticks_since_heartbeat >= kHeartbeatEvery) {
+                        // Heartbeat comment — SSE-spec way to keep the
+                        // connection open without a fake data event.
+                        const char* hb = ": heartbeat\n\n";
+                        if (!sink.write(hb, std::strlen(hb))) break;
+                        ticks_since_heartbeat = 0;
+                    }
+                }
+                channels->remove_route(handle);
+                sink.done();
+                return true;
+            }
+        );
     });
 
     // DELETE /mcp — terminate session
@@ -756,11 +864,11 @@ std::optional<nlohmann::json> HttpTransport::dispatch(const nlohmann::json& msg)
     try {
         return handler_(msg);
     } catch (const std::exception& e) {
-        fprintf(stderr, "MCP handler exception: %s\n", e.what());
+        log()->error("MCP handler exception: {}", e.what());
         return make_error(nullptr, JsonRpcError::InternalError,
                           std::string("Server error: ") + e.what());
     } catch (...) {
-        fprintf(stderr, "MCP handler unknown exception\n");
+        log()->error("MCP handler unknown exception");
         return make_error(nullptr, JsonRpcError::InternalError,
                           "Unknown internal server error");
     }

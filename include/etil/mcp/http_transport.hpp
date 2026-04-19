@@ -24,6 +24,10 @@ class UserStore;
 class AuditLog;
 }
 
+namespace etil::manifold {
+class ChannelService;
+}
+
 namespace etil::mcp {
 
 // Forward declare McpServer for session-aware handler
@@ -63,6 +67,12 @@ struct SessionCallbacks {
                               const std::string& email)> create_session;
     std::function<void(const std::string&)> destroy_session;
     std::function<bool(const std::string&)> has_session;
+
+    /// Optional — the Manifold channel service for §17 Phase B GET /mcp
+    /// SSE streaming. When set, GET /mcp opens a chunked text/event-stream
+    /// response and subscribes to etil.mcp.out.notification.** filtered by
+    /// the client's session id. Left null, GET /mcp returns 405.
+    etil::manifold::ChannelService* channels = nullptr;
 };
 
 /// HTTP transport for MCP JSON-RPC (Streamable HTTP).

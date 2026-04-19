@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 351u);  // +1: evolve-dag-stats-interval!
+    EXPECT_EQ(dict.concept_count(), 378u);  // +27: Manifold Phase 2 channel-* + mcp-on-* + role-*
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

@@ -1,5 +1,18 @@
+# Manifold library sources (I/O channel pipeline — doc B)
+set(ETIL_MANIFOLD_SOURCES
+    manifold/origin.cpp
+    manifold/channel_name.cpp
+    manifold/rbac.cpp
+    manifold/sinks.cpp
+    manifold/transforms.cpp
+    manifold/subject.cpp
+    manifold/default_service.cpp
+    manifold/til_primitives.cpp
+)
+
 # Core library sources
 set(ETIL_CORE_SOURCES
+    core/logging.cpp
     core/word_impl.cpp
     core/execution_context.cpp
     core/dictionary.cpp
@@ -75,6 +88,7 @@ add_library(etil
     ${ETIL_EVOLUTION_SOURCES}
     ${ETIL_JIT_SOURCES}
     ${ETIL_UTILS_SOURCES}
+    ${ETIL_MANIFOLD_SOURCES}
 )
 
 target_include_directories(etil
@@ -181,6 +195,7 @@ set(ETIL_MCP_SOURCES
     mcp/http_transport.cpp
     mcp/session.cpp
     mcp/mcp_server.cpp
+    mcp/mcp_sse_out_sink.cpp
     mcp/tool_handlers.cpp
     mcp/resource_handlers.cpp
 )

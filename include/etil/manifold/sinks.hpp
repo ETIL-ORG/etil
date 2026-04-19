@@ -1,0 +1,98 @@
+#pragma once
+
+// Copyright (c) 2026 Mark Deazley. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+
+/// Built-in Manifold sink factories.
+///
+/// Phase 1 sinks:
+///   - spdlog_sink       forward to a named spdlog logger (Phase 0 substrate)
+///   - file_sink         direct append to a log file (used by hard-wired Inline routes)
+///   - stderr_sink       bootstrap exception path only (doc A §11.2)
+///   - observable_sink   stub in Phase 1 — full wiring lands in Phase 2
+///   - ring_buffer_sink  bounded in-memory tail (debug/crash context)
+///   - test_capture_sink vector-of-messages collector for unit tests
+///   - null_sink         discards all messages
+
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
+#include "etil/manifold/sink.hpp"
+
+namespace etil::manifold {
+
+/// Forward messages to a named spdlog logger via the Phase 0 facade.
+/// Level selection: tags["level"] ∈ {trace,debug,info,warn,error,critical};
+/// default info. Payload stringification: if payload is std::string it
+/// is used directly, else the message channel is used as a fallback
+/// log line.
+std::shared_ptr<ISink> make_spdlog_sink(std::string logger_name);
+
+/// Append each message as one line to the given file path. Used in
+/// Inline delivery mode for hard-wired audit/security channels. Not a
+/// rotating sink — pair with logrotate externally. Empty payload
+/// formats the channel + tags.
+std::shared_ptr<ISink> make_file_sink(std::string path);
+
+/// Write to stderr. Reserved for the three bootstrap exceptions in
+/// doc A §11.2; not a production sink for normal channels.
+std::shared_ptr<ISink> make_stderr_sink();
+
+/// Discard all messages. Used to disable routes without removing them.
+std::shared_ptr<ISink> make_null_sink();
+
+/// Collect all accepted messages into an internal vector; unit tests
+/// query via captured(). Exposes a richer API than ISink.
+class TestCaptureSink : public ISink {
+public:
+    void accept(const Message& msg) override;
+    void flush() override {}
+
+    std::vector<Message> captured() const;
+    size_t size() const;
+    void clear();
+
+private:
+    mutable std::mutex mu_;
+    std::vector<Message> storage_;
+};
+
+std::shared_ptr<TestCaptureSink> make_test_capture_sink();
+
+/// Bounded in-memory ring. Useful for post-mortem context dumps.
+/// drop_first: oldest entries evicted first (default); drop_last
+/// discards the newest.
+class RingBufferSink : public ISink {
+public:
+    explicit RingBufferSink(size_t capacity, bool drop_first = true);
+
+    void accept(const Message& msg) override;
+    void flush() override {}
+
+    std::vector<Message> snapshot() const;
+    size_t size() const;
+    size_t dropped_count() const;
+    void clear();
+
+private:
+    mutable std::mutex mu_;
+    std::vector<Message> ring_;
+    size_t capacity_;
+    size_t head_ = 0;
+    size_t count_ = 0;
+    size_t dropped_ = 0;
+    bool drop_first_ = true;
+};
+
+std::shared_ptr<RingBufferSink> make_ring_buffer_sink(size_t capacity,
+                                                     bool drop_first = true);
+
+/// Stub observable-sink for Phase 1. Records that the route is
+/// observable-backed; Phase 2 replaces this with a HeapObservable
+/// emitter via ChannelService::observe. Accepting does nothing in
+/// Phase 1 — test_capture_sink is the right choice for Phase 1 tests.
+std::shared_ptr<ISink> make_observable_sink_stub();
+
+} // namespace etil::manifold

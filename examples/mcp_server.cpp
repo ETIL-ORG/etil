@@ -3,6 +3,7 @@
 
 #include "etil/mcp/mcp_server.hpp"
 #include "etil/mcp/http_transport.hpp"
+#include "etil/core/logging.hpp"
 #include "etil/core/version.hpp"
 
 #include <csignal>
@@ -15,15 +16,20 @@ static void print_usage(const char* prog) {
         << "Usage: " << prog << " [OPTIONS]\n"
         << "\n"
         << "Options:\n"
-        << "  --host <addr>    HTTP listen address (default: 0.0.0.0)\n"
-        << "  --port <port>    HTTP port (default: 8080)\n"
-        << "  -h, --help       Print this help and exit\n"
-        << "  -v, --version    Print version and exit\n";
+        << "  --host <addr>      HTTP listen address (default: 0.0.0.0)\n"
+        << "  --port <port>      HTTP port (default: 8080)\n"
+        << "  --log-dir <path>   Log directory (default: ./logs)\n"
+        << "  --log-level <lvl>  trace|debug|info|warn|error|critical|off\n"
+        << "                     (default: info; ETIL_LOG_LEVEL env overrides)\n"
+        << "  -h, --help         Print this help and exit\n"
+        << "  -v, --version      Print version and exit\n";
 }
 
 int main(int argc, char* argv[]) {
     std::string host = "0.0.0.0";
     int port = 8080;
+    std::string log_dir = "./logs";
+    std::string log_level_str = "info";
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--host") == 0) {
@@ -38,6 +44,20 @@ int main(int argc, char* argv[]) {
                 port = std::atoi(argv[++i]);
             } else {
                 std::cerr << "--port requires a number argument\n";
+                return 1;
+            }
+        } else if (std::strcmp(argv[i], "--log-dir") == 0) {
+            if (i + 1 < argc) {
+                log_dir = argv[++i];
+            } else {
+                std::cerr << "--log-dir requires a path argument\n";
+                return 1;
+            }
+        } else if (std::strcmp(argv[i], "--log-level") == 0) {
+            if (i + 1 < argc) {
+                log_level_str = argv[++i];
+            } else {
+                std::cerr << "--log-level requires a level argument\n";
                 return 1;
             }
         } else if (std::strcmp(argv[i], "-h") == 0 ||
@@ -59,6 +79,11 @@ int main(int argc, char* argv[]) {
     // on write instead of killing the process silently.
     signal(SIGPIPE, SIG_IGN);
 
+    etil::core::logging::init(
+        log_dir,
+        etil::core::logging::level_from_string(log_level_str));
+    auto startup_log = etil::core::logging::get("etil.mcp");
+
     try {
         etil::mcp::McpServer server;
 
@@ -70,18 +95,21 @@ int main(int argc, char* argv[]) {
         const char* api_key_env = std::getenv("ETIL_MCP_API_KEY");
         if (api_key_env && api_key_env[0] != '\0') {
             config.api_key = api_key_env;
-            std::cerr << "API key authentication enabled\n";
+            startup_log->info("API key authentication enabled");
         }
 
         etil::mcp::HttpTransport transport(config);
         server.run_http(transport);
     } catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << "\n";
+        startup_log->critical("Fatal error: {}", e.what());
+        etil::core::logging::shutdown();
         return 1;
     } catch (...) {
-        std::cerr << "Fatal unknown error\n";
+        startup_log->critical("Fatal unknown error");
+        etil::core::logging::shutdown();
         return 1;
     }
 
+    etil::core::logging::shutdown();
     return 0;
 }

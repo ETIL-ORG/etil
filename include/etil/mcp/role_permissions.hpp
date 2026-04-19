@@ -8,9 +8,11 @@
 #include <string>
 #include <vector>
 
+#include "etil/manifold/channel_action.hpp"
+
 namespace etil::mcp {
 
-/// Per-role permission set covering 6 resource domains.
+/// Per-role permission set covering 7 resource domains.
 ///
 /// Plain data struct — no #ifdef guards, no JWT dependencies.
 /// Standalone mode (permissions pointer is nullptr) means "all permitted".
@@ -50,6 +52,28 @@ struct RolePermissions {
     // --- Database (MongoDB) ---
     bool mongo_access = false;
     int  mongo_query_quota = 1000;  // queries per session
+
+    // --- Channels (Manifold I/O pipeline) ---
+    // See docs/claude-design/20260418B-IO-Channel-Pipeline-Architecture.md §15
+    bool channels_enabled = false;              // primary on/off master switch
+    std::vector<etil::manifold::ChannelGrant> channel_grants;
+    int  channel_publish_quota = 1000;          // messages published per session
+    int  channel_subscribe_quota = 10;          // concurrent subscriptions per session
+    bool channels_route_admin = false;          // add/remove routes (dangerous)
+    bool channels_network_sink = false;         // attach udp/tcp sinks (very dangerous)
+
+    // --- MCP SSE inbound (§17.4) ---
+    // Gate which inbound client notification types a session may subscribe
+    // to via mcp-on-* TIL words. receive_cancelled defaults true so
+    // cancellation is always honored unless explicitly disabled (and
+    // even then, the hard-wired etil.mcp.in.cancelled Read bypass in
+    // kHardwiredChannels ensures the session receives its own
+    // cancellations).
+    bool receive_client_notification = false;   // etil.mcp.in.notification.**
+    bool receive_progress            = false;   // etil.mcp.in.progress
+    bool receive_cancelled           = true;    // etil.mcp.in.cancelled
+    bool receive_roots_changed       = false;   // etil.mcp.in.roots.changed
+    int  mcp_subscribe_quota         = 10;      // concurrent mcp-on-* subscriptions
 };
 
 } // namespace etil::mcp

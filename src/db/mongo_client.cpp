@@ -5,6 +5,8 @@
 
 #include "etil/db/mongo_client.hpp"
 
+#include "etil/core/logging.hpp"
+
 #include <bsoncxx/builder/basic/document.hpp>
 #include <bsoncxx/builder/basic/kvp.hpp>
 #include <bsoncxx/json.hpp>
@@ -41,6 +43,11 @@ void ensure_instance() {
     std::call_once(instance_flag, [] {
         static mongocxx::instance inst{};
     });
+}
+
+auto& log() {
+    static auto logger = etil::core::logging::get("etil.db");
+    return logger;
 }
 } // namespace
 
@@ -122,12 +129,10 @@ MongoClientConfig MongoConnectionsConfig::resolve() {
         if (config_path[0] != '\0') {
             try {
                 cfg = from_file(config_path);
-                fprintf(stderr, "MongoDB config loaded from: %s\n",
-                        config_path);
+                log()->info("MongoDB config loaded from: {}", config_path);
             } catch (const std::exception& e) {
-                fprintf(stderr, "Warning: failed to load MongoDB config '%s': "
-                                "%s\n",
-                        config_path, e.what());
+                log()->warn("failed to load MongoDB config '{}': {}",
+                            config_path, e.what());
             }
         }
     }
@@ -179,11 +184,10 @@ bool MongoClient::connect(const std::string& uri, const std::string& db_name) {
         auto client = impl_->pool->acquire();
         (void)impl_->get_db(client);
 
-        fprintf(stderr, "MongoDB connected: %s (database: %s)\n",
-                uri.c_str(), db_name.c_str());
+        log()->info("MongoDB connected: {} (database: {})", uri, db_name);
         return true;
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB connection failed: %s\n", e.what());
+        log()->error("MongoDB connection failed: {}", e.what());
         return false;
     }
 }
@@ -208,7 +212,7 @@ void MongoClient::ensure_unique_index(const std::string& collection,
         opts.unique(true);
         db[collection].create_index(index_doc.view(), opts);
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB ensure_unique_index error: %s\n", e.what());
+        log()->error("MongoDB ensure_unique_index error: {}", e.what());
     }
 }
 
@@ -225,7 +229,7 @@ void MongoClient::ensure_ttl_index(const std::string& collection,
         opts.expire_after(std::chrono::seconds(expire_seconds));
         db[collection].create_index(index_doc.view(), opts);
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB ensure_ttl_index error: %s\n", e.what());
+        log()->error("MongoDB ensure_ttl_index error: {}", e.what());
     }
 }
 
@@ -263,10 +267,10 @@ std::optional<std::string> MongoClient::find(const std::string& collection,
         result += "]";
         return result;
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB find error: %s\n", e.what());
+        log()->error("MongoDB find error: {}", e.what());
         return std::nullopt;
     } catch (const std::invalid_argument& e) {
-        fprintf(stderr, "MongoDB find JSON error: %s\n", e.what());
+        log()->error("MongoDB find JSON error: {}", e.what());
         return std::nullopt;
     }
 }
@@ -289,10 +293,10 @@ int64_t MongoClient::count(const std::string& collection,
         return static_cast<int64_t>(
             db[collection].count_documents(filter, count_opts));
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB count error: %s\n", e.what());
+        log()->error("MongoDB count error: {}", e.what());
         return -1;
     } catch (const std::invalid_argument& e) {
-        fprintf(stderr, "MongoDB count JSON error: %s\n", e.what());
+        log()->error("MongoDB count JSON error: {}", e.what());
         return -1;
     }
 }
@@ -311,10 +315,10 @@ std::optional<std::string> MongoClient::insert(const std::string& collection,
         }
         return std::nullopt;
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB insert error: %s\n", e.what());
+        log()->error("MongoDB insert error: {}", e.what());
         return std::nullopt;
     } catch (const std::invalid_argument& e) {
-        fprintf(stderr, "MongoDB insert JSON error: %s\n", e.what());
+        log()->error("MongoDB insert JSON error: {}", e.what());
         return std::nullopt;
     }
 }
@@ -340,10 +344,10 @@ int64_t MongoClient::update(const std::string& collection,
         }
         return -1;
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB update error: %s\n", e.what());
+        log()->error("MongoDB update error: {}", e.what());
         return -1;
     } catch (const std::invalid_argument& e) {
-        fprintf(stderr, "MongoDB update JSON error: %s\n", e.what());
+        log()->error("MongoDB update JSON error: {}", e.what());
         return -1;
     }
 }
@@ -366,10 +370,10 @@ int64_t MongoClient::remove(const std::string& collection,
         }
         return -1;
     } catch (const mongocxx::exception& e) {
-        fprintf(stderr, "MongoDB delete error: %s\n", e.what());
+        log()->error("MongoDB delete error: {}", e.what());
         return -1;
     } catch (const std::invalid_argument& e) {
-        fprintf(stderr, "MongoDB delete JSON error: %s\n", e.what());
+        log()->error("MongoDB delete JSON error: {}", e.what());
         return -1;
     }
 }

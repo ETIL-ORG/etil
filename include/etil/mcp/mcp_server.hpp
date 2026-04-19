@@ -6,6 +6,7 @@
 
 #include "etil/core/dictionary.hpp"
 #include "etil/core/interpreter.hpp"
+#include "etil/manifold/route_spec.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -20,6 +21,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+namespace etil::manifold { class ChannelService; }
 
 namespace etil::db { class MongoClient; }
 namespace etil::aaa {
@@ -214,6 +217,36 @@ public:
     /// Generate a new UUID v4 session ID.
     static std::string generate_session_id();
 
+    /// Access the Manifold channel service used for outbound MCP
+    /// notifications (§17 Phase A). Tests may attach additional routes
+    /// to observe the outbound traffic.
+    etil::manifold::ChannelService* channels() { return channels_.get(); }
+
+    /// Bridge method for the Manifold SSE sink (§17 Phase A). Builds
+    /// and sends a `notifications/message` over the active transport.
+    /// Also exposed as a legacy API for code that still calls it
+    /// directly.
+    void emit_notification(const std::string& msg);
+
+    /// Bridge method for the Manifold SSE sink — sends to all sessions
+    /// of the given user. Returns true if at least one session matched.
+    bool send_targeted_notification(const std::string& user_id,
+                                    const std::string& msg);
+
+    /// §17 Phase B — publish an inbound client notification onto the
+    /// appropriate etil.mcp.in.* channel. Channel is derived from the
+    /// JSON-RPC method name:
+    ///   notifications/progress            → etil.mcp.in.progress
+    ///   notifications/cancelled           → etil.mcp.in.cancelled
+    ///   notifications/roots/list_changed  → etil.mcp.in.roots.changed
+    ///   notifications/initialized         → etil.mcp.in.initialized
+    ///   notifications/<other>             → etil.mcp.in.notification.<other>
+    /// The payload is the JSON-encoded params (string); the Message's
+    /// session_id tag carries the current session so subscribers can
+    /// filter. No-op if channels_ is null.
+    void publish_inbound_notification(const std::string& method,
+                                      const nlohmann::json& params);
+
 private:
     // Protocol handlers
     nlohmann::json handle_initialize(const nlohmann::json& id,
@@ -275,14 +308,6 @@ private:
     nlohmann::json resource_stack(const std::string& uri);
     nlohmann::json resource_session_stats(const std::string& uri);
 
-    // Emit a real-time MCP notification to the client.
-    void emit_notification(const std::string& msg);
-
-    // Send a targeted notification to all sessions of a specific user.
-    // Returns true if at least one session was found and notified.
-    bool send_targeted_notification(const std::string& user_id,
-                                    const std::string& msg);
-
     // Compute the effective idle timeout for a session.
     // Uses per-role config if available, else falls back to SESSION_IDLE_TIMEOUT.
     static std::chrono::steady_clock::duration effective_timeout(const Session& s);
@@ -333,6 +358,12 @@ private:
 
     // Shared state
     class HttpTransport* transport_ = nullptr;
+
+    // Manifold channel service for outbound SSE notifications (§17 Phase A).
+    // Route registered in the constructor on etil.mcp.out.notification.**
+    // with a sink that bridges to transport_->send via emit_notification.
+    std::shared_ptr<etil::manifold::ChannelService> channels_;
+    etil::manifold::RouteHandle sse_out_route_handle_;
 
     // Registries (shared across all sessions)
     std::vector<ToolDef> tools_;
