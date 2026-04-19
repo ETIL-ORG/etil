@@ -262,6 +262,52 @@ custom agents, or any MCP client.
   long-running commands (chunked transfer encoding via `set_chunked_content_provider`)
 - **Per-session profiling** — CPU time, wall time, RSS tracking, dictionary/stack metrics
 
+### Manifold — I/O Channel Pipeline
+
+Named-channel dataflow substrate providing multi-source → multi-sink
+routing with composable transforms, message-identity tuples, cycle
+detection, and RBAC as a seventh `RolePermissions` domain. Every
+diagnostic, notification, and outbound/inbound SSE event flows through
+this substrate; producers call `channels->publish(msg)`, routes
+dispatch to sinks.
+
+- **27 new TIL words** (`channel-publish`, `channel-subscribe`,
+  `channel-route-add`/`-remove`, `channel-tap-file`/`-tap-observable`,
+  `channel-list`/`-list-routes`, `channel-origin`/`-seq`/
+  `-last-published`, `channel-cycle-stats`/`-sink-stats`/
+  `-all-sink-stats`/`-trace`/`-hops-left`, `channel-perm-check`/
+  `-perm-list`, 5 `mcp-on-*` inbound convenience words, 4
+  `role-grant-channel` / `role-revoke-channel` /
+  `role-channel-enable!` / `role-network-sink!` admin words).
+- **Named spdlog loggers** — `etil.mcp`, `etil.http`, `etil.db`,
+  `etil.aaa`, `etil.oauth`, `etil.session`, `etil.dict`,
+  `etil.manifold`. All 41 raw-stderr sites from the Phase 0 audit
+  migrated to the named-logger façade; `scripts/check-logging-policy.sh`
+  enforces the no-direct-stdio rule in src/ and include/.
+- **Dual-backend logging** — native uses spdlog (rotating file sink +
+  stderr for WARN+); WASM skips the file sink (Emscripten maps
+  stdout/stderr to `console.log`/`console.error`).
+- **Hard-wired channels** — `etil.aaa.audit.**`, `etil.security.**`,
+  `etil.system.bootstrap.**`, `etil.logging.error` are Write
+  hard-wired with inline delivery (never silenced, never buffered).
+  `etil.mcp.in.cancelled` is Read hard-wired so cancellation
+  always reaches the owning session.
+- **Outbound MCP SSE** — `sys-notification` / `user-notification`
+  publish onto `etil.mcp.out.notification.{system,user}`; per-session
+  sink bridges to the HTTP transport. TIL signatures unchanged.
+- **GET /mcp SSE endpoint** — long-lived stream filtered per session,
+  replacing the earlier "not yet supported" stub.
+- **Inbound MCP SSE** — POST /mcp `notifications/*` methods publish
+  onto `etil.mcp.in.progress` / `.cancelled` / `.roots.changed` /
+  `.initialized` / `.notification.<tail>`. TIL code subscribes via
+  `mcp-on-progress` / `mcp-on-cancelled` / `mcp-on-roots-changed` /
+  `mcp-on-notification` / `mcp-on-request`.
+
+See the design docs under `docs/claude-design/`:
+`20260418A-Logging-Infrastructure-Survey.md`,
+`20260418B-IO-Channel-Pipeline-Architecture.md`,
+`20260418C-Manifold-Phase-0-1-2-Implementation-Plan.md`.
+
 ### MCP Client TUI
 
 Interactive terminal UI in the separate [`etil-tui`](https://github.com/ETIL-ORG/etil-tui)
