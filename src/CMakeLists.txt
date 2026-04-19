@@ -12,6 +12,7 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/codec_resolver.cpp
     manifold/broker_sink.cpp
     manifold/nats_sink.cpp
+    manifold/amqp_sink.cpp
 )
 
 # Core library sources

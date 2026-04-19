@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 380u);  // +2: Manifold Phase 3b channel-tap-nats + channel-session-hmac
+    EXPECT_EQ(dict.concept_count(), 381u);  // +3 in Phase 3b/3c: channel-tap-{nats,amqp} + channel-session-hmac
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

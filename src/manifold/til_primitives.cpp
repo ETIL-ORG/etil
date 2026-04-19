@@ -24,6 +24,7 @@
 #include "etil/core/heap_string.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/word_impl.hpp"
+#include "etil/manifold/amqp_sink.hpp"
 #include "etil/manifold/channel_action.hpp"
 #include "etil/manifold/channel_name.hpp"
 #include "etil/manifold/codec_resolver.hpp"
@@ -734,6 +735,59 @@ bool prim_channel_tap_nats(ExecutionContext& ctx) {
     return true;
 }
 
+// --- channel-tap-amqp ( url codec pattern -- handle ) -----------------------
+//
+// AMQP 1.0 parallel of channel-tap-nats. Same codec parameter
+// semantics, same RBAC gates. Plan doc 20260419A §Phase 3c.
+
+bool prim_channel_tap_amqp(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string codec = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, pattern); return false; }
+    std::string url = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, codec); push_string(ctx, pattern); return false; }
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-tap-amqp: no channel service\n";
+        return false;
+    }
+
+    auto codec_xform = resolve_codec(codec);
+    if (!codec_xform) {
+        ctx.err() << "Error: channel-tap-amqp: unknown codec '"
+                  << codec << "' (use json|msgpack|cbor|raw)\n";
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    BrokerSinkConfig cfg;
+    cfg.broker_url = std::move(url);
+    cfg.codec = codec.empty() ? std::string("json") : codec;
+    auto channels_sp = svc->shared_from_this();
+    auto sink = make_amqp_sink(std::move(cfg),
+                               std::weak_ptr<ChannelService>(channels_sp));
+    if (!sink) {
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    RouteSpec spec;
+    spec.channel_pattern = std::move(pattern);
+    spec.transforms.push_back(std::move(codec_xform));
+    spec.sink = std::move(sink);
+
+    auto h = svc->add_route(std::move(spec), ctx.permissions());
+    if (!h.valid()) {
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+    ctx.data_stack().push(Value(static_cast<int64_t>(h.id)));
+    return true;
+}
+
 // --- channel-session-hmac ( session-str -- hmac-str ) -----------------------
 //
 // Compute the Session-Hmac token the broker sinks put on outbound
@@ -779,6 +833,10 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
 
     dict.register_word("channel-tap-nats",
         make_primitive("channel-tap-nats", prim_channel_tap_nats,
+            {T::String, T::String, T::String}, {T::Integer}));
+
+    dict.register_word("channel-tap-amqp",
+        make_primitive("channel-tap-amqp", prim_channel_tap_amqp,
             {T::String, T::String, T::String}, {T::Integer}));
 
     dict.register_word("channel-session-hmac",
