@@ -25,7 +25,7 @@
 networks:
   etil-net:
     name: etil-net
-    driver: bridge
+    external: true
 
 volumes:
   etil-sessions:

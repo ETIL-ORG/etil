@@ -229,10 +229,12 @@ if [ "$LOCAL_DEPLOY" = true ]; then
         echo "Env file keys (values masked):"
         sed 's/=.*/=***/' "$LOCAL_DEPLOY_ENV"
 
-        # Ensure external volumes exist before compose up (named volumes in
-        # the compose file are declared external: true).
+        # Ensure external volumes + network exist before compose up —
+        # everything marked `external: true` in the compose file must be
+        # pre-created; compose won't manage their lifecycle.
         docker volume create etil-sessions 2>/dev/null || true
         docker volume create etil-library 2>/dev/null || true
+        docker network create etil-net 2>/dev/null || true
 
         $DOCKER_COMPOSE -f "$COMPOSE_FILE_LOCAL" --env-file "$LOCAL_DEPLOY_ENV" up -d
         echo "$DOCKER_COMPOSE up -d completed"
@@ -343,9 +345,10 @@ else
     echo "WARNING: Could not parse image ID from load output — tags may be from save"
 fi
 
-echo "--- Ensuring external volumes exist ---"
+echo "--- Ensuring external volumes + network exist ---"
 docker volume create etil-sessions 2>/dev/null || true
 docker volume create etil-library 2>/dev/null || true
+docker network create etil-net 2>/dev/null || true
 
 echo "--- Building env file for compose ---"
 rm -f "\$DEPLOY_ENV_FILE"
