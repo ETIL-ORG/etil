@@ -33,6 +33,10 @@ LOCAL_TARBALL="/tmp/etil-mcp-deploy.tar.gz"
 REMOTE_TARBALL="/tmp/etil-mcp-deploy.tar.gz"
 REMOTE_ENV_FILE="/tmp/etil-deploy-env"
 ENV_FALLBACK="$ETIL_PROJECT_DIR/deploy/production/.env"
+COMPOSE_FILE_LOCAL="$ETIL_PROJECT_DIR/deploy/production/docker-compose.prod.yml"
+REMOTE_COMPOSE_FILE="/tmp/etil-docker-compose.prod.yml"
+LOCAL_DEPLOY_ENV="/tmp/etil-compose-deploy.env"
+REMOTE_DEPLOY_ENV="/tmp/etil-compose-deploy.env"
 START_TIME=$SECONDS
 
 # --- Parse args ---
@@ -99,10 +103,10 @@ cleanup() {
     rm -f "$LOCAL_TARBALL"
     rm -rf "$ETIL_PROJECT_DIR/.docker-stage"
     if [ "$DRY_RUN" = false ] && [ "$LOCAL_DEPLOY" = false ]; then
-        $SSH_CMD "rm -f $REMOTE_TARBALL $REMOTE_ENV_FILE /tmp/etil-deploy-env-final" 2>/dev/null || true
+        $SSH_CMD "rm -f $REMOTE_TARBALL $REMOTE_ENV_FILE $REMOTE_COMPOSE_FILE $REMOTE_DEPLOY_ENV" 2>/dev/null || true
     fi
     if [ "$LOCAL_DEPLOY" = true ]; then
-        rm -f /tmp/etil-deploy-env /tmp/etil-deploy-env-final 2>/dev/null || true
+        rm -f "$LOCAL_DEPLOY_ENV" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
@@ -172,74 +176,53 @@ echo ""
 
 if [ "$LOCAL_DEPLOY" = true ]; then
     # --- Local deploy: image is already on this host's Docker daemon ---
-    echo "=== Local deploy: restarting container ==="
+    echo "=== Local deploy: docker compose up -d ==="
     if [ "$DRY_RUN" = true ]; then
-        echo "[dry-run] docker stop + rm + run locally"
+        echo "[dry-run] write $LOCAL_DEPLOY_ENV, docker compose -f $COMPOSE_FILE_LOCAL up -d"
     else
-        # Extract env vars from running container
-        ENV_FILE="/tmp/etil-deploy-env"
-        DEPLOY_ENV_FILE="/tmp/etil-deploy-env-final"
-        rm -f "$ENV_FILE" "$DEPLOY_ENV_FILE"
+        # Build deploy env file from (in order of precedence):
+        #   1. running container's existing ETIL_* env (preserves runtime state)
+        #   2. on-disk fallback .env in deploy/production/.env
+        #
+        # Host-specific paths (oauth dir, mongo cert paths, container mount
+        # points, etc.) live ONLY in the fallback .env — this script never
+        # hardcodes them. Required vars are enumerated in .env.example.
+        # `docker compose up -d` uses ${VAR:?} syntax and will fail loudly
+        # if any required var is missing from the merged env file.
+        rm -f "$LOCAL_DEPLOY_ENV"
 
         if docker inspect "$ETIL_CONTAINER_NAME" >/dev/null 2>&1; then
             docker inspect "$ETIL_CONTAINER_NAME" --format '{{range .Config.Env}}{{println .}}{{end}}' \
-                | grep '^ETIL_' > "$ENV_FILE" 2>/dev/null || true
+                | grep '^ETIL_' > "$LOCAL_DEPLOY_ENV" 2>/dev/null || true
             echo "Env vars extracted from running container"
-        elif [ -f "$ENV_FALLBACK" ]; then
-            grep '^ETIL_' "$ENV_FALLBACK" > "$ENV_FILE" 2>/dev/null || true
-            echo "Env vars loaded from fallback .env"
         else
-            touch "$ENV_FILE"
-            echo "WARNING: No env vars found"
+            touch "$LOCAL_DEPLOY_ENV"
         fi
 
-        cp "$ENV_FILE" "$DEPLOY_ENV_FILE"
-
-        # Ensure required env vars
-        grep -q "ETIL_SESSIONS_DIR" "$DEPLOY_ENV_FILE" || echo "ETIL_SESSIONS_DIR=/data/sessions" >> "$DEPLOY_ENV_FILE"
-        grep -q "ETIL_LIBRARY_DIR" "$DEPLOY_ENV_FILE" || echo "ETIL_LIBRARY_DIR=/data/library" >> "$DEPLOY_ENV_FILE"
-        if grep -q "ETIL_AUTH_CONFIG" "$DEPLOY_ENV_FILE"; then
-            sed -i 's|^ETIL_AUTH_CONFIG=.*|ETIL_AUTH_CONFIG=/etc/etil|' "$DEPLOY_ENV_FILE"
-        else
-            echo "ETIL_AUTH_CONFIG=/etc/etil" >> "$DEPLOY_ENV_FILE"
+        # Merge fallback .env entries for any keys the running container
+        # didn't expose (paths, GIDs, etc.).
+        if [ -f "$ENV_FALLBACK" ]; then
+            while IFS='=' read -r key _val; do
+                [ -z "$key" ] && continue
+                case "$key" in \#*) continue ;; esac
+                if ! grep -q "^${key}=" "$LOCAL_DEPLOY_ENV"; then
+                    grep "^${key}=" "$ENV_FALLBACK" >> "$LOCAL_DEPLOY_ENV" || true
+                fi
+            done < <(grep '^ETIL_' "$ENV_FALLBACK" || true)
+            echo "Env vars merged from $ENV_FALLBACK"
         fi
-        if ! grep -q "ETIL_MONGODB_URI" "$DEPLOY_ENV_FILE"; then
-            if [ -f /opt/mongodb/etil-uri ]; then
-                echo "ETIL_MONGODB_URI=$(cat /opt/mongodb/etil-uri)" >> "$DEPLOY_ENV_FILE"
-            else
-                echo "ETIL_MONGODB_URI=mongodb://host.docker.internal:27017" >> "$DEPLOY_ENV_FILE"
-            fi
-        fi
-        grep -q "ETIL_MONGODB_DATABASE" "$DEPLOY_ENV_FILE" || echo "ETIL_MONGODB_DATABASE=etil" >> "$DEPLOY_ENV_FILE"
 
-        echo "Env file contents (values masked):"
-        sed 's/=.*/=***/' "$DEPLOY_ENV_FILE"
+        chmod 600 "$LOCAL_DEPLOY_ENV"
+        echo "Env file keys (values masked):"
+        sed 's/=.*/=***/' "$LOCAL_DEPLOY_ENV"
 
-        docker stop "$ETIL_CONTAINER_NAME" 2>/dev/null || true
-        docker rm "$ETIL_CONTAINER_NAME" 2>/dev/null || true
+        # Ensure external volumes exist before compose up (named volumes in
+        # the compose file are declared external: true).
         docker volume create etil-sessions 2>/dev/null || true
         docker volume create etil-library 2>/dev/null || true
 
-        docker run -d --name "$ETIL_CONTAINER_NAME" --restart unless-stopped \
-            --read-only --security-opt no-new-privileges:true \
-            --tmpfs /tmp:size=10M \
-            -p 127.0.0.1:8080:8080 \
-            --add-host host.docker.internal:host-gateway \
-            -v etil-sessions:/data/sessions \
-            -v etil-library:/data/library:ro \
-            -v /opt/etil/oauth:/etc/etil \
-            -v /opt/mongodb/client-etil.pem:/etc/etil-mongo/client-etil.pem:ro \
-            -v /opt/mongodb/ca.pem:/etc/etil-mongo/ca.pem:ro \
-            --group-add "${ETIL_CERT_GID:-1006}" \
-            --group-add "${ETIL_MONGO_GID:-110}" \
-            --memory 512m --memory-swap 512m \
-            --cpus 1.0 --pids-limit 50 \
-            --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \
-            --env-file "$DEPLOY_ENV_FILE" \
-            "$ETIL_IMAGE_NAME:latest" --host 0.0.0.0 --port 8080
-
-        rm -f "$ENV_FILE" "$DEPLOY_ENV_FILE"
-        echo "Container started"
+        docker compose -f "$COMPOSE_FILE_LOCAL" --env-file "$LOCAL_DEPLOY_ENV" up -d
+        echo "docker compose up -d completed"
     fi
     echo ""
 else
@@ -260,9 +243,11 @@ else
     echo "=== Transferring to production server ==="
     if [ "$DRY_RUN" = true ]; then
         echo "[dry-run] scp $LOCAL_TARBALL production server:$REMOTE_TARBALL"
+        echo "[dry-run] scp $COMPOSE_FILE_LOCAL production server:$REMOTE_COMPOSE_FILE"
     else
         $SCP_CMD "$LOCAL_TARBALL" "$ETIL_SSH_HOST:$REMOTE_TARBALL"
-        echo "Transfer complete"
+        $SCP_CMD "$COMPOSE_FILE_LOCAL" "$ETIL_SSH_HOST:$REMOTE_COMPOSE_FILE"
+        echo "Transfer complete (image + compose file)"
     fi
     echo ""
 
@@ -322,6 +307,8 @@ IMAGE="$ETIL_IMAGE_NAME"
 CONTAINER="$ETIL_CONTAINER_NAME"
 ENV_FILE="$REMOTE_ENV_FILE"
 TARBALL="$REMOTE_TARBALL"
+COMPOSE_FILE="$REMOTE_COMPOSE_FILE"
+DEPLOY_ENV_FILE="$REMOTE_DEPLOY_ENV"
 
 echo "--- Loading image ---"
 LOAD_OUTPUT=\$(docker load < "\$TARBALL" 2>&1)
@@ -343,66 +330,33 @@ else
     echo "WARNING: Could not parse image ID from load output — tags may be from save"
 fi
 
-echo "--- Stopping old container ---"
-docker stop "\$CONTAINER" 2>/dev/null || true
-docker rm "\$CONTAINER" 2>/dev/null || true
-
-echo "--- Creating volumes ---"
+echo "--- Ensuring external volumes exist ---"
 docker volume create etil-sessions 2>/dev/null || true
 docker volume create etil-library 2>/dev/null || true
 
-echo "--- Building env file for container ---"
-DEPLOY_ENV_FILE="/tmp/etil-deploy-env-final"
+echo "--- Building env file for compose ---"
 rm -f "\$DEPLOY_ENV_FILE"
 
+# Seed from whatever the previous container had; on remote this was
+# already gathered via the "Extracting env vars" step above and
+# uploaded to \$ENV_FILE. Host-specific paths are NOT backfilled here;
+# they must be present in the operator-maintained deploy/production/.env
+# on the target server. `docker compose` \${VAR:?} references will fail
+# loudly if any required var is missing.
 if [ -f "\$ENV_FILE" ]; then
     cp "\$ENV_FILE" "\$DEPLOY_ENV_FILE"
 else
     touch "\$DEPLOY_ENV_FILE"
 fi
 
-grep -q "ETIL_SESSIONS_DIR" "\$DEPLOY_ENV_FILE" || echo "ETIL_SESSIONS_DIR=/data/sessions" >> "\$DEPLOY_ENV_FILE"
-grep -q "ETIL_LIBRARY_DIR" "\$DEPLOY_ENV_FILE" || echo "ETIL_LIBRARY_DIR=/data/library" >> "\$DEPLOY_ENV_FILE"
-if grep -q "ETIL_AUTH_CONFIG" "\$DEPLOY_ENV_FILE"; then
-    sed -i 's|^ETIL_AUTH_CONFIG=.*|ETIL_AUTH_CONFIG=/etc/etil|' "\$DEPLOY_ENV_FILE"
-else
-    echo "ETIL_AUTH_CONFIG=/etc/etil" >> "\$DEPLOY_ENV_FILE"
-fi
-
-if ! grep -q "ETIL_MONGODB_URI" "\$DEPLOY_ENV_FILE"; then
-    if [ -f /opt/mongodb/etil-uri ]; then
-        echo "ETIL_MONGODB_URI=\$(cat /opt/mongodb/etil-uri)" >> "\$DEPLOY_ENV_FILE"
-    else
-        echo "ETIL_MONGODB_URI=mongodb://host.docker.internal:27017" >> "\$DEPLOY_ENV_FILE"
-    fi
-fi
-grep -q "ETIL_MONGODB_DATABASE" "\$DEPLOY_ENV_FILE" || echo "ETIL_MONGODB_DATABASE=etil" >> "\$DEPLOY_ENV_FILE"
-
-echo "Env file contents (values masked):"
+chmod 600 "\$DEPLOY_ENV_FILE"
+echo "Env file keys (values masked):"
 sed 's/=.*/=***/' "\$DEPLOY_ENV_FILE"
 
-echo "--- Starting container ---"
-docker run -d --name "\$CONTAINER" --restart unless-stopped \
-    --read-only --security-opt no-new-privileges:true \
-    --tmpfs /tmp:size=10M \
-    -p 127.0.0.1:8080:8080 \
-    --add-host host.docker.internal:host-gateway \
-    -v etil-sessions:/data/sessions \
-    -v etil-library:/data/library:ro \
-    -v /opt/etil/oauth:/etc/etil \
-    -v /opt/mongodb/client-etil.pem:/etc/etil-mongo/client-etil.pem:ro \
-    -v /opt/mongodb/ca.pem:/etc/etil-mongo/ca.pem:ro \
-    --group-add "${ETIL_CERT_GID:-1006}" \
-    --group-add "${ETIL_MONGO_GID:-110}" \
-    --memory 512m --memory-swap 512m \
-    --cpus 1.0 --pids-limit 50 \
-    --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \
-    --env-file "\$DEPLOY_ENV_FILE" \
-    "\$IMAGE:latest" --host 0.0.0.0 --port 8080
+echo "--- docker compose up -d ---"
+docker compose -f "\$COMPOSE_FILE" --env-file "\$DEPLOY_ENV_FILE" up -d
 
-rm -f "\$DEPLOY_ENV_FILE"
-
-echo "Container started"
+echo "docker compose up -d completed"
 REMOTE_DEPLOY
     fi
     echo ""
