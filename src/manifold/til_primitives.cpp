@@ -10,9 +10,11 @@
 
 #include <algorithm>
 #include <any>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <typeindex>
+#include <unordered_map>
 #include <vector>
 
 #include "etil/core/dictionary.hpp"
@@ -25,6 +27,7 @@
 #include "etil/core/primitives.hpp"
 #include "etil/core/word_impl.hpp"
 #include "etil/manifold/amqp_sink.hpp"
+#include "etil/manifold/broker_source_factories.hpp"
 #include "etil/manifold/channel_action.hpp"
 #include "etil/manifold/channel_name.hpp"
 #include "etil/manifold/codec_resolver.hpp"
@@ -34,6 +37,7 @@
 #include "etil/manifold/service.hpp"
 #include "etil/manifold/sinks.hpp"
 #include "etil/manifold/subject.hpp"
+#include "etil/manifold/transforms.hpp"
 #include "etil/mcp/role_permissions.hpp"
 
 namespace etil::manifold {
@@ -788,6 +792,151 @@ bool prim_channel_tap_amqp(ExecutionContext& ctx) {
     return true;
 }
 
+// --- broker-source registry -------------------------------------------------
+//
+// Broker sources aren't ChannelService routes — they publish INTO
+// the service. We keep them alive in a process-wide registry keyed
+// by handle id; TIL users receive the handle and can retain it. A
+// Phase 4+ enhancement would expose `channel-source-stop`.
+
+struct SourceRegistry {
+    std::mutex mu;
+    std::atomic<int64_t> next_id{1};
+    std::unordered_map<int64_t, std::shared_ptr<BrokerSourceBase>> active;
+};
+
+SourceRegistry& source_registry() {
+    static SourceRegistry r;
+    return r;
+}
+
+int64_t register_source(std::shared_ptr<BrokerSourceBase> src) {
+    auto& r = source_registry();
+    int64_t id = r.next_id.fetch_add(1, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lk(r.mu);
+    r.active.emplace(id, std::move(src));
+    return id;
+}
+
+// --- channel-source-nats ( url codec subject pattern -- handle ) ------------
+
+bool prim_channel_source_nats(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string subject = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, pattern); return false; }
+    std::string codec = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, subject); push_string(ctx, pattern); return false; }
+    std::string url = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, codec); push_string(ctx, subject); push_string(ctx, pattern); return false; }
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-source-nats: no channel service\n";
+        return false;
+    }
+    if (codec.empty()) codec = "json";
+    if (codec != "json" && codec != "msgpack" && codec != "cbor" && codec != "raw") {
+        ctx.err() << "Error: channel-source-nats: unknown codec '"
+                  << codec << "'\n";
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    BrokerSourceConfig cfg;
+    cfg.broker_url = std::move(url);
+    cfg.codec = codec;
+    cfg.subject = std::move(subject);
+    cfg.channel_pattern = std::move(pattern);
+    auto src = make_nats_source(std::move(cfg), svc->shared_from_this());
+    if (!src) { ctx.data_stack().push(Value(false)); return true; }
+    ctx.data_stack().push(Value(register_source(std::move(src))));
+    return true;
+}
+
+// --- channel-source-amqp ( url codec address pattern -- handle ) ------------
+
+bool prim_channel_source_amqp(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string address = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, pattern); return false; }
+    std::string codec = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, address); push_string(ctx, pattern); return false; }
+    std::string url = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, codec); push_string(ctx, address); push_string(ctx, pattern); return false; }
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-source-amqp: no channel service\n";
+        return false;
+    }
+    if (codec.empty()) codec = "json";
+    if (codec != "json" && codec != "msgpack" && codec != "cbor" && codec != "raw") {
+        ctx.err() << "Error: channel-source-amqp: unknown codec '"
+                  << codec << "'\n";
+        ctx.data_stack().push(Value(false));
+        return true;
+    }
+
+    BrokerSourceConfig cfg;
+    cfg.broker_url = std::move(url);
+    cfg.codec = codec;
+    cfg.subject = std::move(address);
+    cfg.channel_pattern = std::move(pattern);
+    auto src = make_amqp_source(std::move(cfg), svc->shared_from_this());
+    if (!src) { ctx.data_stack().push(Value(false)); return true; }
+    ctx.data_stack().push(Value(register_source(std::move(src))));
+    return true;
+}
+
+// --- mcp-notify-nats ( url -- ) / mcp-notify-amqp ( url -- ) ----------------
+//
+// Thin wrappers around channel-tap-{nats,amqp} pinned to the
+// etil.mcp.out.notification.** channel and json codec (MCP
+// notifications are JSON-RPC by protocol). Nothing pushed on
+// success; false on failure.
+
+bool mcp_notify_common(ExecutionContext& ctx, bool use_amqp) {
+    bool ok = false;
+    std::string url = pop_string(ctx, &ok);
+    if (!ok) return false;
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: mcp-notify-*: no channel service\n";
+        return false;
+    }
+    BrokerSinkConfig cfg;
+    cfg.broker_url = std::move(url);
+    cfg.codec = "json";
+    std::shared_ptr<BrokerSinkBase> sink;
+    if (use_amqp) {
+        sink = make_amqp_sink(std::move(cfg), svc->shared_from_this());
+    } else {
+        sink = make_nats_sink(std::move(cfg), svc->shared_from_this());
+    }
+    if (!sink) { ctx.data_stack().push(Value(false)); return true; }
+
+    RouteSpec spec;
+    spec.channel_pattern = "etil.mcp.out.notification.**";
+    spec.transforms.push_back(make_json_encoder());
+    spec.sink = std::move(sink);
+    auto h = svc->add_route(std::move(spec), ctx.permissions());
+    if (!h.valid()) { ctx.data_stack().push(Value(false)); return true; }
+    return true;
+}
+
+bool prim_mcp_notify_nats(ExecutionContext& ctx) {
+    return mcp_notify_common(ctx, /*use_amqp=*/false);
+}
+
+bool prim_mcp_notify_amqp(ExecutionContext& ctx) {
+    return mcp_notify_common(ctx, /*use_amqp=*/true);
+}
+
 // --- channel-session-hmac ( session-str -- hmac-str ) -----------------------
 //
 // Compute the Session-Hmac token the broker sinks put on outbound
@@ -838,6 +987,22 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
     dict.register_word("channel-tap-amqp",
         make_primitive("channel-tap-amqp", prim_channel_tap_amqp,
             {T::String, T::String, T::String}, {T::Integer}));
+
+    dict.register_word("channel-source-nats",
+        make_primitive("channel-source-nats", prim_channel_source_nats,
+            {T::String, T::String, T::String, T::String}, {T::Integer}));
+
+    dict.register_word("channel-source-amqp",
+        make_primitive("channel-source-amqp", prim_channel_source_amqp,
+            {T::String, T::String, T::String, T::String}, {T::Integer}));
+
+    dict.register_word("mcp-notify-nats",
+        make_primitive("mcp-notify-nats", prim_mcp_notify_nats,
+            {T::String}, {}));
+
+    dict.register_word("mcp-notify-amqp",
+        make_primitive("mcp-notify-amqp", prim_mcp_notify_amqp,
+            {T::String}, {}));
 
     dict.register_word("channel-session-hmac",
         make_primitive("channel-session-hmac", prim_channel_session_hmac,

@@ -15,6 +15,8 @@ add_executable(etil_tests
     unit/test_manifold_session_hmac.cpp
     unit/test_manifold_nats_sink.cpp
     unit/test_manifold_amqp_sink.cpp
+    unit/test_manifold_echo.cpp
+    unit/test_manifold_broker_source.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
     unit/test_primitives.cpp

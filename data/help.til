@@ -2400,3 +2400,19 @@ s" channel-session-hmac" s" category" s" text" s" manifold" meta! drop
 s" channel-tap-amqp" s" description" s" text" s" Install an AMQP 1.0 broker sink on `pattern` that serializes via `codec` and publishes to `url`. Codecs: json (default), msgpack, cbor, raw. Returns a non-zero route handle, or false on unknown codec / connect failure / binary built without ETIL_BUILD_AMQP_SINK. Requires channels_network_sink" meta! drop
 s" channel-tap-amqp" s" stack-effect" s" text" s" ( url codec pattern -- handle )" meta! drop
 s" channel-tap-amqp" s" category" s" text" s" manifold" meta! drop
+
+s" channel-source-nats" s" description" s" text" s" Subscribe to `subject` on a NATS broker at `url`, decode inbound messages via `codec`, and republish them locally on `pattern`. Returns a handle or false. Destination routes that shouldn't echo-back own origin should set reject_own_origin on the route spec" meta! drop
+s" channel-source-nats" s" stack-effect" s" text" s" ( url codec subject pattern -- handle )" meta! drop
+s" channel-source-nats" s" category" s" text" s" manifold" meta! drop
+
+s" channel-source-amqp" s" description" s" text" s" Subscribe to `address` on an AMQP 1.0 broker at `url`, decode via `codec`, and republish locally on `pattern`. Parallel of channel-source-nats" meta! drop
+s" channel-source-amqp" s" stack-effect" s" text" s" ( url codec address pattern -- handle )" meta! drop
+s" channel-source-amqp" s" category" s" text" s" manifold" meta! drop
+
+s" mcp-notify-nats" s" description" s" text" s" Install a NATS sink on etil.mcp.out.notification.** with json codec so all sys-notification / user-notification traffic fans out to the broker. Codec is fixed at json per MCP protocol. Returns nothing on success, false on failure" meta! drop
+s" mcp-notify-nats" s" stack-effect" s" text" s" ( url -- )" meta! drop
+s" mcp-notify-nats" s" category" s" text" s" manifold" meta! drop
+
+s" mcp-notify-amqp" s" description" s" text" s" AMQP 1.0 parallel of mcp-notify-nats: install a JSON-coded sink on etil.mcp.out.notification.**" meta! drop
+s" mcp-notify-amqp" s" stack-effect" s" text" s" ( url -- )" meta! drop
+s" mcp-notify-amqp" s" category" s" text" s" manifold" meta! drop

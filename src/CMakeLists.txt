@@ -13,6 +13,8 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/broker_sink.cpp
     manifold/nats_sink.cpp
     manifold/amqp_sink.cpp
+    manifold/broker_source.cpp
+    manifold/broker_source_factories.cpp
 )
 
 # Core library sources

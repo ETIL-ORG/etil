@@ -266,6 +266,22 @@ private:
     void deliver(std::shared_ptr<RouteState>& state,
                  const Message& msg,
                  PublishOutcome& /*outcome*/) {
+        // Layer 3 cycle detection (doc B §20.3). When the route
+        // opted in with reject_own_origin, compare the incoming
+        // message's origin against this process's own identity; if
+        // they match, drop and audit. Hardwired audit channels
+        // bypass this check — they must always flow.
+        if (state->spec.reject_own_origin && !is_hardwired_audit(msg.channel)) {
+            const auto self = current_origin(msg.origin.session_id);
+            if (msg.origin.hostname == self.hostname &&
+                msg.origin.app_startup_us == self.app_startup_us) {
+                echo_dropped_.fetch_add(1, std::memory_order_relaxed);
+                state->dropped.fetch_add(1, std::memory_order_relaxed);
+                publish_echo_audit(msg, state->spec.channel_pattern);
+                return;
+            }
+        }
+
         // Apply the transform chain. Each transform may emit 0..N messages.
         std::vector<Message> pipeline = {msg};
         for (auto& transform : state->spec.transforms) {
@@ -359,6 +375,25 @@ private:
         m.payload_type = std::type_index(typeid(std::string));
         PublishOutcome throwaway;
         dispatch(m, throwaway);
+    }
+
+    void publish_echo_audit(const Message& original,
+                             const std::string& route_pattern) {
+        Message m = Message::fresh("etil.aaa.audit.channel.echo-dropped");
+        m.origin = current_origin(original.origin.session_id);
+        m.tags["origin_channel"] = original.channel;
+        m.tags["route_pattern"] = route_pattern;
+        m.tags["original_seq"] = std::to_string(original.origin.seq);
+        m.payload = std::string("own-origin-echo-dropped");
+        m.payload_type = std::type_index(typeid(std::string));
+        PublishOutcome throwaway;
+        dispatch(m, throwaway);
+    }
+
+    bool is_hardwired_audit(const std::string& channel) const {
+        // Layer 3 must not fire on audit channels themselves — a
+        // self-referential echo of echo-dropped would be a footgun.
+        return channel_matches("etil.aaa.audit.**", channel);
     }
 
     void static_scc_check(const RouteSpec& /*spec*/) {
