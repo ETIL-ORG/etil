@@ -8,6 +8,13 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/subject.cpp
     manifold/default_service.cpp
     manifold/til_primitives.cpp
+    manifold/session_hmac.cpp
+    manifold/codec_resolver.cpp
+    manifold/broker_sink.cpp
+    manifold/nats_sink.cpp
+    manifold/amqp_sink.cpp
+    manifold/broker_source.cpp
+    manifold/broker_source_factories.cpp
 )
 
 # Core library sources
@@ -15,6 +22,7 @@ set(ETIL_CORE_SOURCES
     core/logging.cpp
     core/word_impl.cpp
     core/execution_context.cpp
+    core/execution_output_tee.cpp
     core/dictionary.cpp
     core/primitives.cpp
     core/compiled_body.cpp
@@ -141,6 +149,18 @@ if(ETIL_BUILD_MONGODB)
     )
     target_link_libraries(etil PUBLIC mongocxx_static bsoncxx_static)
     target_compile_definitions(etil PUBLIC ETIL_MONGODB_ENABLED)
+endif()
+
+# Manifold NATS broker sink — nats.c (Apache 2.0)
+if(ETIL_BUILD_NATS_SINK)
+    target_link_libraries(etil PUBLIC nats::nats)
+    target_compile_definitions(etil PUBLIC ETIL_NATS_SINK_ENABLED)
+endif()
+
+# Manifold AMQP broker sink — Qpid Proton-C++ (Apache 2.0)
+if(ETIL_BUILD_AMQP_SINK)
+    target_link_libraries(etil PUBLIC Proton::cpp)
+    target_compile_definitions(etil PUBLIC ETIL_AMQP_SINK_ENABLED)
 endif()
 
 # Linear algebra primitives — always compiled, backend selected by target

@@ -6,8 +6,30 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include <typeindex>
+
+#include "etil/manifold/message.hpp"
+#include "etil/manifold/service.hpp"
 
 namespace etil::evolution {
+
+namespace {
+
+void publish_category(etil::manifold::ChannelService* svc,
+                       EvolveLogCategory cat,
+                       const char* level,
+                       const std::string& msg) {
+    if (!svc) return;
+    etil::manifold::Message m;
+    m.channel = std::string("etil.evolution.") +
+                 EvolveLogger::category_channel_suffix(cat);
+    m.payload = msg;
+    m.payload_type = std::type_index(typeid(std::string));
+    m.tags["level"] = level;
+    svc->publish(std::move(m));
+}
+
+} // namespace
 
 EvolveLogger::~EvolveLogger() {
     stop();
@@ -48,15 +70,21 @@ void EvolveLogger::set_directory(const std::string& dir) {
 }
 
 void EvolveLogger::log(EvolveLogCategory cat, const std::string& msg) {
-    if (!enabled(cat) || !file_.is_open()) return;
-    file_ << timestamp() << " [" << category_tag(cat) << "] " << msg << "\n";
-    file_.flush();
+    if (!enabled(cat)) return;
+    if (file_.is_open()) {
+        file_ << timestamp() << " [" << category_tag(cat) << "] " << msg << "\n";
+        file_.flush();
+    }
+    publish_category(channels_, cat, "logical", msg);
 }
 
 void EvolveLogger::detail(EvolveLogCategory cat, const std::string& msg) {
-    if (!granular(cat) || !file_.is_open()) return;
-    file_ << timestamp() << " [" << category_tag(cat) << ":detail] " << msg << "\n";
-    file_.flush();
+    if (!granular(cat)) return;
+    if (file_.is_open()) {
+        file_ << timestamp() << " [" << category_tag(cat) << ":detail] " << msg << "\n";
+        file_.flush();
+    }
+    publish_category(channels_, cat, "granular", msg);
 }
 
 std::string EvolveLogger::timestamp() const {
@@ -106,6 +134,32 @@ const char* EvolveLogger::category_tag(EvolveLogCategory cat) {
         case EvolveLogCategory::Bridge:      return "bridge";
         case EvolveLogCategory::Diff:        return "diff";
         case EvolveLogCategory::ASTDump:     return "ast-dump";
+        default:                             return "unknown";
+    }
+}
+
+const char* EvolveLogger::category_channel_suffix(EvolveLogCategory cat) {
+    // Mirror category_tag but use dot-safe segments (the mapping is
+    // 1:1; dashes in the tags table stay as dashes in the channel
+    // subsegment, which is legal per channel-name grammar).
+    switch (cat) {
+        case EvolveLogCategory::Engine:      return "engine";
+        case EvolveLogCategory::Decompile:   return "decompile";
+        case EvolveLogCategory::Substitute:  return "substitute";
+        case EvolveLogCategory::Perturb:     return "perturb";
+        case EvolveLogCategory::Move:        return "move";
+        case EvolveLogCategory::ControlFlow: return "control";
+        case EvolveLogCategory::Grow:        return "grow";
+        case EvolveLogCategory::Shrink:      return "shrink";
+        case EvolveLogCategory::Crossover:   return "crossover";
+        case EvolveLogCategory::Repair:      return "repair";
+        case EvolveLogCategory::Compile:     return "compile";
+        case EvolveLogCategory::Fitness:     return "fitness";
+        case EvolveLogCategory::Selection:   return "selection";
+        case EvolveLogCategory::Bridge:      return "bridge";
+        case EvolveLogCategory::Diff:        return "diff";
+        case EvolveLogCategory::ASTDump:     return "ast-dump";
+        case EvolveLogCategory::DAG:         return "dag";
         default:                             return "unknown";
     }
 }

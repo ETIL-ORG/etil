@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(EvolutionaryTIL VERSION 2.4.3 LANGUAGES C CXX)
+project(EvolutionaryTIL VERSION 2.5.2 LANGUAGES C CXX)
 
 # All executables go to <builddir>/bin/
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -39,6 +39,8 @@ option(ETIL_USE_JEMALLOC "Use jemalloc allocator" OFF)
 option(ETIL_BUILD_HTTP_CLIENT "Build HTTP client primitives (http-get)" ON)
 option(ETIL_BUILD_JWT "Build JWT authentication" ON)
 option(ETIL_BUILD_MONGODB "Build MongoDB integration (requires ETIL_BUILD_JWT)" ON)
+option(ETIL_BUILD_NATS_SINK "Build Manifold nats_sink (requires nats.c)" OFF)
+option(ETIL_BUILD_AMQP_SINK "Build Manifold amqp_sink (requires Qpid Proton-C++)" OFF)
 option(ETIL_WASM_TARGET "Build for WebAssembly via Emscripten" OFF)
 
 # WASM target forces off incompatible features
@@ -48,6 +50,8 @@ if(ETIL_WASM_TARGET)
     set(ETIL_BUILD_HTTP_CLIENT OFF CACHE BOOL "" FORCE)
     set(ETIL_BUILD_JWT OFF CACHE BOOL "" FORCE)
     set(ETIL_BUILD_MONGODB OFF CACHE BOOL "" FORCE)
+    set(ETIL_BUILD_NATS_SINK OFF CACHE BOOL "" FORCE)
+    set(ETIL_BUILD_AMQP_SINK OFF CACHE BOOL "" FORCE)
 endif()
 
 # Include custom CMake modules

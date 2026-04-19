@@ -64,6 +64,15 @@ struct RouteSpec {
     DeliveryMode   delivery_mode   = DeliveryMode::RingBuffered;
     size_t         buffer_capacity = kDefaultRingCapacity;
     OverflowPolicy overflow_policy = OverflowPolicy::DropFirst;
+
+    /// Cycle-detection layer 3 (doc B §20.3). When true, the router
+    /// drops messages whose origin.(hostname, app_startup_us) matches
+    /// this process's own origin before delivering to the sink, and
+    /// emits an audit on etil.aaa.audit.channel.echo-dropped. Set
+    /// this on routes that consume broker-replayed traffic to avoid
+    /// local-echo amplification; leave it false (default) for
+    /// ordinary local publishes.
+    bool reject_own_origin = false;
 };
 
 /// Opaque handle returned by add_route. Passed to remove_route and to

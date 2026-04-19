@@ -11,6 +11,13 @@ add_executable(etil_tests
     unit/test_manifold_observable.cpp
     unit/test_manifold_roleadmin.cpp
     unit/test_manifold_integration.cpp
+    unit/test_manifold_codecs.cpp
+    unit/test_manifold_session_hmac.cpp
+    unit/test_manifold_nats_sink.cpp
+    unit/test_manifold_amqp_sink.cpp
+    unit/test_manifold_echo.cpp
+    unit/test_manifold_broker_source.cpp
+    unit/test_execution_context_channels.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
     unit/test_primitives.cpp
@@ -47,6 +54,8 @@ add_executable(etil_mcp_tests
     unit/test_mcp_tools.cpp
     unit/test_manifold_sse_out.cpp
     unit/test_manifold_sse_in.cpp
+    unit/test_mcp_request_channels.cpp
+    unit/test_manifold_integration_phase34.cpp
 )
 
 target_link_libraries(etil_mcp_tests
@@ -142,6 +151,8 @@ gtest_discover_tests(etil_selection_tests)
 # Evolution engine unit tests
 add_executable(etil_evolution_tests
     unit/test_evolution.cpp
+    unit/test_evolution_channels.cpp
+    unit/test_evolvelogger_absorption.cpp
 )
 
 target_link_libraries(etil_evolution_tests

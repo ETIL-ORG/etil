@@ -148,6 +148,8 @@ namespace etil::core
 
 namespace etil::core {
 
+    struct ExecutionOutputTee;  // forward decl; full definition in execution_output_tee.hpp
+
     /// Registry of data field vectors for bounds-checked DataRef resolution.
     /// Entries are non-owning pointers to ByteCode::data_field_ vectors.
     class DataFieldRegistry
@@ -325,19 +327,21 @@ namespace etil::core {
 
         // Manifold channel service (non-owning, nullptr = no channel access).
         // Installed per-session by the MCP layer; TIL channel-* primitives
-        // consult this to publish / add routes / introspect.
+        // consult this to publish / add routes / introspect. When set,
+        // the stdout tee (Phase 4a) is installed so writes to out() also
+        // publish onto etil.repl.stdout for subscribers.
         etil::manifold::ChannelService* channels() const { return channels_; }
-        void set_channels(etil::manifold::ChannelService* c) { channels_ = c; }
+        void set_channels(etil::manifold::ChannelService* c);
 
         // Session ID associated with this context, for origin stamping on
         // outbound channel messages. Empty when not set.
         const std::string& session_id() const { return session_id_; }
-        void set_session_id(std::string id) { session_id_ = std::move(id); }
+        void set_session_id(std::string id);
 
         // Output/error streams (non-owning, defaults to std::cout/std::cerr)
         std::ostream& out() { return *out_; }
         std::ostream& err() { return *err_; }
-        void set_out(std::ostream* s) { out_ = s; }
+        void set_out(std::ostream* s);
         void set_err(std::ostream* s) { err_ = s; }
 
         // Data field registry for bounds-checked DataRef resolution
@@ -527,6 +531,17 @@ namespace etil::core {
         // Output/error streams
         std::ostream* out_ = &std::cout;
         std::ostream* err_ = &std::cerr;
+
+        // Original (pre-tee) downstream out_ — restored when channels
+        // are detached. Null means out_ was never teed.
+        std::ostream* out_original_ = nullptr;
+
+        // Owned tee (Phase 4a). Non-null when stdout is being teed
+        // onto etil.repl.stdout.
+        std::unique_ptr<ExecutionOutputTee> out_tee_;
+
+        void rebuild_stdout_tee();
+        void clear_stdout_tee();
 
         // Data field registry (shared_ptr so ByteCode backpointers keep it alive)
         std::shared_ptr<DataFieldRegistry> data_field_registry_;

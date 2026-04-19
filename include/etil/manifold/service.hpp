@@ -96,6 +96,14 @@ public:
 
     /// Introspection — aggregate cycle-detection counters.
     virtual CycleStats cycle_stats() const = 0;
+
+    /// Compute the broker-side Session-Hmac header value for a given
+    /// plaintext session_id, using a process-local CSPRNG key
+    /// generated at construction. Returns empty string for empty
+    /// session_id. The process key is never exposed (A-5 resolution).
+    /// Output is a 22-character base64url string (128-bit HMAC-SHA256
+    /// truncate).
+    virtual std::string session_hmac(std::string_view session_id) const = 0;
 };
 
 /// Factory for the production implementation. Defined in

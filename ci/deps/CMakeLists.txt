@@ -79,6 +79,19 @@ ExternalProject_Add(benchmark
         -DBUILD_SHARED_LIBS=OFF
 )
 
+# --- nats.c (Manifold Phase 3b broker client, Apache 2.0) ---
+ExternalProject_Add(nats_c
+    GIT_REPOSITORY https://github.com/nats-io/nats.c.git
+    GIT_TAG        v3.8.2
+    GIT_SHALLOW    ON
+    CMAKE_ARGS     ${COMMON_CMAKE_ARGS}
+        -DNATS_BUILD_STATIC=ON
+        -DNATS_BUILD_EXAMPLES=OFF
+        -DNATS_BUILD_STREAMING=OFF
+        -DNATS_BUILD_WITH_TLS=ON
+        -DBUILD_SHARED_LIBS=OFF
+)
+
 # --- spdlog ---
 ExternalProject_Add(spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git

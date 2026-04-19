@@ -320,10 +320,12 @@ std::string McpServer::create_session(const std::string& user_id,
     }
 #endif
 
+    publish_session_event("opened", id, user_id);
     return id;
 }
 
 void McpServer::destroy_session(const std::string& session_id) {
+    publish_session_event("closed", session_id);
 #ifdef ETIL_MONGODB_ENABLED
     // Log audit event before erasing (need session data)
     if (audit_log_ && audit_log_->available()) {
@@ -397,6 +399,25 @@ size_t McpServer::session_count() const {
 
 std::optional<nlohmann::json> McpServer::handle_message(
     const std::string& session_id, const nlohmann::json& msg) {
+    // Phase 4b: stamp a start time and extract method for lifecycle
+    // event emission. Method extraction is best-effort — malformed
+    // messages get "<unknown>".
+    const auto t_start = std::chrono::steady_clock::now();
+    std::string method = "<unknown>";
+    if (msg.is_object() && msg.contains("method") && msg["method"].is_string()) {
+        method = msg["method"].get<std::string>();
+    }
+    publish_request_event("received", session_id, method, -1);
+
+    auto finish_fail = [&](const std::string& err,
+                           std::optional<nlohmann::json> r) {
+        const auto t = std::chrono::steady_clock::now();
+        const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+            t - t_start).count();
+        publish_request_event("failed", session_id, method, us, err);
+        return r;
+    };
+
     // Look up the session and check idle time before resetting last_activity
     Session* session = nullptr;
     std::chrono::steady_clock::duration idle_duration{};
@@ -404,8 +425,9 @@ std::optional<nlohmann::json> McpServer::handle_message(
         std::lock_guard<std::mutex> lock(sessions_mutex_);
         auto it = sessions_.find(session_id);
         if (it == sessions_.end()) {
-            return make_error(nullptr, JsonRpcError::InvalidRequest,
-                              "Unknown session: " + session_id);
+            return finish_fail("unknown-session",
+                               make_error(nullptr, JsonRpcError::InvalidRequest,
+                                          "Unknown session: " + session_id));
         }
         session = it->second.get();
         auto now = std::chrono::steady_clock::now();
@@ -444,6 +466,24 @@ std::optional<nlohmann::json> McpServer::handle_message(
     if (should_terminate) {
         destroy_session(session_id);
     }
+
+    // Phase 4b: emit completed/failed based on the response shape.
+    const auto t_end = std::chrono::steady_clock::now();
+    const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+        t_end - t_start).count();
+    std::string err_msg;
+    bool failed = false;
+    if (result && result->is_object() && result->contains("error")) {
+        failed = true;
+        const auto& e = (*result)["error"];
+        if (e.is_object() && e.contains("message") && e["message"].is_string()) {
+            err_msg = e["message"].get<std::string>();
+        } else {
+            err_msg = "jsonrpc-error";
+        }
+    }
+    publish_request_event(failed ? "failed" : "completed",
+                           session_id, method, us, err_msg);
 
     return result;
 }
@@ -625,6 +665,42 @@ void McpServer::publish_inbound_notification(
     if (current_session_ != nullptr) {
         m.tags["session_id"] = current_session_->id;
     }
+    channels_->publish(std::move(m));
+}
+
+void McpServer::publish_request_event(const std::string& stage,
+                                       const std::string& session_id,
+                                       const std::string& method,
+                                       int64_t latency_us,
+                                       const std::string& error) {
+    if (!channels_) return;
+    etil::manifold::Message m;
+    if (stage == "received")       m.channel = "etil.mcp.request.received";
+    else if (stage == "completed") m.channel = "etil.mcp.request.completed";
+    else if (stage == "failed")    m.channel = "etil.mcp.request.failed";
+    else return;
+
+    m.payload = std::string{};  // structured data lives in tags
+    m.payload_type = std::type_index(typeid(std::string));
+    if (!method.empty())    m.tags["method"] = method;
+    if (!session_id.empty()) m.tags["session_id"] = session_id;
+    if (latency_us >= 0)    m.tags["latency_us"] = std::to_string(latency_us);
+    if (!error.empty())     m.tags["error"] = error;
+    channels_->publish(std::move(m));
+}
+
+void McpServer::publish_session_event(const std::string& stage,
+                                       const std::string& session_id,
+                                       const std::string& user_id) {
+    if (!channels_) return;
+    etil::manifold::Message m;
+    if (stage == "opened")      m.channel = "etil.mcp.session.opened";
+    else if (stage == "closed") m.channel = "etil.mcp.session.closed";
+    else return;
+    m.payload = std::string{};
+    m.payload_type = std::type_index(typeid(std::string));
+    if (!session_id.empty()) m.tags["session_id"] = session_id;
+    if (!user_id.empty())    m.tags["user_id"] = user_id;
     channels_->publish(std::move(m));
 }
 
