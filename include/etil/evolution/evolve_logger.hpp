@@ -16,6 +16,8 @@
 #include <fstream>
 #include <string>
 
+namespace etil::manifold { class ChannelService; }
+
 namespace etil::evolution {
 
 /// Category bitmask for selective evolution logging.
@@ -103,12 +105,28 @@ public:
     /// Returns nullptr if the log file is not open.
     std::ostream* stream() { return file_.is_open() ? &file_ : nullptr; }
 
+    /// Phase 4d: optional Manifold channel service. When non-null,
+    /// every log()/detail() call additionally publishes onto
+    /// etil.evolution.<category>. The legacy file path is unchanged
+    /// — channel emission is additive, not a replacement. Null by
+    /// default to preserve the 100+ existing call sites verbatim.
+    etil::manifold::ChannelService* channels() const { return channels_; }
+    void set_channels(etil::manifold::ChannelService* c) { channels_ = c; }
+
+    /// Mapping from EvolveLogCategory to channel-subtree suffix.
+    /// Exposed for tests and doc cross-reference.
+    static const char* category_channel_suffix(EvolveLogCategory cat);
+
 private:
     EvolveLogLevel level_ = EvolveLogLevel::Off;
     uint32_t categories_ = static_cast<uint32_t>(EvolveLogCategory::All);
     std::string directory_;
     std::ofstream file_;
     bool show_failed_ = false;
+
+    // Phase 4d: non-owning; null means channels-absorption inactive
+    // and only legacy file output happens.
+    etil::manifold::ChannelService* channels_ = nullptr;
 
     std::string timestamp() const;
     std::string make_filename() const;

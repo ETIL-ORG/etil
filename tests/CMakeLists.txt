@@ -151,6 +151,7 @@ gtest_discover_tests(etil_selection_tests)
 add_executable(etil_evolution_tests
     unit/test_evolution.cpp
     unit/test_evolution_channels.cpp
+    unit/test_evolvelogger_absorption.cpp
 )
 
 target_link_libraries(etil_evolution_tests

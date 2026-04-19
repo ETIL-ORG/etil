@@ -112,8 +112,14 @@ public:
     /// Phase 4c: optional ChannelService to publish generation
     /// lifecycle events onto etil.evolution.**. Null means no
     /// channel output (existing EvolveLogger path unchanged).
+    /// Phase 4d: this pointer is also forwarded into the embedded
+    /// EvolveLogger so its log()/detail() calls publish onto
+    /// etil.evolution.<category> subchannels.
     etil::manifold::ChannelService* channels() const { return channels_; }
-    void set_channels(etil::manifold::ChannelService* c) { channels_ = c; }
+    void set_channels(etil::manifold::ChannelService* c) {
+        channels_ = c;
+        logger_.set_channels(c);
+    }
 
     /// Seed all RNGs for deterministic, reproducible evolution runs.
     void seed_rng(uint64_t seed);
