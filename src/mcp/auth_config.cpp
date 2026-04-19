@@ -71,6 +71,86 @@ void read_string_array(const nlohmann::json& obj, const char* key,
     }
 }
 
+/// Parse a single ChannelAction from its lowercase JSON string form.
+/// Returns ChannelAction::None for unrecognized names (silent skip).
+etil::manifold::ChannelAction action_from_string(const std::string& s) {
+    using etil::manifold::ChannelAction;
+    if (s == "read")       return ChannelAction::Read;
+    if (s == "write")      return ChannelAction::Write;
+    if (s == "route")      return ChannelAction::Route;
+    if (s == "introspect") return ChannelAction::Introspect;
+    return ChannelAction::None;
+}
+
+/// Stringify a ChannelAction for serialization.
+const char* action_to_string(etil::manifold::ChannelAction a) {
+    using etil::manifold::ChannelAction;
+    switch (a) {
+        case ChannelAction::Read:       return "read";
+        case ChannelAction::Write:      return "write";
+        case ChannelAction::Route:      return "route";
+        case ChannelAction::Introspect: return "introspect";
+        default:                        return "";
+    }
+}
+
+/// Parse "channel_grants": [ { pattern, actions:[...], effect } ] into
+/// a vector<ChannelGrant>. Unrecognized action strings are silently
+/// skipped; missing `effect` defaults to "allow". An invalid entry
+/// (missing pattern, or effect not in {allow,deny}) is skipped whole.
+void read_channel_grants(const nlohmann::json& obj, const char* key,
+                         std::vector<etil::manifold::ChannelGrant>& out) {
+    using etil::manifold::ChannelGrant;
+    if (!obj.contains(key) || !obj[key].is_array()) return;
+    for (const auto& elem : obj[key]) {
+        if (!elem.is_object()) continue;
+        ChannelGrant g;
+        if (!elem.contains("pattern") || !elem["pattern"].is_string()) continue;
+        g.pattern = elem["pattern"].get<std::string>();
+        uint8_t mask = 0;
+        if (elem.contains("actions") && elem["actions"].is_array()) {
+            for (const auto& a : elem["actions"]) {
+                if (!a.is_string()) continue;
+                mask |= static_cast<uint8_t>(action_from_string(a.get<std::string>()));
+            }
+        }
+        g.actions = mask;
+        g.effect = ChannelGrant::Effect::Allow;
+        if (elem.contains("effect") && elem["effect"].is_string()) {
+            const auto s = elem["effect"].get<std::string>();
+            if (s == "deny")  g.effect = ChannelGrant::Effect::Deny;
+            else if (s != "allow") continue;  // unrecognized → skip
+        }
+        out.push_back(std::move(g));
+    }
+}
+
+/// Serialize a vector<ChannelGrant> back to JSON, symmetric with
+/// read_channel_grants above.
+nlohmann::json channel_grants_to_json(
+    const std::vector<etil::manifold::ChannelGrant>& grants) {
+    using etil::manifold::ChannelAction;
+    using etil::manifold::ChannelGrant;
+    nlohmann::json arr = nlohmann::json::array();
+    for (const auto& g : grants) {
+        nlohmann::json j;
+        j["pattern"] = g.pattern;
+        nlohmann::json actions = nlohmann::json::array();
+        if (g.actions & static_cast<uint8_t>(ChannelAction::Read))
+            actions.push_back(action_to_string(ChannelAction::Read));
+        if (g.actions & static_cast<uint8_t>(ChannelAction::Write))
+            actions.push_back(action_to_string(ChannelAction::Write));
+        if (g.actions & static_cast<uint8_t>(ChannelAction::Route))
+            actions.push_back(action_to_string(ChannelAction::Route));
+        if (g.actions & static_cast<uint8_t>(ChannelAction::Introspect))
+            actions.push_back(action_to_string(ChannelAction::Introspect));
+        j["actions"] = std::move(actions);
+        j["effect"] = (g.effect == ChannelGrant::Effect::Deny) ? "deny" : "allow";
+        arr.push_back(std::move(j));
+    }
+    return arr;
+}
+
 // --- Section parsers ---
 
 /// Parse "roles" and "default_role" from JSON into config.
@@ -140,6 +220,29 @@ void parse_roles(AuthConfig& config, const nlohmann::json& j) {
             // --- Database (MongoDB) ---
             read_bool(role_json, "mongo_access", perms.mongo_access);
             read_int(role_json, "mongo_query_quota", perms.mongo_query_quota);
+
+            // --- Channels (Manifold I/O pipeline) ---
+            read_bool(role_json, "channels_enabled", perms.channels_enabled);
+            read_channel_grants(role_json, "channel_grants",
+                                perms.channel_grants);
+            read_int(role_json, "channel_publish_quota",
+                     perms.channel_publish_quota);
+            read_int(role_json, "channel_subscribe_quota",
+                     perms.channel_subscribe_quota);
+            read_bool(role_json, "channels_route_admin",
+                      perms.channels_route_admin);
+            read_bool(role_json, "channels_network_sink",
+                      perms.channels_network_sink);
+
+            // --- MCP SSE inbound ---
+            read_bool(role_json, "receive_client_notification",
+                      perms.receive_client_notification);
+            read_bool(role_json, "receive_progress", perms.receive_progress);
+            read_bool(role_json, "receive_cancelled", perms.receive_cancelled);
+            read_bool(role_json, "receive_roots_changed",
+                      perms.receive_roots_changed);
+            read_int(role_json, "mcp_subscribe_quota",
+                     perms.mcp_subscribe_quota);
 
             config.roles[role_name] = std::move(perms);
         }
@@ -306,6 +409,20 @@ AuthConfig::parse_role_permissions(const nlohmann::json& j) {
     // Database
     read_bool(j, "mongo_access", perms.mongo_access);
     read_int(j, "mongo_query_quota", perms.mongo_query_quota);
+    // Channels (Manifold)
+    read_bool(j, "channels_enabled", perms.channels_enabled);
+    read_channel_grants(j, "channel_grants", perms.channel_grants);
+    read_int(j, "channel_publish_quota", perms.channel_publish_quota);
+    read_int(j, "channel_subscribe_quota", perms.channel_subscribe_quota);
+    read_bool(j, "channels_route_admin", perms.channels_route_admin);
+    read_bool(j, "channels_network_sink", perms.channels_network_sink);
+    // MCP SSE inbound
+    read_bool(j, "receive_client_notification",
+              perms.receive_client_notification);
+    read_bool(j, "receive_progress", perms.receive_progress);
+    read_bool(j, "receive_cancelled", perms.receive_cancelled);
+    read_bool(j, "receive_roots_changed", perms.receive_roots_changed);
+    read_int(j, "mcp_subscribe_quota", perms.mcp_subscribe_quota);
     return perms;
 }
 
@@ -342,6 +459,19 @@ nlohmann::json role_to_json(const RolePermissions& p) {
     // Database
     j["mongo_access"] = p.mongo_access;
     j["mongo_query_quota"] = p.mongo_query_quota;
+    // Channels (Manifold)
+    j["channels_enabled"] = p.channels_enabled;
+    j["channel_grants"] = channel_grants_to_json(p.channel_grants);
+    j["channel_publish_quota"] = p.channel_publish_quota;
+    j["channel_subscribe_quota"] = p.channel_subscribe_quota;
+    j["channels_route_admin"] = p.channels_route_admin;
+    j["channels_network_sink"] = p.channels_network_sink;
+    // MCP SSE inbound
+    j["receive_client_notification"] = p.receive_client_notification;
+    j["receive_progress"] = p.receive_progress;
+    j["receive_cancelled"] = p.receive_cancelled;
+    j["receive_roots_changed"] = p.receive_roots_changed;
+    j["mcp_subscribe_quota"] = p.mcp_subscribe_quota;
     return j;
 }
 
