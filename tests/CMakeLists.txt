@@ -91,6 +91,7 @@ if(ETIL_BUILD_JWT)
     add_executable(etil_jwt_tests
         unit/test_jwt_auth.cpp
         unit/test_oauth_provider.cpp
+        unit/test_auth_config.cpp
     )
 
     target_link_libraries(etil_jwt_tests
