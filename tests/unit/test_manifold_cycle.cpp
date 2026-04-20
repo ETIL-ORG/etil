@@ -84,6 +84,7 @@ TEST(Cycle, AuditBypassAllowsCycleAuditToFlow) {
     Message m = make_msg("etil.cycle-source", "first");
     m.route_trace.push_back("etil.cycle-source");
     svc->publish(std::move(m));  // triggers a cycle audit publish
+    svc->flush_for_tests();
 
     // The audit emission should have reached the audit route sink.
     EXPECT_GE(capture->size(), 1u);

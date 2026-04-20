@@ -62,6 +62,7 @@ TEST(ExecutionContextChannels, AttachingChannelsInstallsTee) {
 
     // Channel subscriber saw it too. Hold the vector in a local so
     // references into it stay alive.
+    svc->flush_for_tests();
     ASSERT_GE(cap->size(), 1u);
     auto msgs = cap->captured();
     const auto& msg = msgs.front();
@@ -85,11 +86,13 @@ TEST(ExecutionContextChannels, DetachingChannelsRestoresOriginal) {
     ctx.set_channels(svc.get());
     ctx.out() << "during-tee\n";
     ctx.out().flush();
+    svc->flush_for_tests();
     size_t during_count = cap->size();
 
     ctx.set_channels(nullptr);
     ctx.out() << "after-tee\n";
     ctx.out().flush();
+    svc->flush_for_tests();
 
     // After detach no new channel messages arrive.
     EXPECT_EQ(cap->size(), during_count);
@@ -117,6 +120,7 @@ TEST(ExecutionContextChannels, PartialLineFlushedOnTeeDestruction) {
         ctx.set_channels(nullptr);
         // clear_stdout_tee flushes on destruction of the buf.
     }
+    svc->flush_for_tests();
     ASSERT_GE(cap->size(), 1u);
     auto msgs = cap->captured();
     EXPECT_EQ(payload_str(msgs.front()), "no-newline-here");

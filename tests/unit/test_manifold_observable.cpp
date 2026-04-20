@@ -104,6 +104,9 @@ TEST(ManifoldObservable, PublishesAppearOnSubscription) {
         svc->publish(make_msg("etil.obs.one", "alpha"));
         svc->publish(make_msg("etil.obs.deep.two", "beta"));
         svc->publish(make_msg("etil.other", "ignored"));
+        // Drain the dispatcher before closing the subject so the
+        // ObservableSink has pushed all matched messages through.
+        svc->flush_for_tests();
         // Close the subject by releasing the observable's holder —
         // done by releasing obs_sp's ref. Because obs_sp holds the
         // only external shared_ptr ref, this closes the subject.
@@ -163,6 +166,7 @@ TEST(ManifoldObservable, SessionAndSeqAreStamped) {
     m2.origin.session_id = "sess-y";
     svc->publish(std::move(m2));
 
+    svc->flush_for_tests();  // drain dispatcher before closing subject
     obs_sp.reset();
     worker.join();
 

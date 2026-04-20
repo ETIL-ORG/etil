@@ -87,6 +87,7 @@ TEST(EvolutionChannels, EvolveWordEmitsStartAndEnd) {
     engine.register_tests("double", std::move(tests));
 
     engine.evolve_word("double");
+    svc->flush_for_tests();
 
     EXPECT_GE(cap_start->size(), 1u);
     EXPECT_GE(cap_end->size(), 1u);

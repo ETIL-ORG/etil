@@ -72,6 +72,7 @@ TEST(EvolveLoggerAbsorb, LogPublishesToCategorySubchannel) {
                   static_cast<uint32_t>(EvolveLogCategory::All));
     logger.log(EvolveLogCategory::Engine, "hello-from-engine");
     logger.stop();
+    svc->flush_for_tests();
 
     ASSERT_GE(cap->size(), 1u);
     auto msgs = cap->captured();
@@ -92,12 +93,14 @@ TEST(EvolveLoggerAbsorb, DetailOnlyAtGranularLevel) {
     logger.start(EvolveLogLevel::Logical,
                   static_cast<uint32_t>(EvolveLogCategory::All));
     logger.detail(EvolveLogCategory::Fitness, "not-emitted-at-logical");
+    svc->flush_for_tests();
     EXPECT_EQ(cap->size(), 0u);
 
     logger.start(EvolveLogLevel::Granular,
                   static_cast<uint32_t>(EvolveLogCategory::All));
     logger.detail(EvolveLogCategory::Fitness, "emitted-at-granular");
     logger.stop();
+    svc->flush_for_tests();
     ASSERT_GE(cap->size(), 1u);
     EXPECT_EQ(cap->captured().front().tags.at("level"), "granular");
 }
@@ -136,6 +139,7 @@ TEST(EvolveLoggerAbsorb, FileAndChannelBothReceiveLines) {
                   static_cast<uint32_t>(EvolveLogCategory::All));
     logger.log(EvolveLogCategory::Engine, "dual-write");
     logger.stop();
+    svc->flush_for_tests();
 
     // Channel saw it.
     ASSERT_GE(cap->size(), 1u);
@@ -191,6 +195,7 @@ TEST(EvolveLoggerAbsorb, EngineForwardsChannelsIntoLogger) {
     engine.register_tests("square", std::move(tests));
     engine.evolve_word("square");
     engine.logger().stop();
+    svc->flush_for_tests();
 
     EXPECT_GE(cap->size(), 1u);
 }

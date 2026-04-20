@@ -92,6 +92,7 @@ TEST(ManifoldIntegration, MultiSessionPublishLoadNoDrops) {
         });
     }
     for (auto& th : threads) th.join();
+    svc->flush_for_tests();
 
     EXPECT_EQ(capture->size(),
               static_cast<size_t>(kSessions * kPerSession));
@@ -173,6 +174,7 @@ TEST(ManifoldIntegration, TwoHopCycleIsDetected) {
 
     auto stats = svc->cycle_stats();
     EXPECT_GE(stats.cycles_detected, 1u);
+    svc->flush_for_tests();
 
     // The audit record should have been written on
     // etil.aaa.audit.channel.cycle-detected.
@@ -206,6 +208,7 @@ TEST(ManifoldIntegration, TTLExhaustionIsDetected) {
     auto outcome = svc->publish(std::move(m));
     EXPECT_TRUE(outcome.ttl_exhausted);
     EXPECT_GE(svc->cycle_stats().ttl_exhausted, 1u);
+    svc->flush_for_tests();
 
     bool found = false;
     for (const auto& msg : audit_capture->captured()) {
@@ -407,6 +410,7 @@ TEST(ManifoldIntegration, RingBufferOverflowIsVisible) {
     for (int i = 0; i < kTotal; ++i) {
         svc->publish(make_msg("etil.drop", "m" + std::to_string(i)));
     }
+    svc->flush_for_tests();
     EXPECT_EQ(ring->size(), 8u);
     EXPECT_EQ(ring->dropped_count(), static_cast<size_t>(kTotal - 8));
 

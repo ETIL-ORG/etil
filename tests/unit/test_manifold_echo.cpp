@@ -39,6 +39,7 @@ TEST(EchoSuppression, DefaultRouteAcceptsOwnOrigin) {
 
     auto out = svc->publish(make_msg("etil.echo.test", "alpha"));
     EXPECT_TRUE(out.accepted);
+    svc->flush_for_tests();
     EXPECT_EQ(cap->size(), 1u);
 
     auto stats = svc->cycle_stats();
@@ -58,6 +59,7 @@ TEST(EchoSuppression, RejectOwnOriginDropsLocalPublish) {
     // Publish itself returns accepted=true (RBAC passed, dispatch
     // ran); the route-level drop is reflected in cycle_stats.
     EXPECT_TRUE(out.accepted);
+    svc->flush_for_tests();
     EXPECT_EQ(cap->size(), 0u);
 
     auto stats = svc->cycle_stats();
@@ -81,6 +83,7 @@ TEST(EchoSuppression, EchoAuditIsEmitted) {
     svc->add_route(std::move(audit_route));
 
     svc->publish(make_msg("etil.echo.test", "gamma"));
+    svc->flush_for_tests();
     EXPECT_EQ(dropper->size(), 0u);
     EXPECT_GE(audit->size(), 1u);
 
@@ -101,5 +104,6 @@ TEST(EchoSuppression, HardwiredAuditChannelsNotRejected) {
 
     Message m = make_msg("etil.aaa.audit.channel.echo-dropped", "audit-body");
     svc->publish(std::move(m));
+    svc->flush_for_tests();
     EXPECT_EQ(cap->size(), 1u);
 }
