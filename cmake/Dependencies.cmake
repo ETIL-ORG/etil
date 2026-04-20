@@ -361,7 +361,18 @@ if(ETIL_BUILD_NATS_SINK AND NOT ETIL_WASM_TARGET)
         set(NATS_BUILD_EXAMPLES OFF CACHE BOOL "")
         set(NATS_BUILD_STREAMING OFF CACHE BOOL "")
         set(NATS_BUILD_WITH_TLS ON CACHE BOOL "")
+        # Suppress nats.c's vendored test suite (~200 tests requiring a
+        # live NATS server on TCP 4222/4223). Three names because
+        # different nats.c releases have used different gates. Also
+        # turn off CMake's global BUILD_TESTING around the subdir so
+        # `include(CTest)` in the library is a no-op.
+        set(NATS_BUILD_EXAMPLES_WITH_CONFIG OFF CACHE BOOL "")
+        set(NATS_BUILD_TESTS OFF CACHE BOOL "")
+        set(NATS_BUILD_TESTING OFF CACHE BOOL "")
+        set(_saved_BUILD_TESTING ${BUILD_TESTING})
+        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(nats_c)
+        set(BUILD_TESTING ${_saved_BUILD_TESTING} CACHE BOOL "" FORCE)
         if(TARGET nats_static AND NOT TARGET nats::nats)
             add_library(nats::nats ALIAS nats_static)
         endif()
