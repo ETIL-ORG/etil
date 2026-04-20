@@ -385,6 +385,77 @@ bool prim_channel_all_sink_stats(ExecutionContext& ctx) {
     return prim_channel_list_routes(ctx);  // alias
 }
 
+// --- channel-producer-list ( -- array ) -------------------------------------
+// Phase 5a.5 — complementary to channel-list. Returns every channel
+// NAME that has received at least one publish since service start,
+// whether or not any route is installed. See doc B §24.2.
+
+bool prim_channel_producer_list(ExecutionContext& ctx) {
+    auto* svc = ctx.channels();
+    auto* arr = new HeapArray();
+    if (svc) {
+        for (const auto& name : svc->producer_list()) {
+            arr->push_back(Value::from(HeapString::create(name)));
+        }
+    }
+    ctx.data_stack().push(Value::from(arr));
+    return true;
+}
+
+// --- channel-producer-stats ( name-str -- map ) -----------------------------
+// Phase 5a.5 — per-channel publish counts. Returns a HeapMap with
+// keys:
+//   channel            — the queried name (or empty if never published)
+//   published-count    — total successful publish() calls on this channel
+//   last-published-ns  — IClock::now_ns() at last publish
+//   route-count        — number of routes currently matching this channel
+
+bool prim_channel_producer_stats(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string name = pop_string(ctx, &ok);
+    if (!ok) return false;
+
+    auto* m = new HeapMap();
+    auto* svc = ctx.channels();
+    if (svc) {
+        auto s = svc->producer_stats(name);
+        m->set("channel", Value::from(HeapString::create(s.channel)));
+        m->set("published-count",
+               Value(static_cast<int64_t>(s.published_count)));
+        m->set("last-published-ns",
+               Value(static_cast<int64_t>(s.last_published_ns)));
+        m->set("route-count",
+               Value(static_cast<int64_t>(s.route_count)));
+    } else {
+        m->set("channel", Value::from(HeapString::create(std::string{})));
+        m->set("published-count", Value(int64_t{0}));
+        m->set("last-published-ns", Value(int64_t{0}));
+        m->set("route-count", Value(int64_t{0}));
+    }
+    ctx.data_stack().push(Value::from(m));
+    return true;
+}
+
+// --- channel-producers-by-pattern ( pattern-str -- array ) ------------------
+// Phase 5a.5 — filter channel-producer-list by a pattern (same
+// wildcards as routes: `*` single segment, `**` tail).
+
+bool prim_channel_producers_by_pattern(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string pattern = pop_string(ctx, &ok);
+    if (!ok) return false;
+
+    auto* arr = new HeapArray();
+    auto* svc = ctx.channels();
+    if (svc) {
+        for (const auto& name : svc->producers_by_pattern(pattern)) {
+            arr->push_back(Value::from(HeapString::create(name)));
+        }
+    }
+    ctx.data_stack().push(Value::from(arr));
+    return true;
+}
+
 // --- channel-trace ( -- array ) ---------------------------------------------
 // Phase 2a stub — returns an empty array. Meaningful inside a
 // subscription handler once the subject-observable lands (Phase 2b).
@@ -1036,6 +1107,20 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
     dict.register_word("channel-all-sink-stats",
         make_primitive("channel-all-sink-stats", prim_channel_all_sink_stats,
             {}, {T::Array}));
+
+    // Phase 5a.5 — producer-keyed channel registry (doc B §24.2).
+    dict.register_word("channel-producer-list",
+        make_primitive("channel-producer-list", prim_channel_producer_list,
+            {}, {T::Array}));
+
+    dict.register_word("channel-producer-stats",
+        make_primitive("channel-producer-stats", prim_channel_producer_stats,
+            {T::String}, {T::Map}));
+
+    dict.register_word("channel-producers-by-pattern",
+        make_primitive("channel-producers-by-pattern",
+            prim_channel_producers_by_pattern,
+            {T::String}, {T::Array}));
 
     dict.register_word("channel-trace",
         make_primitive("channel-trace", prim_channel_trace, {}, {T::Array}));

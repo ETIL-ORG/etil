@@ -47,6 +47,18 @@ struct CycleStats {
     uint64_t static_warnings    = 0;  // add_route SCC warnings
 };
 
+/// Per-channel producer-side snapshot — returned by the Phase 5a.5
+/// channel-producer-stats TIL word. Unlike SinkStats (which is
+/// route-keyed), ProducerStats is keyed by channel *name* and
+/// reflects publish activity whether or not any route is installed.
+/// See doc B §24.2.
+struct ProducerStats {
+    std::string channel;              ///< channel name
+    uint64_t published_count  = 0;    ///< total publish() calls on this channel
+    uint64_t last_published_ns = 0;   ///< IClock::now_ns() at last publish
+    uint64_t route_count      = 0;    ///< matching routes at query time
+};
+
 /// Result of a publish call. Never throws; reports diagnostic outcome.
 struct PublishOutcome {
     bool accepted = true;     // at least one route accepted
@@ -116,6 +128,30 @@ public:
     /// written today will be correct after Phase 5a.3 flips delivery
     /// onto a worker thread.
     virtual void flush_for_tests() {}
+
+    // --- Phase 5a.5 producer registry (doc B §24.2) ---
+
+    /// Every channel name that has received at least one publish()
+    /// since service start. Not ordered (hash-map snapshot).
+    virtual std::vector<std::string> producer_list() const { return {}; }
+
+    /// Snapshot of a single channel's producer stats. Returns a
+    /// ProducerStats with channel set to an empty string (and counts
+    /// at their defaults) when the channel has never been published
+    /// to.
+    virtual ProducerStats producer_stats(std::string_view channel) const {
+        (void)channel;
+        return {};
+    }
+
+    /// producer_list() filtered to channels matching the pattern
+    /// (same match semantics as route patterns: `*` single segment,
+    /// `**` tail).
+    virtual std::vector<std::string>
+        producers_by_pattern(std::string_view pattern) const {
+        (void)pattern;
+        return {};
+    }
 };
 
 /// Factory for the production implementation. Defined in

@@ -178,6 +178,14 @@ public:
             }
         }
 
+        // Phase 5a.5 — producer-registry bookkeeping. Happens AFTER
+        // origin stamping so the stamp timestamp and producer stamp
+        // agree on ordering. Before dispatch so a publish that the
+        // cycle detector rejects is still counted as "the producer
+        // tried" — matches operator expectations for observability
+        // (failed-publish count visible).
+        record_publisher(msg.channel);
+
         dispatch(msg, outcome);
         return outcome;
     }
@@ -296,7 +304,62 @@ public:
         return etil::manifold::session_hmac(process_key_, session_id);
     }
 
+    // --- Phase 5a.5 producer registry ---
+
+    std::vector<std::string> producer_list() const override {
+        std::vector<std::string> out;
+        std::lock_guard<std::mutex> lk(producer_mu_);
+        out.reserve(producer_stats_.size());
+        for (const auto& [name, _] : producer_stats_) out.push_back(name);
+        return out;
+    }
+
+    ProducerStats producer_stats(std::string_view channel) const override {
+        ProducerStats s;
+        {
+            std::lock_guard<std::mutex> lk(producer_mu_);
+            auto it = producer_stats_.find(std::string(channel));
+            if (it == producer_stats_.end()) return s;
+            s.channel           = it->first;
+            s.published_count   = it->second.published_count;
+            s.last_published_ns = it->second.last_published_ns;
+        }
+        // route_count is derived at query time — walk the route map
+        // under its own lock.
+        {
+            absl::MutexLock lock(&mu_);
+            for (const auto& [id, state] : routes_) {
+                if (channel_matches(state->spec.channel_pattern, s.channel)) {
+                    ++s.route_count;
+                }
+            }
+        }
+        return s;
+    }
+
+    std::vector<std::string>
+    producers_by_pattern(std::string_view pattern) const override {
+        std::vector<std::string> out;
+        std::string pat(pattern);
+        std::lock_guard<std::mutex> lk(producer_mu_);
+        for (const auto& [name, _] : producer_stats_) {
+            if (channel_matches(pat, name)) out.push_back(name);
+        }
+        return out;
+    }
+
 private:
+    /// Phase 5a.5 — called from publish() immediately after the RBAC
+    /// check and origin stamping succeed. One hash-map upsert + one
+    /// clock read. The mutex is separate from mu_ so producer-registry
+    /// writes don't contend with route lookups in dispatch().
+    void record_publisher(const std::string& channel) {
+        uint64_t now = clock_ ? clock_->now_ns() : 0;
+        std::lock_guard<std::mutex> lk(producer_mu_);
+        auto& stats = producer_stats_[channel];
+        stats.published_count += 1;
+        stats.last_published_ns = now;
+    }
     /// Core dispatch — for each matching route, apply transforms then
     /// deliver to the sink. Transforms may emit onto different
     /// channels; those secondary publishes go through dispatch_message
@@ -472,6 +535,17 @@ private:
 
     mutable absl::Mutex mu_;
     std::unordered_map<uint64_t, std::shared_ptr<RouteState>> routes_ ABSL_GUARDED_BY(mu_);
+
+    /// Phase 5a.5 — producer-keyed channel registry (doc B §24.2).
+    /// Keyed by channel name; updated once per successful publish()
+    /// under a dedicated mutex so it doesn't contend with route
+    /// lookups in dispatch().
+    struct ProducerRecord {
+        uint64_t published_count  = 0;
+        uint64_t last_published_ns = 0;
+    };
+    mutable std::mutex producer_mu_;
+    absl::flat_hash_map<std::string, ProducerRecord> producer_stats_;
 
     std::atomic<uint64_t> next_handle_id_{1};
     std::atomic<uint64_t> cycles_detected_{0};
