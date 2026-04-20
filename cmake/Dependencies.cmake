@@ -41,6 +41,16 @@ if(NOT absl_FOUND)
     )
     set(ABSL_PROPAGATE_CXX_STD ON)
     FetchContent_MakeAvailable(abseil)
+    # Abseil's CRC fast-path uses std::array<__m128i, N>. The vector-size
+    # and may_alias attributes on __m128i get stripped when __m128i is
+    # passed as a template argument, which GCC reports as
+    # -Wignored-attributes. Storage-wise it's benign (std::array's member
+    # array retains the attributes), but the warning fires twice per
+    # build. Scope the suppression to the one target that hits it so
+    # every other Abseil target stays warning-strict.
+    if(TARGET absl_crc32c)
+        target_compile_options(absl_crc32c PRIVATE -Wno-ignored-attributes)
+    endif()
 else()
     message(STATUS "Using pre-built Abseil")
 endif()
