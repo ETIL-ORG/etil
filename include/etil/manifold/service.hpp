@@ -104,10 +104,31 @@ public:
     /// Output is a 22-character base64url string (128-bit HMAC-SHA256
     /// truncate).
     virtual std::string session_hmac(std::string_view session_id) const = 0;
+
+    /// Test helper — block until every publish issued before this call
+    /// has been fully delivered to its sinks. Default implementation
+    /// is a no-op (sync implementations such as the current
+    /// DefaultChannelService deliver on the caller's stack, so there
+    /// is nothing to flush). The Phase 5a ThreadDispatcher override
+    /// will actually block on the dispatcher queue.
+    ///
+    /// Introduced in Phase 5a.1 as a forward-compatibility seam: tests
+    /// written today will be correct after Phase 5a.3 flips delivery
+    /// onto a worker thread.
+    virtual void flush_for_tests() {}
 };
 
 /// Factory for the production implementation. Defined in
 /// src/manifold/default_service.cpp.
 std::shared_ptr<ChannelService> make_default_channel_service();
+
+class IClock;
+
+/// Test-oriented factory that lets callers inject a custom clock
+/// (typically a ManualClock) for deterministic time-stamp assertions
+/// in producer-registry tests. Production code should use the
+/// default factory above.
+std::shared_ptr<ChannelService> make_default_channel_service_with_clock(
+    std::shared_ptr<IClock> clock);
 
 } // namespace etil::manifold

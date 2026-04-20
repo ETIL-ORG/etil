@@ -16,6 +16,7 @@
 #include "etil/core/heap_observable.hpp"
 #include "etil/core/logging.hpp"
 #include "etil/manifold/channel_name.hpp"
+#include "etil/manifold/clock.hpp"
 #include "etil/manifold/origin.hpp"
 #include "etil/manifold/rbac.hpp"
 #include "etil/manifold/session_hmac.hpp"
@@ -39,11 +40,74 @@ struct RouteState {
     std::atomic<uint64_t> dropped{0};
 };
 
+/// Phase 5a.1 seam extraction — the pure transform-application +
+/// sink-delivery tail of deliver(). No service state references; takes
+/// only the route state, the message, and (forward-compat) the clock.
+/// Echo-suppression (layer 3) and audit emission stay in the service
+/// method that invokes this.
+///
+/// Invariants:
+///   - Does not throw. Sink exceptions are caught and logged; the
+///     loop continues so one bad sink does not drop the entire
+///     pipeline.
+///   - `state.accepted` is incremented per successfully delivered
+///     transformed message.
+///   - Does not mutate the caller's `msg` (copies for retarget).
+///
+/// The `clock` parameter is reserved for Phase 5a.5 producer-registry
+/// time-stamping from within the delivery path; currently unused.
+void apply_transforms_and_deliver(RouteState& state,
+                                  const Message& msg,
+                                  IClock& /*clock*/) {
+    // Apply the transform chain. Each transform may emit 0..N messages.
+    std::vector<Message> pipeline = {msg};
+    for (auto& transform : state.spec.transforms) {
+        std::vector<Message> next;
+        next.reserve(pipeline.size());
+        for (auto& m : pipeline) {
+            auto emitted = transform->apply(std::move(m));
+            for (auto& em : emitted) next.push_back(std::move(em));
+        }
+        pipeline = std::move(next);
+        if (pipeline.empty()) break;
+    }
+
+    if (pipeline.empty()) return;
+
+    // For each transformed message, deliver to the sink. Messages
+    // retargeted onto a different channel via fan_out still go to
+    // this route's sink (transform-driven retargeting through the
+    // router is a Phase 2+ follow-up per doc B §20.5).
+    for (auto& m : pipeline) {
+        Message to_deliver = m;
+        if (to_deliver.channel != msg.channel) {
+            if (to_deliver.route_trace.size() < kMaxRouteTraceEntries) {
+                to_deliver.route_trace.push_back(msg.channel);
+            }
+            if (to_deliver.hops_remaining > 0) --to_deliver.hops_remaining;
+        }
+
+        try {
+            if (state.spec.sink) {
+                state.spec.sink->accept(to_deliver);
+                state.accepted.fetch_add(1, std::memory_order_relaxed);
+            }
+        } catch (const std::exception& e) {
+            log()->warn("Sink threw during accept on channel {}: {}",
+                        to_deliver.channel, e.what());
+        }
+    }
+}
+
 /// Forward declaration — dispatch helper for recursive (transform-
 /// fan-out) publishes without reentering the public publish() path.
 class DefaultChannelService : public ChannelService {
 public:
-    DefaultChannelService() {
+    DefaultChannelService()
+        : DefaultChannelService(make_system_clock()) {}
+
+    explicit DefaultChannelService(std::shared_ptr<IClock> clock)
+        : clock_(std::move(clock)) {
         if (!origin_is_initialized()) init_origin();
     }
 
@@ -282,55 +346,10 @@ private:
             }
         }
 
-        // Apply the transform chain. Each transform may emit 0..N messages.
-        std::vector<Message> pipeline = {msg};
-        for (auto& transform : state->spec.transforms) {
-            std::vector<Message> next;
-            next.reserve(pipeline.size());
-            for (auto& m : pipeline) {
-                auto emitted = transform->apply(std::move(m));
-                for (auto& em : emitted) next.push_back(std::move(em));
-            }
-            pipeline = std::move(next);
-            if (pipeline.empty()) break;
-        }
-
-        if (pipeline.empty()) return;
-
-        // For each transformed message, deliver to the sink. Transforms
-        // that retargeted onto a different channel would, in a fuller
-        // implementation, re-enter the router — Phase 1 keeps things
-        // simple: messages emitted with a different channel still go
-        // to THIS route's sink (fan_out replicates at sink level). A
-        // future phase adds transform-driven retargeting through the
-        // router.
-        for (auto& m : pipeline) {
-            // Append this route's channel pattern to the trace and
-            // decrement hops_remaining on the copy we deliver. We do
-            // not mutate the caller's `msg`.
-            Message to_deliver = m;
-            // route_trace append happens when a transform retargets
-            // onto a new channel; single-route delivery to the same
-            // channel does not re-add. Detect retargeting:
-            if (to_deliver.channel != msg.channel) {
-                if (to_deliver.route_trace.size() < kMaxRouteTraceEntries) {
-                    to_deliver.route_trace.push_back(msg.channel);
-                }
-                if (to_deliver.hops_remaining > 0) --to_deliver.hops_remaining;
-            }
-
-            try {
-                if (state->spec.sink) {
-                    state->spec.sink->accept(to_deliver);
-                    state->accepted.fetch_add(1, std::memory_order_relaxed);
-                }
-            } catch (const std::exception& e) {
-                // Isolate sink failures — one bad sink must not
-                // poison the dispatch loop.
-                log()->warn("Sink threw during accept on channel {}: {}",
-                            to_deliver.channel, e.what());
-            }
-        }
+        // Phase 5a.1: the pure tail is now a free function so it can be
+        // exercised in isolation (tests construct a RouteState + Message
+        // + IClock without needing a full ChannelService).
+        apply_transforms_and_deliver(*state, msg, *clock_);
     }
 
     // --- audit emission (bypasses RBAC + cycle checks) ---
@@ -404,6 +423,12 @@ private:
         // self-loop (rare but easy to catch).
     }
 
+    /// Injectable clock — production defaults to SystemClock, tests
+    /// inject ManualClock for deterministic last_published_ns. Phase
+    /// 5a.1: owned but not yet read on the hot path (Phase 5a.5 wires
+    /// producer-registry stamping through it).
+    std::shared_ptr<IClock> clock_;
+
     mutable absl::Mutex mu_;
     std::unordered_map<uint64_t, std::shared_ptr<RouteState>> routes_ ABSL_GUARDED_BY(mu_);
 
@@ -422,6 +447,11 @@ private:
 
 std::shared_ptr<ChannelService> make_default_channel_service() {
     return std::make_shared<DefaultChannelService>();
+}
+
+std::shared_ptr<ChannelService> make_default_channel_service_with_clock(
+    std::shared_ptr<IClock> clock) {
+    return std::make_shared<DefaultChannelService>(std::move(clock));
 }
 
 } // namespace etil::manifold
