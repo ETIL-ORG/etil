@@ -198,6 +198,12 @@ public:
     /// Return a human-readable name for this node's kind.
     const char* kind_name() const;
 
+    /// For Kind::ChannelSubscription only — signal the subject to close
+    /// so any in-flight execute_pipeline drain loop exits on its next
+    /// pop_wait. No-op for other kinds. Safe to call concurrently with
+    /// execute_pipeline; does not destroy the observable.
+    void close_channel_subscription();
+
 private:
     explicit HeapObservable(Kind k);
 

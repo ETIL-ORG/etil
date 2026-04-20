@@ -49,6 +49,14 @@ struct TdState {
     std::condition_variable    done_cv;
     bool                       worker_done = false;
 
+    // --- Phase 5a.6 pause hook (test-only) ---
+    // Protected by `mu` above — NOT by a separate mutex. Keeping it
+    // under the same lock as `q` and `stop` means test_pause() is
+    // observed atomically with the worker's wait predicate: the
+    // worker CANNOT wake to pop an item while paused is true, even
+    // if it was already in cv.wait() when the pause flag was set.
+    bool                       paused = false;
+
     // --- user-supplied delivery callback ---
     DeliveryFn                 deliver;
 };
@@ -61,7 +69,14 @@ void td_run(std::shared_ptr<TdState> st) {
         DeliveryItem item;
         {
             std::unique_lock<std::mutex> lk(st->mu);
-            st->cv.wait(lk, [&] { return st->stop || !st->q.empty(); });
+            // Phase 5a.6 — pause is part of the wait predicate. While
+            // `paused` is true the worker stays in cv.wait() even if
+            // the queue is non-empty; tests can observe queue-depth
+            // grow without the worker sneaking an item through. stop
+            // still takes priority so shutdown always makes progress.
+            st->cv.wait(lk, [&] {
+                return st->stop || (!st->paused && !st->q.empty());
+            });
             if (st->q.empty()) break;   // stop_ must be true per predicate
             item = std::move(st->q.front());
             st->q.pop();
@@ -184,6 +199,19 @@ public:
         s.dispatcher_exceptions = st_->exceptions.load(std::memory_order_acquire);
         s.idle_transitions      = st_->idle_transitions.load(std::memory_order_acquire);
         return s;
+    }
+
+    void test_pause() override {
+        std::lock_guard<std::mutex> lk(st_->mu);
+        st_->paused = true;
+    }
+
+    void test_resume() override {
+        {
+            std::lock_guard<std::mutex> lk(st_->mu);
+            st_->paused = false;
+        }
+        st_->cv.notify_all();
     }
 
 private:

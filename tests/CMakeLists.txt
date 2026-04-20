@@ -20,6 +20,7 @@ add_executable(etil_tests
     unit/test_manifold_test_sinks.cpp
     unit/test_manifold_async_dispatch.cpp
     unit/test_manifold_producer_registry.cpp
+    unit/test_manifold_dispatcher_stats.cpp
     unit/test_execution_context_channels.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp

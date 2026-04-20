@@ -287,8 +287,10 @@ std::shared_ptr<DelayingSink> make_delaying_sink(
 void BlockingSink::accept(const Message& /*msg*/) {
     std::unique_lock<std::mutex> lk(mu_);
     in_progress_.store(true, std::memory_order_release);
+    in_progress_cv_.notify_all();        // wake anyone in wait_until_accept_in_progress()
     cv_.wait(lk, [this] { return released_; });
     in_progress_.store(false, std::memory_order_release);
+    in_progress_cv_.notify_all();        // wake waiters observing the exit edge too
     count_.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -311,6 +313,13 @@ uint64_t BlockingSink::count() const {
 
 bool BlockingSink::accept_in_progress() const {
     return in_progress_.load(std::memory_order_acquire);
+}
+
+void BlockingSink::wait_until_accept_in_progress() {
+    std::unique_lock<std::mutex> lk(mu_);
+    in_progress_cv_.wait(lk, [this] {
+        return in_progress_.load(std::memory_order_acquire);
+    });
 }
 
 std::shared_ptr<BlockingSink> make_blocking_sink() {

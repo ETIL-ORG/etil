@@ -39,12 +39,20 @@ struct SinkStats {
     uint64_t dropped_count  = 0;   // messages dropped at this route
 };
 
-/// Aggregate cycle-detection stats (channel-cycle-stats).
+/// Aggregate cycle-detection + dispatcher stats (channel-cycle-stats).
+/// Phase 5a.6 added the lower four counters; they surface dispatcher-
+/// internal state through the same TIL word operators already use for
+/// cycle diagnostics.
 struct CycleStats {
-    uint64_t cycles_detected    = 0;  // layer 1 (route_trace)
-    uint64_t ttl_exhausted      = 0;  // layer 2 (hops_remaining)
-    uint64_t echo_dropped       = 0;  // layer 3 (origin echo) — phase 3
-    uint64_t static_warnings    = 0;  // add_route SCC warnings
+    uint64_t cycles_detected         = 0;  // layer 1 (route_trace)
+    uint64_t ttl_exhausted           = 0;  // layer 2 (hops_remaining)
+    uint64_t echo_dropped            = 0;  // layer 3 (origin echo)
+    uint64_t static_warnings         = 0;  // add_route SCC warnings
+    // --- Phase 5a.6 dispatcher counters ---
+    uint64_t subscriber_queue_depth   = 0; // items currently queued
+    uint64_t dropped_by_overflow      = 0; // RingBuffered/DropOldest drops (Phase 5a.7)
+    uint64_t dispatcher_exceptions    = 0; // sink throws caught by dispatcher
+    uint64_t dispatcher_idle_transitions = 0; // queue-empty edges
 };
 
 /// Per-channel producer-side snapshot — returned by the Phase 5a.5

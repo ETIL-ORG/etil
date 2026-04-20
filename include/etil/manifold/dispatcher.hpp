@@ -86,6 +86,18 @@ public:
 
     /// Snapshot of the four internal counters.
     virtual DispatcherStats stats() const = 0;
+
+    /// Test-only: stop the worker from consuming items from the queue
+    /// until test_resume() is called. New items still enqueue; they
+    /// pile up in the queue. Used by the Phase 5a.6 queue-depth
+    /// test and by any future test that needs to observe the
+    /// dispatcher under backpressure. Default is no-op (InlineDispatcher
+    /// has nothing to pause; a ThreadDispatcher overrides to flip an
+    /// internal flag that the worker loop respects).
+    virtual void test_pause()  {}
+
+    /// Test-only: release a previously-requested pause. Default no-op.
+    virtual void test_resume() {}
 };
 
 /// Production dispatcher. One std::thread, MPSC queue under a

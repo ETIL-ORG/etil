@@ -211,10 +211,16 @@ TEST(ManifoldTil, CycleStatsReturnsExpectedKeys) {
     auto opt = f.ctx.data_stack().pop();
     ASSERT_EQ(opt->type, Value::Type::Map);
     auto* m = opt->as_map();
+    // Cycle-detection keys (Phases 0-3).
     EXPECT_TRUE(m->has("cycles-detected"));
     EXPECT_TRUE(m->has("ttl-exhausted"));
     EXPECT_TRUE(m->has("echo-dropped"));
     EXPECT_TRUE(m->has("static-warnings"));
+    // Dispatcher keys (Phase 5a.6).
+    EXPECT_TRUE(m->has("subscriber-queue-depth"));
+    EXPECT_TRUE(m->has("dropped-by-overflow"));
+    EXPECT_TRUE(m->has("dispatcher-exceptions"));
+    EXPECT_TRUE(m->has("dispatcher-idle-transitions"));
     m->release();
 }
 

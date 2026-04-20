@@ -353,6 +353,15 @@ bool prim_channel_cycle_stats(ExecutionContext& ctx) {
     m->set("ttl-exhausted",    Value(static_cast<int64_t>(s.ttl_exhausted)));
     m->set("echo-dropped",     Value(static_cast<int64_t>(s.echo_dropped)));
     m->set("static-warnings",  Value(static_cast<int64_t>(s.static_warnings)));
+    // Phase 5a.6 dispatcher counters.
+    m->set("subscriber-queue-depth",
+           Value(static_cast<int64_t>(s.subscriber_queue_depth)));
+    m->set("dropped-by-overflow",
+           Value(static_cast<int64_t>(s.dropped_by_overflow)));
+    m->set("dispatcher-exceptions",
+           Value(static_cast<int64_t>(s.dispatcher_exceptions)));
+    m->set("dispatcher-idle-transitions",
+           Value(static_cast<int64_t>(s.dispatcher_idle_transitions)));
     ctx.data_stack().push(Value::from(m));
     return true;
 }

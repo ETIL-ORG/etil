@@ -175,9 +175,15 @@ public:
     uint64_t count() const;
     bool accept_in_progress() const;
 
+    /// Block the calling thread until an accept() is parked on the
+    /// semaphore. Returns immediately if one is already parked.
+    /// Replaces the poll-and-sleep "let things settle" anti-pattern.
+    void wait_until_accept_in_progress();
+
 private:
     std::mutex mu_;
-    std::condition_variable cv_;
+    std::condition_variable cv_;             ///< signals on release() / block()
+    std::condition_variable in_progress_cv_; ///< signals on entry/exit of accept()
     bool released_ = false;
     std::atomic<bool> in_progress_{false};
     std::atomic<uint64_t> count_{0};

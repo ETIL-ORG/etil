@@ -264,10 +264,8 @@ ASYNC_DISPATCH_TEST(AsyncDispatch, ShutdownInterruptsLongBlockingSink) {
         auto svc = make_default_channel_service();
         svc->add_route(make_spec("etil.async.block", blocker));
         svc->publish(make_msg("etil.async.block"));
-        // Give the dispatcher a moment to park on the blocker.
-        for (int i = 0; i < 100 && !blocker->accept_in_progress(); ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
+        // Deterministic barrier — no polling.
+        blocker->wait_until_accept_in_progress();
         ASSERT_TRUE(blocker->accept_in_progress());
         // Service goes out of scope here. Shutdown must return within
         // a bounded time window even though the blocker is stuck.

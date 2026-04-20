@@ -85,14 +85,15 @@ void apply_transforms_and_deliver(RouteState& state,
             if (to_deliver.hops_remaining > 0) --to_deliver.hops_remaining;
         }
 
-        try {
-            if (state.spec.sink) {
-                state.spec.sink->accept(to_deliver);
-                state.accepted.fetch_add(1, std::memory_order_relaxed);
-            }
-        } catch (const std::exception& e) {
-            log()->warn("Sink threw during accept on channel {}: {}",
-                        to_deliver.channel, e.what());
+        // Phase 5a.6 note: sink exceptions propagate up to the
+        // dispatcher's try/catch, which counts them via
+        // DispatcherStats::dispatcher_exceptions. Catching here would
+        // double-swallow the exception before the counter sees it.
+        // Invariant I5: dispatcher_exceptions increments atomically
+        // from the dispatcher thread.
+        if (state.spec.sink) {
+            state.spec.sink->accept(to_deliver);
+            state.accepted.fetch_add(1, std::memory_order_relaxed);
         }
     }
 }
@@ -297,6 +298,17 @@ public:
         c.ttl_exhausted   = ttl_exhausted_.load(std::memory_order_relaxed);
         c.echo_dropped    = echo_dropped_.load(std::memory_order_relaxed);
         c.static_warnings = static_warnings_.load(std::memory_order_relaxed);
+        // Phase 5a.6 — dispatcher-internal counters merged in so one
+        // `channel-cycle-stats` call surfaces both cycle diagnostics
+        // and dispatcher health.
+        if (dispatcher_) {
+            auto ds = dispatcher_->stats();
+            c.subscriber_queue_depth       = ds.queue_depth;
+            c.dispatcher_exceptions        = ds.dispatcher_exceptions;
+            c.dispatcher_idle_transitions  = ds.idle_transitions;
+            // dropped_by_overflow stays at DispatcherStats default (0)
+            // in Phase 5a.6; Phase 5a.7 adds enforcement + counter.
+        }
         return c;
     }
 

@@ -105,10 +105,8 @@ TEST(BlockingSinkSmoke, AcceptBlocksUntilReleased) {
         finished.store(true, std::memory_order_release);
     });
 
-    // Give the worker time to park in accept().
-    for (int i = 0; i < 50 && !sink->accept_in_progress(); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
+    // Deterministic wait — no polling.
+    sink->wait_until_accept_in_progress();
     EXPECT_TRUE(sink->accept_in_progress());
     EXPECT_FALSE(finished.load(std::memory_order_acquire));
 
@@ -130,9 +128,7 @@ TEST(BlockingSinkSmoke, BlockReArmsAfterRelease) {
         sink->accept(make_msg());
         finished.store(true, std::memory_order_release);
     });
-    for (int i = 0; i < 50 && !sink->accept_in_progress(); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
+    sink->wait_until_accept_in_progress();
     EXPECT_FALSE(finished.load(std::memory_order_acquire));
     sink->release();
     worker.join();
