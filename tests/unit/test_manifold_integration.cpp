@@ -242,11 +242,6 @@ struct MatrixRow {
     std::vector<Case> cases;
 };
 
-RolePermissions make_standalone() {
-    // Caller uses nullptr to get standalone; this is for completeness.
-    return {};
-}
-
 RolePermissions make_master_off() {
     RolePermissions r;
     r.channels_enabled = false;

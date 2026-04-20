@@ -6,7 +6,7 @@
 
 include(FetchContent)
 
-# Threading, LLVM, TBB — skipped for WASM (single-threaded, no JIT)
+# Threading, LLVM — skipped for WASM (single-threaded, no JIT)
 if(NOT ETIL_WASM_TARGET)
     find_package(Threads REQUIRED)
 
@@ -28,22 +28,6 @@ if(NOT ETIL_WASM_TARGET)
         nativecodegen
         orcjit
     )
-
-    # TBB (Threading Building Blocks) for concurrent containers
-    find_package(TBB QUIET CONFIG)
-    if(NOT TBB_FOUND)
-        FetchContent_Declare(
-            tbb
-            URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.11.0.tar.gz
-            URL_HASH SHA256=782ce0cab62df9ea125cdea253a50534862b563f1d85d4cda7ad4e77550ac363
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        )
-        set(TBB_TEST OFF CACHE BOOL "")
-        set(TBB_STRICT OFF CACHE BOOL "")
-        FetchContent_MakeAvailable(tbb)
-    else()
-        message(STATUS "Using pre-built TBB")
-    endif()
 endif()
 
 # Abseil (Google's C++ library) for containers and utilities
@@ -254,6 +238,7 @@ if(ETIL_BUILD_MONGODB)
         set(BUILD_SHARED_AND_STATIC_LIBS OFF CACHE BOOL "")
         set(ENABLE_TESTS OFF CACHE BOOL "")
         set(ENABLE_UNINSTALL OFF CACHE BOOL "")
+        set(MONGOCXX_OVERRIDE_DEFAULT_INSTALL_PREFIX OFF CACHE BOOL "")
         FetchContent_MakeAvailable(mongo-cxx-driver)
     else()
         message(STATUS "Using pre-built MongoDB drivers")

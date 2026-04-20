@@ -109,16 +109,6 @@ ChannelAction action_from_string(const std::string& s) {
     return ChannelAction::None;
 }
 
-const char* action_to_short(ChannelAction a) {
-    switch (a) {
-        case ChannelAction::Read:       return "read";
-        case ChannelAction::Write:      return "write";
-        case ChannelAction::Route:      return "route";
-        case ChannelAction::Introspect: return "introspect";
-        default:                        return "none";
-    }
-}
-
 std::string actions_mask_to_string(uint8_t m) {
     std::string s;
     auto add = [&](const char* tok) {

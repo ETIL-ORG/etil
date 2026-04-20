@@ -268,14 +268,6 @@ llvm-config-18 --version
 cmake -DLLVM_DIR=/usr/lib/llvm-18/cmake ../evolutionary-til
 ```
 
-### Missing TBB
-
-TBB is fetched automatically by CMake. If you prefer the system package:
-
-```bash
-sudo apt install libtbb-dev
-```
-
 ### Clean Rebuild
 
 ```bash

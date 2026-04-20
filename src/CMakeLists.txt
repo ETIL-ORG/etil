@@ -123,7 +123,6 @@ else()
         PUBLIC
             Threads::Threads
             ${llvm_libs}
-            TBB::tbb
             absl::flat_hash_map
             absl::flat_hash_set
             absl::synchronization
