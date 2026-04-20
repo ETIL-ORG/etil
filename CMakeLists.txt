@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(EvolutionaryTIL VERSION 2.8.1 LANGUAGES C CXX)
+project(EvolutionaryTIL VERSION 2.8.2 LANGUAGES C CXX)
 
 # All executables go to <builddir>/bin/
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -41,6 +41,13 @@ option(ETIL_BUILD_JWT "Build JWT authentication" ON)
 option(ETIL_BUILD_MONGODB "Build MongoDB integration (requires ETIL_BUILD_JWT)" ON)
 option(ETIL_BUILD_NATS_SINK "Build Manifold nats_sink (requires nats.c)" OFF)
 option(ETIL_BUILD_AMQP_SINK "Build Manifold amqp_sink (requires Qpid Proton-C++)" OFF)
+# Phase 5a.2 gate: when OFF, the async-correctness tests in
+# test_manifold_async_dispatch.cpp are prefixed DISABLED_ so Google
+# Test skips them. Phase 5a.3 ships the ThreadDispatcher impl and
+# flips this ON; Phase 5a.4 reconciles any pre-5a tests that break.
+option(ETIL_MANIFOLD_ASYNC_DISPATCH_ENABLED
+       "Run Phase 5a.2 async-correctness test suite (needs Phase 5a.3)"
+       OFF)
 option(ETIL_WASM_TARGET "Build for WebAssembly via Emscripten" OFF)
 
 # WASM target forces off incompatible features
