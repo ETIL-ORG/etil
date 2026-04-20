@@ -271,14 +271,25 @@ diagnostic, notification, and outbound/inbound SSE event flows through
 this substrate; producers call `channels->publish(msg)`, routes
 dispatch to sinks.
 
-- **27 new TIL words** (`channel-publish`, `channel-subscribe`,
-  `channel-route-add`/`-remove`, `channel-tap-file`/`-tap-observable`,
-  `channel-list`/`-list-routes`, `channel-origin`/`-seq`/
-  `-last-published`, `channel-cycle-stats`/`-sink-stats`/
-  `-all-sink-stats`/`-trace`/`-hops-left`, `channel-perm-check`/
-  `-perm-list`, 5 `mcp-on-*` inbound convenience words, 4
-  `role-grant-channel` / `role-revoke-channel` /
-  `role-channel-enable!` / `role-network-sink!` admin words).
+- **34 TIL words** covering publish/subscribe, route install, broker
+  taps (file / NATS / AMQP 1.0), broker sources (inbound from broker
+  back into local channels), MCP SSE inbound subscribers, message-identity
+  introspection, cycle / sink stats, session-HMAC, and role admin.
+  Full reference with stack effects, examples, and MQ subject/header
+  conventions in **Appendix V**.
+- **Broker sinks + sources** — `channel-tap-nats`, `channel-tap-amqp`,
+  `channel-source-nats`, `channel-source-amqp`, `mcp-notify-nats`,
+  `mcp-notify-amqp`. Per-message headers carry `Session-Hmac`
+  (HMAC-SHA256 of session_id), `Msg-Codec`, `Msg-Host`, `Msg-Startup`,
+  `Msg-Seq`, `Msg-HopsLeft` for cross-process correlation and loop
+  detection. Codecs: `json` (default), `msgpack`, `cbor`, `raw`.
+- **MCP + evolution channels** — every MCP request publishes on
+  `etil.mcp.request.{received,completed,failed}`; every session open/close
+  on `etil.mcp.session.{opened,closed}`; every evolution generation on
+  `etil.evolution.generation.{start,end}`; all REPL stdout on
+  `etil.repl.stdout`; `EvolveLogger` categories absorbed into
+  `etil.evolution.<category>`. Tap any subtree with a file sink, a
+  broker sink, or an in-process observable for real-time observability.
 - **Named spdlog loggers** — `etil.mcp`, `etil.http`, `etil.db`,
   `etil.aaa`, `etil.oauth`, `etil.session`, `etil.dict`,
   `etil.manifold`. All 41 raw-stderr sites from the Phase 0 audit
@@ -530,6 +541,8 @@ are not yet implemented:
 | [R](#appendix-r-system-time-and-debug) | System, Time, and Debug | 21 |
 | [S](#appendix-s-observables) | Observables | 60 |
 | [T](#appendix-t-evolution-and-selection) | Evolution and Selection | 7 |
+| [U](#appendix-u-evolution-logging) | Evolution Logging | 11 |
+| [V](#appendix-v-manifold-channels) | Manifold — I/O Channels | 34 |
 
 ---
 
@@ -2920,6 +2933,197 @@ s" double" evolve-status .   \ => 10
 ```
 
 > **Note:** Evolution outcomes are **non-deterministic** — different random seeds produce different mutations, fitness scores, and surviving implementations. The error messages during `evolve-word` (e.g., "Error in 'mat-apply'") are expected — they come from mutated code that calls random words and fails fitness evaluation. The evolution engine discards these failed mutants automatically.
+
+---
+
+## Appendix V: Manifold — I/O Channels
+
+**Manifold** is ETIL's named-channel dataflow substrate. Every log line, every MCP request, every evolution event, every REPL stdout write — they all publish onto named channels. Routes match patterns and deliver to sinks (file, spdlog, stderr, null, broker, in-process observable). Transforms compose along the route. Subscribers observe channels at runtime without pre-registration.
+
+### V.1 When to reach for Manifold
+
+- **Observability.** Tap `etil.mcp.**` or `etil.evolution.**` during a long-running session to see what's happening, without restarting or recompiling.
+- **Integration.** Forward specific ETIL events to an external message broker (NATS or AMQP 1.0) so other processes can react — e.g., a dashboard service that subscribes to `etil.evolution.generation.end`.
+- **Audit.** Hard-wired channels like `etil.aaa.audit.**` always deliver — routes can't silence them, RBAC can't deny Write to them.
+- **Cross-fleet correlation.** Every message carries a `MessageOrigin` tuple `(host, app_startup_us, session_id, seq)` that uniquely identifies the event across all ETIL processes.
+
+### V.2 Core concepts
+
+| Concept | What it is |
+|---|---|
+| **Channel** | A hierarchical dot-separated name like `etil.mcp.request.received`. No registration needed — just publish. |
+| **Pattern** | A channel name with optional wildcards: `*` (one segment), `**` (tail). Matches a family of channels. |
+| **Route** | `(pattern, transforms, sink)` triple. Installed via `channel-route-add` / `channel-tap-*`. |
+| **Sink** | Terminal destination for a message: file, stderr, spdlog logger, in-process observable, external broker. |
+| **Transform** | Pure function applied to a message before the sink sees it: level/channel/tag filters, annotator, codec encoder, rate limiter, sampler, fan-out. |
+| **Subscriber** | In-process consumer via `channel-subscribe` — returns an observable that emits each matching message. |
+| **Origin tuple** | `(host, startup_us, session, seq)` stamped on every `publish()` by the service. |
+| **Session-HMAC** | HMAC-SHA256 of `session_id` under a process-local CSPRNG key, base64url-truncated to 22 chars. Broker sinks send this, not the raw session_id. |
+
+### V.3 RBAC — seven actions under `RolePermissions`
+
+| Field | Controls |
+|---|---|
+| `channels_enabled` | Master switch. If false, all non-hardwired channel operations deny. |
+| `channel_grants` | Array of `{pattern, actions, effect}` grants. Most-specific pattern + deny-beats-allow at equal specificity. |
+| `channels_route_admin` | Required to install / remove routes (including every `channel-tap-*`). |
+| `channels_network_sink` | Required to attach a network-backed sink (NATS / AMQP / UDP / TCP). |
+| `channel_publish_quota` / `channel_subscribe_quota` | Per-session caps. |
+| `receive_client_notification` / `receive_progress` / `receive_cancelled` / `receive_roots_changed` | Gates MCP-SSE inbound `mcp-on-*` subscription patterns. |
+
+Hard-wired channels bypass `channel_grants` for their designated action:
+
+| Channel | Bypass action |
+|---|---|
+| `etil.aaa.audit.**`, `etil.security.**`, `etil.system.bootstrap.**`, `etil.logging.error` | Write (any role can always emit audit / security / bootstrap / error traces) |
+| `etil.health.**`, `etil.manifold.sink.**` | Write (with ring-buffered delivery) |
+| `etil.mcp.in.cancelled` | Read for the session owner (cancellation always reaches the target session) |
+
+### V.4 Word reference (34 words)
+
+| Category | Words |
+|---|---|
+| **Publish / subscribe** | `channel-publish` `channel-subscribe` `channel-tap-observable` |
+| **Route install** | `channel-route-add` `channel-route-remove` `channel-tap-file` `channel-tap-nats` `channel-tap-amqp` |
+| **Broker source** (inbound from broker → local channel) | `channel-source-nats` `channel-source-amqp` |
+| **MCP outbound on broker** | `mcp-notify-nats` `mcp-notify-amqp` |
+| **Introspection** | `channel-list` `channel-list-routes` `channel-perm-list` `channel-perm-check` `channel-session-hmac` |
+| **Message identity** | `channel-origin` `channel-seq` `channel-last-published` `channel-trace` `channel-hops-left` |
+| **Stats** | `channel-cycle-stats` `channel-sink-stats` `channel-all-sink-stats` |
+| **MCP inbound subscribers** | `mcp-on-notification` `mcp-on-progress` `mcp-on-cancelled` `mcp-on-roots-changed` `mcp-on-request` |
+| **Role admin** | `role-grant-channel` `role-revoke-channel` `role-channel-enable!` `role-network-sink!` |
+
+Stack effects are in `data/help.til` and visible via the TUI's F1 help browser.
+
+### V.5 Usage examples
+
+**Simple publish/subscribe (in-process, no route needed)**
+
+```
+\ Consumer — subscribe to a pattern, get an observable
+s" etil.app.**" channel-subscribe   ( -- observable )
+' my-handler obs-subscribe          ( consume each message )
+
+\ Producer — publish a message
+s" hello" s" etil.app.greet" channel-publish
+```
+
+**Tap the MCP request lifecycle to a file (async sink, safe from reentrancy)**
+
+```
+s" /tmp/mcp-trace.log" s" json" s" etil.mcp.**" channel-tap-file   ( -- handle )
+drop                                                                \ keep the handle if you'll remove later
+```
+
+**Install a NATS broker sink (requires `channels_network_sink`)**
+
+```
+\ Signature: ( url codec pattern -- handle )
+\ Codecs: json (default), msgpack, cbor, raw
+s" nats://nats:4222" s" json" s" etil.app.events" channel-tap-nats drop
+```
+
+Every `publish()` matching `etil.app.events` is encoded with the chosen codec and published to the NATS subject `etil.app.events` with headers:
+
+```
+Session-Hmac: NjTyVOaT96UgnmeB0dfawQ
+Msg-Codec: json
+Msg-OriginType: native
+Msg-Host: <container-hostname>
+Msg-Startup: <app_startup_us>
+Msg-Seq: <monotonic>
+Msg-HopsLeft: 32
+```
+
+Payload (JSON codec):
+
+```json
+{
+  "channel": "etil.app.events",
+  "origin": {
+    "host": "<hostname>",
+    "app_start_us": 1776645052218491,
+    "session": "<opaque-session-uuid>",
+    "origin_type": "native",
+    "seq": 67
+  },
+  "payload": "<user-data>",
+  "tags": {"session_id": "<uuid>"},
+  "ts_us": 1776683661339349
+}
+```
+
+**Ingest from a broker into a local channel**
+
+```
+\ Signature: ( url codec pattern -- handle )
+s" nats://nats:4222" s" json" s" etil.partner.**" channel-source-nats drop
+```
+
+Messages arriving on NATS subject tree `etil.partner.**` are decoded and re-published onto the matching local ETIL channel. Consumers use `channel-subscribe` as usual.
+
+**Introspection**
+
+```
+channel-list-routes .                \ every active route
+channel-cycle-stats .                \ visited / ttl_exhausted / echo_dropped counters
+<handle> channel-sink-stats .        \ forwarded / dropped / errors for one route
+s" etil.mcp.**" channel-perm-list .  \ what the current role can do on that pattern
+```
+
+**Role admin (interactive; mutates the session's role permissions, not roles.json)**
+
+```
+true role-channel-enable!                                              \ flip master switch on
+s" etil.**" s" read|write|route|introspect" true role-grant-channel    \ grant self
+true role-network-sink!                                                \ allow NATS/AMQP taps
+```
+
+### V.6 Broker subject conventions
+
+When `channel-tap-*` forwards an ETIL channel to a broker, the broker subject is **identical** to the ETIL channel name — dot segments preserved. NATS and AMQP 1.0 both handle dotted subjects natively.
+
+Common subject trees ETIL publishes onto:
+
+| Subject tree | What it carries |
+|---|---|
+| `etil.mcp.request.{received,completed,failed}` | Per-MCP-request lifecycle events — request ID, method, latency_us, error string |
+| `etil.mcp.session.{opened,closed}` | Session lifecycle — user_id, role name |
+| `etil.mcp.in.{progress,cancelled,roots.changed,initialized,notification.<tail>}` | Inbound MCP notifications the client sends |
+| `etil.mcp.out.notification.{system,user}` | Outbound MCP notifications from `sys-notification` / `user-notification` |
+| `etil.repl.stdout` | Every line written via `.` / `cr` / `type` from TIL |
+| `etil.evolution.generation.{start,end}` | Per-generation events — best_fitness, children count |
+| `etil.evolution.{mutate,bridge,fitness,timing}` | Per-mutation trace (absorbed `EvolveLogger` output) |
+| `etil.aaa.audit.**` | AAA audit trail — login, role assign, permission deny, channel cycle-detected, ttl-exhausted |
+| `etil.security.**` | Security events — allowlist breach, JWT validation failure |
+| `etil.system.bootstrap.**` | Startup sequence trace |
+
+A cross-process consumer typically subscribes with a wildcard:
+
+```
+# NATS CLI — watch every MCP request event from every ETIL process
+nats sub --server=nats://broker:4222 'etil.mcp.request.>'
+
+# or — everything from a specific session
+nats sub --server=nats://broker:4222 'etil.**' --filter-header "Session-Hmac=NjTy..."
+```
+
+### V.7 Wire headers (broker sinks)
+
+The `nats_sink` / `amqp_sink` set the following headers on each outbound message. `channel-source-nats` / `channel-source-amqp` parse them on ingress back into a `MessageOrigin` tuple.
+
+| Header | Semantic | Example |
+|---|---|---|
+| `Session-Hmac` | Opaque 22-char base64url HMAC of `session_id` | `NjTyVOaT96UgnmeB0dfawQ` |
+| `Msg-Codec` | Payload encoding | `json` / `msgpack` / `cbor` / `raw` |
+| `Msg-OriginType` | Which kind of ETIL process emitted this | `native` / `wasm` / `browser` |
+| `Msg-Host` | Container or machine hostname | `416d30e72284` |
+| `Msg-Startup` | Process-start microseconds since epoch | `1776645052218491` |
+| `Msg-Seq` | Monotonic sequence number since process start | `67` |
+| `Msg-HopsLeft` | TTL for cycle detection, decremented per hop | `32` |
+| `Msg-RouteTrace` | Comma-separated pattern trail (for layer-1 loop detection) | `etil.app.**,etil.replay.**` |
+
+On the consumer side, reconstructing the original message requires only the `Msg-Codec` header to decode the payload. The other headers are used by the ingress route and by `channel-origin` / `channel-seq` for introspection.
 
 ---
 

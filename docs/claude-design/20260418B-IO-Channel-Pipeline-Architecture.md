@@ -2432,3 +2432,53 @@ sys-notification / user-notification wiring), §17 Phase B as
 Phase 2, §16 + §17 Phase C as Phase 3 follow-ups, and §19
 browser-facing sinks/sources as etil-web Phase 1b / 2b / 3b / 4b
 in parallel with the native rollout.
+
+---
+
+## 24. Post-Phase-4 issues surfaced in field use
+
+Two architecture gaps discovered during v2.7.3 interactive TUI debugging, not previously called out in this doc. Both require follow-up phases.
+
+### 24.1 Subscriber dispatch is synchronous — MCP response path deadlock risk
+
+**Observed:** From an interactive `interpret` call, running `s" etil.mcp.**" channel-tap-observable ' some-tail obs-subscribe` caused the client to hang. When the interpret was about to return, the server published `etil.mcp.request.completed` as part of the Phase 4b instrumentation. `DefaultChannelService::publish` dispatches to subscribers synchronously on the caller's stack, so the TIL callback ran *while the MCP response was still being assembled*. The callback wrote to `cr`, which publishes to `etil.repl.stdout` — not a loop, but enough latency/contention on the HTTP response path that the client's read timed out with "Response for unknown request id".
+
+**Root hazard:** Any publish on a channel matched by an in-process subscriber executes the subscriber synchronously, on the publishing thread, holding whatever locks the publisher holds. Subscribers can re-enter `publish()` freely, subscribers can block the publisher's forward progress, subscribers can deadlock against the publisher's mutexes.
+
+**Resolution options:**
+
+1. **Async subscriber dispatch (preferred).** `DefaultChannelService::publish` enqueues the message + the set of matching subscriber-handles into a per-service MPSC queue; a single worker thread drains the queue and invokes subscriber callbacks. The publisher returns as soon as the message is in the queue.
+   - Pros: no reentrancy, bounded publisher latency, subscriber errors don't affect publisher.
+   - Cons: FIFO ordering is preserved within the queue but not across publishers; memory pressure if subscribers fall behind (needs a drop policy + drop counter on `channel-cycle-stats`); adds a worker thread to the process; changes observable ordering semantics (no longer "the observable saw the message before publish returned").
+   - Mitigation: the existing `RingBuffered` / `DropOldest` / `Block` delivery modes on `RouteSpec` (§14 / §22.2) can be reused for subscriber queue overflow.
+
+2. **Thread-local reentrancy guard (cheap interim).** Set a `thread_local bool in_publish = true` at the top of `publish()`; restore on exit. When a subscriber callback tries to re-enter `publish()` within the same stack, the nested publish either (a) silently queues to an internal async path, or (b) returns with a bump to a `reentrant_dropped` counter. Also: `observe()`-returned observables mark themselves "deferred" — their callbacks run off-thread via a short-lived pool only when the original publish returns.
+   - Pros: minimal code change, preserves sync semantics for the common case.
+   - Cons: subtle — any bug in the deferred path regresses silently.
+
+3. **Forbid in-process subscribers on MCP traffic patterns.** `observe()` refuses patterns matching `etil.mcp.request.**`, `etil.mcp.session.**`, `etil.repl.**` when the calling context is itself an MCP request handler (principal is non-null). External sinks (file/nats/amqp) keep working.
+   - Pros: trivially correct for the specific deadlock.
+   - Cons: blunt — legitimate observability tools lose visibility; doesn't generalize to evolution-engine channels or future additions.
+
+**Decision:** go with **option 1** as the real fix, in a new phase (Phase 5a). Ship option 2 as an interim patch only if MCP users hit the deadlock during the interval. Option 3 rejected — too coarse.
+
+### 24.2 `channel-list` only shows channels with routes, not channels with producers
+
+**Observed:** User opened a fresh session, ran `channel-list`, saw only the one channel they had just routed (`etil.test.nats`). Expected to see `etil.mcp.request.*`, `etil.mcp.session.*`, `etil.evolution.*`, `etil.repl.stdout`, etc. — all of which receive publishes continuously.
+
+**Root cause:** The channel registry is derived from routes (`DefaultChannelService::add_route` appends, `remove_route` decrements). Producers call `publish(msg)` directly against `msg.channel` with no registration step. Absent a route, the channel name never enters any table the TIL words can see.
+
+**User expectation:** For interactive debugging / observability, the registry should reflect every channel that has received at least one publish during this process's lifetime, with a publish count per channel — independent of whether a route is installed.
+
+**Resolution:**
+
+Add a `producer_registry` (or rename the current route-derived list and add a new one): a concurrent `absl::flat_hash_map<std::string, ProducerStats>` inside `DefaultChannelService`, keyed by channel name. Each `publish()` does one atomic upsert: increment a 64-bit `published_count`, update `last_published_ns`. New TIL words:
+- `channel-producer-list ( -- array )` — every channel that has been published to since service start
+- `channel-producer-stats ( name-str -- map )` — `{published_count, last_published_ns, subscriber_count, route_count}` for a specific channel name
+- `channel-producers-by-pattern ( pattern-str -- array )` — filter the producer list by pattern
+
+Existing `channel-list` stays route-keyed (useful: "which channels have a sink attached") — the new words add the complementary view.
+
+**Cost:** one hash-table upsert per `publish()` call — at ~100 KHz publish rate (theoretical max of the Phase 4b wiring), that's negligible. Memory grows with number of distinct channel names, which is naturally bounded by how producer code is written.
+
+**Phase:** bundle with Phase 5a (24.1 work) — both touch `DefaultChannelService::publish` and the TIL introspection surface.
