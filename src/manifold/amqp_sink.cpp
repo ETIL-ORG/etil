@@ -41,11 +41,14 @@ public:
                 std::mutex& mu,
                 std::condition_variable& cv,
                 std::queue<proton::message>& queue,
-                std::atomic<bool>& stop)
+                std::atomic<bool>& stop,
+                std::mutex& connect_mu,
+                std::condition_variable& connect_cv)
         : url_(std::move(url)),
           address_(std::move(address)),
           connected_(connected),
-          mu_(mu), cv_(cv), queue_(queue), stop_(stop) {}
+          mu_(mu), cv_(cv), queue_(queue), stop_(stop),
+          connect_mu_(connect_mu), connect_cv_(connect_cv) {}
 
     void on_container_start(proton::container& c) override {
         c.connect(url_);
@@ -56,7 +59,11 @@ public:
     }
 
     void on_sender_open(proton::sender& /*s*/) override {
-        connected_.store(true, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lk(connect_mu_);
+            connected_.store(true, std::memory_order_release);
+        }
+        connect_cv_.notify_all();
         drain();
     }
 
@@ -72,7 +79,11 @@ public:
         auto log = etil::core::logging::get("etil.manifold");
         if (log) log->error("amqp_sink: transport error: {}",
                             t.error().what());
-        connected_.store(false, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lk(connect_mu_);
+            connected_.store(false, std::memory_order_release);
+        }
+        connect_cv_.notify_all();
     }
 
     void wake() {
@@ -104,6 +115,8 @@ private:
     std::condition_variable& cv_;
     std::queue<proton::message>& queue_;
     std::atomic<bool>& stop_;
+    std::mutex& connect_mu_;
+    std::condition_variable& connect_cv_;
 };
 
 class AmqpSink : public BrokerSinkBase {
@@ -126,7 +139,8 @@ public:
         handler_ = std::make_unique<AmqpHandler>(
             config().broker_url,
             default_address(),
-            connected_, mu_, cv_, queue_, stop_);
+            connected_, mu_, cv_, queue_, stop_,
+            connect_mu_, connect_cv_);
         try {
             container_ = std::make_unique<proton::container>(*handler_);
         } catch (const std::exception& e) {
@@ -143,13 +157,12 @@ public:
                                     e.what());
             }
         });
-        // Brief wait for connect — the caller wants to know up front.
         auto deadline = std::chrono::steady_clock::now() +
                         std::chrono::seconds(2);
-        while (!connected_.load(std::memory_order_acquire) &&
-               std::chrono::steady_clock::now() < deadline) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        }
+        std::unique_lock<std::mutex> lk(connect_mu_);
+        connect_cv_.wait_until(lk, deadline, [this] {
+            return connected_.load(std::memory_order_acquire);
+        });
         return connected_.load(std::memory_order_acquire);
     }
 
@@ -216,6 +229,8 @@ private:
     std::mutex mu_;
     std::condition_variable cv_;
     std::queue<proton::message> queue_;
+    std::mutex connect_mu_;
+    std::condition_variable connect_cv_;
 };
 
 } // namespace

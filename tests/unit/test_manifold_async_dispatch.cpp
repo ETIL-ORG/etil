@@ -80,7 +80,7 @@ RouteSpec make_spec(std::string pattern, std::shared_ptr<ISink> sink) {
 
 ASYNC_DISPATCH_TEST(AsyncDispatch, PublishReturnsBeforeSlowSubscriberCompletes) {
     auto svc = make_default_channel_service();
-    auto slow = make_delaying_sink(std::chrono::milliseconds(500));
+    auto slow = make_blocking_sink();
     svc->add_route(make_spec("etil.async.slow", slow));
 
     auto t0 = std::chrono::steady_clock::now();
@@ -92,8 +92,13 @@ ASYNC_DISPATCH_TEST(AsyncDispatch, PublishReturnsBeforeSlowSubscriberCompletes) 
     EXPECT_LT(ms, 50) << "publish() returned after " << ms
                       << "ms; slow sink must not block publisher";
 
-    // Subscriber has not finished yet — it's still sleeping on the
-    // dispatcher thread. Flush to drain.
+    // Prove the sink is actually mid-accept but not yet complete —
+    // the publisher thread has clearly not waited for it.
+    slow->wait_until_accept_in_progress();
+    EXPECT_EQ(slow->count(), 0u);
+
+    // Release the sink and flush to confirm the message delivers.
+    slow->release();
     svc->flush_for_tests();
     EXPECT_EQ(slow->count(), 1u);
 }

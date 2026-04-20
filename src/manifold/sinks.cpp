@@ -254,36 +254,6 @@ std::shared_ptr<SubscriberCountingSink> make_subscriber_counting_sink() {
 
 // ---
 
-DelayingSink::DelayingSink(std::chrono::milliseconds delay)
-    : delay_us_(
-          std::chrono::duration_cast<std::chrono::microseconds>(delay)
-              .count()) {}
-
-void DelayingSink::accept(const Message& /*msg*/) {
-    auto us = delay_us_.load(std::memory_order_relaxed);
-    if (us > 0) {
-        std::this_thread::sleep_for(std::chrono::microseconds(us));
-    }
-    count_.fetch_add(1, std::memory_order_relaxed);
-}
-
-uint64_t DelayingSink::count() const {
-    return count_.load(std::memory_order_relaxed);
-}
-
-void DelayingSink::set_delay(std::chrono::milliseconds d) {
-    delay_us_.store(
-        std::chrono::duration_cast<std::chrono::microseconds>(d).count(),
-        std::memory_order_relaxed);
-}
-
-std::shared_ptr<DelayingSink> make_delaying_sink(
-    std::chrono::milliseconds delay) {
-    return std::make_shared<DelayingSink>(delay);
-}
-
-// ---
-
 void BlockingSink::accept(const Message& /*msg*/) {
     std::unique_lock<std::mutex> lk(mu_);
     in_progress_.store(true, std::memory_order_release);

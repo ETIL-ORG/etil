@@ -16,7 +16,6 @@
 #include <gtest/gtest.h>
 
 using etil::manifold::make_blocking_sink;
-using etil::manifold::make_delaying_sink;
 using etil::manifold::make_exception_injecting_sink;
 using etil::manifold::make_manual_clock;
 using etil::manifold::make_subscriber_counting_sink;
@@ -64,32 +63,6 @@ TEST(SubscriberCountingSinkSmoke, ConcurrentAcceptsAllCounted) {
     }
     for (auto& t : ts) t.join();
     EXPECT_EQ(sink->count(), static_cast<uint64_t>(kThreads * kPer));
-}
-
-// ---------------------------------------------------------------------------
-// DelayingSink
-// ---------------------------------------------------------------------------
-
-TEST(DelayingSinkSmoke, AcceptSleepsAtLeastConfiguredDelay) {
-    auto sink = make_delaying_sink(std::chrono::milliseconds(20));
-    auto t0 = std::chrono::steady_clock::now();
-    sink->accept(make_msg());
-    auto elapsed = std::chrono::steady_clock::now() - t0;
-    EXPECT_GE(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed)
-                  .count(),
-              20);
-    EXPECT_EQ(sink->count(), 1u);
-}
-
-TEST(DelayingSinkSmoke, ZeroDelayDoesNotSleep) {
-    auto sink = make_delaying_sink(std::chrono::milliseconds(0));
-    auto t0 = std::chrono::steady_clock::now();
-    sink->accept(make_msg());
-    auto elapsed = std::chrono::steady_clock::now() - t0;
-    EXPECT_LT(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed)
-                  .count(),
-              5);
-    EXPECT_EQ(sink->count(), 1u);
 }
 
 // ---------------------------------------------------------------------------

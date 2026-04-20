@@ -130,28 +130,6 @@ private:
 
 std::shared_ptr<SubscriberCountingSink> make_subscriber_counting_sink();
 
-/// Sleeps for `delay_ms` inside every accept() call. Simulates a slow
-/// subscriber so tests can prove the publisher isn't blocked. Uses
-/// std::this_thread::sleep_for — the sleep runs on whichever thread
-/// the dispatcher invokes accept() from.
-class DelayingSink : public ISink {
-public:
-    explicit DelayingSink(std::chrono::milliseconds delay_ms);
-
-    void accept(const Message& msg) override;
-    void flush() override {}
-
-    uint64_t count() const;
-    void set_delay(std::chrono::milliseconds d);
-
-private:
-    std::atomic<int64_t> delay_us_;   // stored as microseconds for atomicity
-    std::atomic<uint64_t> count_{0};
-};
-
-std::shared_ptr<DelayingSink> make_delaying_sink(
-    std::chrono::milliseconds delay);
-
 /// Blocks inside accept() on an internal semaphore until release() is
 /// called. Used by tests that need to observe queue depth while an
 /// accept() is in flight. Thread-safe; release() can be called from
