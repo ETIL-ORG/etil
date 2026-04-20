@@ -4,6 +4,7 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/channel_name.cpp
     manifold/rbac.cpp
     manifold/clock.cpp
+    manifold/dispatcher.cpp
     manifold/sinks.cpp
     manifold/transforms.cpp
     manifold/subject.cpp

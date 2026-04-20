@@ -17,11 +17,14 @@
 #include "etil/core/logging.hpp"
 #include "etil/manifold/channel_name.hpp"
 #include "etil/manifold/clock.hpp"
+#include "etil/manifold/dispatcher.hpp"
 #include "etil/manifold/origin.hpp"
 #include "etil/manifold/rbac.hpp"
 #include "etil/manifold/session_hmac.hpp"
 #include "etil/manifold/subject.hpp"
 #include "etil/mcp/role_permissions.hpp"
+
+#include "route_state.hpp"
 
 namespace etil::manifold {
 
@@ -32,13 +35,8 @@ auto& log() {
     return l;
 }
 
-/// Per-route runtime state — held inside the service under its mutex.
-struct RouteState {
-    RouteHandle handle;
-    RouteSpec   spec;
-    std::atomic<uint64_t> accepted{0};
-    std::atomic<uint64_t> dropped{0};
-};
+// RouteState is defined in route_state.hpp (Phase 5a.3 extraction) so
+// both default_service.cpp and dispatcher.cpp can reach it.
 
 /// Phase 5a.1 seam extraction — the pure transform-application +
 /// sink-delivery tail of deliver(). No service state references; takes
@@ -104,11 +102,39 @@ void apply_transforms_and_deliver(RouteState& state,
 class DefaultChannelService : public ChannelService {
 public:
     DefaultChannelService()
-        : DefaultChannelService(make_system_clock()) {}
+        : DefaultChannelService(make_system_clock(), nullptr) {}
 
     explicit DefaultChannelService(std::shared_ptr<IClock> clock)
+        : DefaultChannelService(std::move(clock), nullptr) {}
+
+    /// Full-control constructor (Phase 5a.3). If `dispatcher` is null,
+    /// a ThreadDispatcher is created with a delivery closure bound to
+    /// this->deliver. Tests can pass an InlineDispatcher for
+    /// deterministic synchronous delivery; supply it pre-configured
+    /// with the desired DeliveryFn.
+    DefaultChannelService(std::shared_ptr<IClock> clock,
+                          std::unique_ptr<IDispatcher> dispatcher)
         : clock_(std::move(clock)) {
         if (!origin_is_initialized()) init_origin();
+        if (!dispatcher) {
+            dispatcher = make_thread_dispatcher(
+                [this](std::shared_ptr<RouteState>& state,
+                       const Message& msg) { this->deliver(state, msg); });
+        }
+        dispatcher_ = std::move(dispatcher);
+    }
+
+    /// Shutdown the dispatcher before any member is destroyed, so
+    /// closures capturing `this` see a live object for their entire
+    /// run. Invariant I3 (shutdown drains) is enforced by the
+    /// dispatcher.
+    ~DefaultChannelService() override {
+        if (dispatcher_) dispatcher_->shutdown();
+    }
+
+    /// Override — forward to the dispatcher's flush(). Invariant I2.
+    void flush_for_tests() override {
+        if (dispatcher_) dispatcher_->flush();
     }
 
     PublishOutcome publish(Message msg,
@@ -312,8 +338,13 @@ private:
         }
         outcome.routes_matched = matched.size();
 
+        // Phase 5a.3 — enqueue one DeliveryItem per matched route
+        // rather than invoking deliver() on the caller's stack.
+        // The dispatcher thread drains and calls deliver() outside
+        // this call path. See doc B §24.1 and the plan §4 Phase 5a.3
+        // invariants I1, I2, I4, I6.
         for (auto& state : matched) {
-            deliver(state, msg, outcome);
+            dispatcher_->enqueue(DeliveryItem{state, msg});
         }
     }
 
@@ -327,9 +358,12 @@ private:
         return true;
     }
 
+    /// Called from the dispatcher thread (ThreadDispatcher) or from the
+    /// caller's thread (InlineDispatcher). Layer-3 echo check lives
+    /// here because it mutates service-owned counters; the pure
+    /// transform+sink tail is in apply_transforms_and_deliver().
     void deliver(std::shared_ptr<RouteState>& state,
-                 const Message& msg,
-                 PublishOutcome& /*outcome*/) {
+                 const Message& msg) {
         // Layer 3 cycle detection (doc B §20.3). When the route
         // opted in with reject_own_origin, compare the incoming
         // message's origin against this process's own identity; if
@@ -428,6 +462,13 @@ private:
     /// 5a.1: owned but not yet read on the hot path (Phase 5a.5 wires
     /// producer-registry stamping through it).
     std::shared_ptr<IClock> clock_;
+
+    /// Phase 5a.3 — owns the subscriber/sink dispatcher. Default is
+    /// ThreadDispatcher; tests may inject InlineDispatcher for
+    /// deterministic sync delivery. The dtor explicitly calls
+    /// shutdown() before any other member is destroyed so in-flight
+    /// closures capturing `this` see a live object.
+    std::unique_ptr<IDispatcher> dispatcher_;
 
     mutable absl::Mutex mu_;
     std::unordered_map<uint64_t, std::shared_ptr<RouteState>> routes_ ABSL_GUARDED_BY(mu_);
