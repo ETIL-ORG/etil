@@ -616,14 +616,17 @@ s" select-off" s" category" s" text" s" evolution" meta! drop
 s" evolve-register" s" description" s" text" s" Register test cases for evolutionary fitness evaluation of a word" meta! drop
 s" evolve-register" s" stack-effect" s" text" s" ( word-str tests-array -- flag )" meta! drop
 s" evolve-register" s" category" s" text" s" evolution" meta! drop
+s" evolve-register" s" prerequisites" s" text" s| Ordering: word-str must be defined in the dictionary first. tests-array is an array of 2-element arrays [input-array, expected-outputs-array].\nState: the dictionary-bound ExecutionContext (evolution engine uses the same dictionary).\nNo RBAC check.| meta! drop
 
 s" evolve-word" s" description" s" text" s" Run one generation of AST-level evolution for a word, return children created" meta! drop
 s" evolve-word" s" stack-effect" s" text" s" ( word-str -- n )" meta! drop
 s" evolve-word" s" category" s" text" s" evolution" meta! drop
+s" evolve-word" s" prerequisites" s" text" s| Ordering: evolve-register (or evolve-register-pool) must have been called for word-str first.\nState: evolution RNGs should be seeded via evolve-seed! for reproducibility.\nRole config: instruction_budget bounds fitness eval cost per mutation (default 100000, tunable via evolve-instruction-budget).| meta! drop
 
 s" evolve-all" s" description" s" text" s" Evolve all words that have registered test cases" meta! drop
 s" evolve-all" s" stack-effect" s" text" s" ( -- )" meta! drop
 s" evolve-all" s" category" s" text" s" evolution" meta! drop
+s" evolve-all" s" prerequisites" s" text" s| Ordering: evolve-register must have been called for at least one word; otherwise this is a no-op.\nState: evolve-seed! for reproducibility.| meta! drop
 
 s" evolve-status" s" description" s" text" s" Return number of generations evolved for a word" meta! drop
 s" evolve-status" s" stack-effect" s" text" s" ( word-str -- n )" meta! drop
@@ -644,6 +647,7 @@ s" evolve-untag" s" category" s" text" s" evolution" meta! drop
 s" evolve-bridge" s" description" s" text" s" Register a bridge word that converts between two type domains" meta! drop
 s" evolve-bridge" s" stack-effect" s" text" s" ( from-type-str to-type-str bridge-word-str -- )" meta! drop
 s" evolve-bridge" s" category" s" text" s" evolution" meta! drop
+s" evolve-bridge" s" prerequisites" s" text" s| Ordering: bridge-word-str must be defined in the dictionary with a signature matching from-type-str -> to-type-str. Register bridges BEFORE evolve-word / evolve-chain so the BridgeMap / TypeRepair system can use them.| meta! drop
 
 # --- Evolution Fitness ---
 
@@ -688,14 +692,17 @@ s" evolve-log-show-failed" s" category" s" text" s" evolution" meta! drop
 s" evolve-seed!" s" description" s" text" s" Seed all evolution RNGs for deterministic reproducible runs" meta! drop
 s" evolve-seed!" s" stack-effect" s" text" s" ( n -- )" meta! drop
 s" evolve-seed!" s" category" s" text" s" evolution" meta! drop
+s" evolve-seed!" s" prerequisites" s" text" s| Ordering: call BEFORE any evolve-word / evolve-all / evolve-chain / evolve-dag / evolve-sub so mutations are reproducible. Later calls reseed live engines.| meta! drop
 
 s" evolve-sub" s" description" s" text" s" MCE: mutate sub-concept but evaluate chain word for fitness" meta! drop
 s" evolve-sub" s" stack-effect" s" text" s" ( sub-str chain-str -- n )" meta! drop
 s" evolve-sub" s" category" s" text" s" evolution" meta! drop
+s" evolve-sub" s" prerequisites" s" text" s| Ordering: sub-str and chain-str must be defined in the dictionary. evolve-register must have been called on chain-str (fitness evaluated at chain level).| meta! drop
 
 s" evolve-chain" s" description" s" text" s" Round-robin evolution of sub-concepts within a chain word" meta! drop
 s" evolve-chain" s" stack-effect" s" text" s" ( chain-str sub-concepts-array generations -- )" meta! drop
 s" evolve-chain" s" category" s" text" s" evolution" meta! drop
+s" evolve-chain" s" prerequisites" s" text" s| Ordering: chain-str must be defined and have evolve-register tests. Each word named in sub-concepts-array must be defined.\nState: evolve-seed! for reproducibility.| meta! drop
 
 s" evolve-mce-select" s" description" s" text" s" Toggle weighted-random selection during fitness evaluation. When true, Call instructions use the SelectionEngine instead of latest-impl lookup" meta! drop
 s" evolve-mce-select" s" stack-effect" s" text" s" ( flag -- )" meta! drop
@@ -718,10 +725,12 @@ s" _evolve-round" s" category" s" text" s" evolution" meta! drop
 s" evolve-dag-register" s" description" s" text" s" Build ConceptDAG from call graph and register tests on root" meta! drop
 s" evolve-dag-register" s" stack-effect" s" text" s" ( root-str tests-array -- flag )" meta! drop
 s" evolve-dag-register" s" category" s" text" s" evolution" meta! drop
+s" evolve-dag-register" s" prerequisites" s" text" s| Ordering: root-str and every transitively-called word must be defined. Tests-array format same as evolve-register. Call BEFORE evolve-dag.| meta! drop
 
 s" evolve-dag" s" description" s" text" s" Run DAG-aware contribution-weighted evolution for N generations" meta! drop
 s" evolve-dag" s" stack-effect" s" text" s" ( root-str generations -- )" meta! drop
 s" evolve-dag" s" category" s" text" s" evolution" meta! drop
+s" evolve-dag" s" prerequisites" s" text" s| Ordering: evolve-dag-register must have been called on root-str. evolve-seed! for reproducibility.| meta! drop
 
 s" evolve-dag-accumulate!" s" description" s" text" s" Toggle contribution weight carry across evolution runs" meta! drop
 s" evolve-dag-accumulate!" s" stack-effect" s" text" s" ( flag -- )" meta! drop
@@ -768,10 +777,12 @@ s" sys-datafields" s" examples" s" code" s" sys-datafields" meta! drop
 s" sys-notification" s" description" s" text" s" Queue a MCP notification (Any value auto-converted to string). Requires send_system_notification permission." meta! drop
 s" sys-notification" s" stack-effect" s" text" s" ( x -- )" meta! drop
 s" sys-notification" s" category" s" text" s" system" meta! drop
+s" sys-notification" s" prerequisites" s" text" s| Role flag: send_system_notification=true.\nState: active MCP session (notifications are queued per-session); the queued notification also fans out onto channel etil.mcp.out.notification.system if any sink is attached.| meta! drop
 
 s" user-notification" s" description" s" text" s" Send a notification to all sessions of a specific user. Requires send_user_notification permission. Pushes true (-1) if notified, false (0) otherwise." meta! drop
 s" user-notification" s" stack-effect" s" text" s" ( msg-str user-id-str -- flag )" meta! drop
 s" user-notification" s" category" s" text" s" system" meta! drop
+s" user-notification" s" prerequisites" s" text" s| Role flag: send_user_notification=true.\nState: target user-id must have at least one active session for the notification to be delivered; also fans out onto etil.mcp.out.notification.user.| meta! drop
 
 s" abort" s" description" s" text" s" Terminate interpretation. With true flag: success abort (normal response). With false flag: pops error message, error abort. Remaining tokens not executed." meta! drop
 s" abort" s" stack-effect" s" text" s" ( flag -- ) or ( error-string false -- )" meta! drop
@@ -890,6 +901,7 @@ s" evaluate" s" description" s" text" s" Interpret a string as TIL code at runti
 s" evaluate" s" stack-effect" s" text" s" ( str -- )" meta! drop
 s" evaluate" s" category" s" text" s" dictionary" meta! drop
 s" evaluate" s" examples" s" code" s| s" 42 dup +" evaluate . cr\n=> 84| meta! drop
+s" evaluate" s" prerequisites" s" text" s| Role flag: evaluate=true.\nIf the input string is tainted (originated from external data e.g. http-get, read-file, mongo-find): evaluate_tainted=true is also required.\nState: recursion depth counter respects interpret-execution-limit; deeply nested evaluate calls may hit the limit. Not call-aware of TIL return stack.| meta! drop
 
 s" forget" s" examples" s" code" s" : test 42 . ;\nforget test" meta! drop
 s" forget-all" s" examples" s" code" s" forget-all test" meta! drop
@@ -1497,26 +1509,31 @@ s" read-file" s" description" s" text" s" Read entire file contents as a string 
 s" read-file" s" stack-effect" s" text" s" ( path -- string? flag )" meta! drop
 s" read-file" s" category" s" text" s" file-io-async" meta! drop
 s" read-file" s" examples" s" code" s| s" /home/data.txt" read-file drop s.| meta! drop
+s" read-file" s" prerequisites" s" text" s| State: path must start with /home/ or /library/ (logical paths). /library is read-only. ExecutionContext must have Lvfs bound (automatic under MCP).\nRead-file results are tainted.| meta! drop
 
 s" write-file" s" description" s" text" s" Write string to file, truncating any existing content (async). Only writes to /home" meta! drop
 s" write-file" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
 s" write-file" s" category" s" text" s" file-io-async" meta! drop
 s" write-file" s" examples" s" code" s| s" Hello" s" /home/out.txt" write-file .| meta! drop
+s" write-file" s" prerequisites" s" text" s| Role flag: lvfs_modify=true.\nRole config: disk_quota must have headroom for the bytes being written.\nState: path must start with /home/ (writes to /library rejected); Lvfs bound to context.| meta! drop
 
 s" append-file" s" description" s" text" s" Append string to file (async). Creates file if it does not exist. Only writes to /home" meta! drop
 s" append-file" s" stack-effect" s" text" s" ( string path -- flag )" meta! drop
 s" append-file" s" category" s" text" s" file-io-async" meta! drop
 s" append-file" s" examples" s" code" s| s" more data" s" /home/log.txt" append-file drop| meta! drop
+s" append-file" s" prerequisites" s" text" s| Role flag: lvfs_modify=true.\nRole config: disk_quota must have headroom for appended bytes.\nState: path must start with /home/.| meta! drop
 
 s" copy-file" s" description" s" text" s" Copy a file (async). Source can be /library, destination must be under /home" meta! drop
 s" copy-file" s" stack-effect" s" text" s" ( src dest -- flag )" meta! drop
 s" copy-file" s" category" s" text" s" file-io-async" meta! drop
 s" copy-file" s" examples" s" code" s| s" /library/template.til" s" /home/my.til" copy-file drop| meta! drop
+s" copy-file" s" prerequisites" s" text" s| Role flag: lvfs_modify=true.\nRole config: disk_quota must cover destination size.\nState: src may be /home/ or /library/; dest must be /home/.| meta! drop
 
 s" rename-file" s" description" s" text" s" Rename or move a file/directory (async). Both paths must be under /home" meta! drop
 s" rename-file" s" stack-effect" s" text" s" ( old new -- flag )" meta! drop
 s" rename-file" s" category" s" text" s" file-io-async" meta! drop
 s" rename-file" s" examples" s" code" s| s" /home/old.txt" s" /home/new.txt" rename-file drop| meta! drop
+s" rename-file" s" prerequisites" s" text" s| Role flag: lvfs_modify=true.\nState: both old and new paths must be under /home/.| meta! drop
 
 s" lstat" s" description" s" text" s" Get file status as a 4-element array: [size, mtime_us, is_dir, is_read_only] (async)" meta! drop
 s" lstat" s" stack-effect" s" text" s" ( path -- array? flag )" meta! drop
@@ -1532,16 +1549,19 @@ s" mkdir" s" description" s" text" s" Create a directory (and parents) under /ho
 s" mkdir" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
 s" mkdir" s" category" s" text" s" file-io-async" meta! drop
 s" mkdir" s" examples" s" code" s| s" /home/project/src" mkdir drop| meta! drop
+s" mkdir" s" prerequisites" s" text" s| Role flag: lvfs_modify=true. State: path must be under /home/.| meta! drop
 
 s" mkdir-tmp" s" description" s" text" s" Create a unique temporary directory under /home with the given prefix (async). Returns virtual path" meta! drop
 s" mkdir-tmp" s" stack-effect" s" text" s" ( prefix -- string? flag )" meta! drop
 s" mkdir-tmp" s" category" s" text" s" file-io-async" meta! drop
 s" mkdir-tmp" s" examples" s" code" s| s" test" mkdir-tmp drop s.| meta! drop
+s" mkdir-tmp" s" prerequisites" s" text" s| Role flag: lvfs_modify=true. State: result path is created under /home/.| meta! drop
 
 s" rmdir" s" description" s" text" s" Remove an empty directory under /home (async)" meta! drop
 s" rmdir" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
 s" rmdir" s" category" s" text" s" file-io-async" meta! drop
 s" rmdir" s" examples" s" code" s| s" /home/empty-dir" rmdir drop| meta! drop
+s" rmdir" s" prerequisites" s" text" s| Role flag: lvfs_modify=true. State: directory must be empty and under /home/.| meta! drop
 
 s" rm" s" description" s" text" s" Remove a file or directory recursively under /home (async). Refuses to delete /home itself" meta! drop
 s" rm" s" stack-effect" s" text" s" ( path -- flag )" meta! drop
@@ -1559,11 +1579,13 @@ s" http-get" s" description" s" text" s" Perform an HTTP/HTTPS GET request with 
 s" http-get" s" stack-effect" s" text" s" ( url headers-map -- bytes status-code flag )" meta! drop
 s" http-get" s" category" s" text" s" http" meta! drop
 s" http-get" s" examples" s" code" s| s" https://httpbin.org/get" map-new http-get -rot 2drop . cr| meta! drop
+s" http-get" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_HTTP_CLIENT=ON at compile time.\nRole flag: net_client_allowed=true.\nRole config: url host must match one of role.net_client_domains (supports wildcards); net_client_quota > 0 (per-session fetch budget).\nNetwork safety: SSRF guards reject loopback, RFC1918 private, link-local, and cloud-metadata IPs at runtime.\nResults are tainted — pass through explicit untainting before use in evaluate or filesystem writes.| meta! drop
 
 s" http-post" s" description" s" text" s" Perform an HTTP/HTTPS POST request. The headers parameter is a HeapMap of string key-value pairs. Content-Type is extracted from headers (default: application/octet-stream). The body parameter is a HeapByteArray (use string->bytes to convert a string). Returns response body as opaque bytes (HeapByteArray), HTTP status code, and success flag. On failure pushes only flag=false. Same domain allowlist, fetch budgets, and SSRF protection as http-get" meta! drop
 s" http-post" s" stack-effect" s" text" s" ( url headers-map body-bytes -- bytes status-code flag )" meta! drop
 s" http-post" s" category" s" text" s" http" meta! drop
 s" http-post" s" examples" s" code" s| s" https://httpbin.org/post" map-new s" hello" string->bytes http-post -rot 2drop . cr| meta! drop
+s" http-post" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_HTTP_CLIENT=ON at compile time.\nRole flag: net_client_allowed=true.\nRole config: url host must match role.net_client_domains; net_client_quota > 0.\nSame SSRF guards as http-get. Results are tainted.| meta! drop
 
 # --- MongoDB ---
 
@@ -1571,26 +1593,31 @@ s" mongo-find" s" description" s" text" s" Query a MongoDB collection. Filter an
 s" mongo-find" s" stack-effect" s" text" s" ( coll filter opts -- json flag )" meta! drop
 s" mongo-find" s" category" s" text" s" mongodb" meta! drop
 s" mongo-find" s" examples" s" code" s| s" test" s" {}" s" {}" mongo-find| meta! drop
+s" mongo-find" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_MONGODB=ON at compile time.\nRole flag: mongo_access=true.\nRole config: mongo_query_quota > 0 (per-session query budget; 0 means no quota).\nState: MongoDB client must be configured and reachable (see MONGO_URI). Results are tainted.| meta! drop
 
 s" mongo-count" s" description" s" text" s" Count documents in a MongoDB collection. Filter and options accept String, Json, or Map. Uses server-side count_documents() (O(index) not O(N)). Options supports: skip, limit, hint, collation, max_time_ms. Returns the count as an integer and a success flag. Requires mongo_access permission" meta! drop
 s" mongo-count" s" stack-effect" s" text" s" ( coll filter opts -- count flag )" meta! drop
 s" mongo-count" s" category" s" text" s" mongodb" meta! drop
 s" mongo-count" s" examples" s" code" s| s" test" s" {}" s" {}" mongo-count| meta! drop
+s" mongo-count" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_MONGODB=ON. Role flag: mongo_access=true. Role config: mongo_query_quota > 0.| meta! drop
 
 s" mongo-insert" s" description" s" text" s" Insert a document into a MongoDB collection. Document accepts String, Json, or Map. Returns the inserted document _id as a string and a success flag. Requires mongo_access permission" meta! drop
 s" mongo-insert" s" stack-effect" s" text" s" ( coll doc -- inserted-id flag )" meta! drop
 s" mongo-insert" s" category" s" text" s" mongodb" meta! drop
 s" mongo-insert" s" examples" s" code" s| s" mycoll" s" {}" mongo-insert| meta! drop
+s" mongo-insert" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_MONGODB=ON. Role flag: mongo_access=true. Role config: mongo_query_quota > 0.| meta! drop
 
 s" mongo-update" s" description" s" text" s" Update documents in a MongoDB collection. Filter, update, and options accept String, Json, or Map. The update should use MongoDB update operators ($set, $inc, etc.). Options supports: upsert, hint, collation. Returns the count of modified documents and a success flag. Requires mongo_access permission" meta! drop
 s" mongo-update" s" stack-effect" s" text" s" ( coll filter update opts -- count flag )" meta! drop
 s" mongo-update" s" category" s" text" s" mongodb" meta! drop
 s" mongo-update" s" examples" s" code" s| s" mycoll" s" {}" s" {}" s" {}" mongo-update| meta! drop
+s" mongo-update" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_MONGODB=ON. Role flag: mongo_access=true. Role config: mongo_query_quota > 0.| meta! drop
 
 s" mongo-delete" s" description" s" text" s" Delete documents from a MongoDB collection. Filter and options accept String, Json, or Map. Options supports: hint, collation. Returns the count of deleted documents and a success flag. Requires mongo_access permission" meta! drop
 s" mongo-delete" s" stack-effect" s" text" s" ( coll filter opts -- count flag )" meta! drop
 s" mongo-delete" s" category" s" text" s" mongodb" meta! drop
 s" mongo-delete" s" examples" s" code" s| s" mycoll" s" {}" s" {}" mongo-delete| meta! drop
+s" mongo-delete" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_MONGODB=ON. Role flag: mongo_access=true. Role config: mongo_query_quota > 0.| meta! drop
 
 # --- Matrix (Linear Algebra) ---
 
