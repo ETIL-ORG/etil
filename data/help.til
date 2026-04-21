@@ -2416,3 +2416,53 @@ s" mcp-notify-nats" s" category" s" text" s" manifold" meta! drop
 s" mcp-notify-amqp" s" description" s" text" s" AMQP 1.0 parallel of mcp-notify-nats: install a JSON-coded sink on etil.mcp.out.notification.**" meta! drop
 s" mcp-notify-amqp" s" stack-effect" s" text" s" ( url -- )" meta! drop
 s" mcp-notify-amqp" s" category" s" text" s" manifold" meta! drop
+
+# --- Manifold: producer-keyed registry (v2.8.5, doc B §24.2) ---
+
+s" channel-producer-list" s" description" s" text" s" Return an array of every channel name that has received at least one publish since service start. Order is undefined" meta! drop
+s" channel-producer-list" s" stack-effect" s" text" s" ( -- array )" meta! drop
+s" channel-producer-list" s" category" s" text" s" manifold" meta! drop
+
+s" channel-producer-stats" s" description" s" text" s" Return a stats map for one channel name (keys: channel published-count last-published-ns route-count). Fields default to 0/empty when the channel has never been published to" meta! drop
+s" channel-producer-stats" s" stack-effect" s" text" s" ( channel-str -- map )" meta! drop
+s" channel-producer-stats" s" category" s" text" s" manifold" meta! drop
+
+s" channel-producers-by-pattern" s" description" s" text" s" Filter channel-producer-list to channels matching pattern. Same match semantics as route patterns (* single segment, ** tail)" meta! drop
+s" channel-producers-by-pattern" s" stack-effect" s" text" s" ( pattern -- array )" meta! drop
+s" channel-producers-by-pattern" s" category" s" text" s" manifold" meta! drop
+
+# --- Manifold: test/diagnostic sync (v2.8.6) ---
+
+s" channel-flush" s" description" s" text" s" Block until every publish issued before this call has been delivered to its sinks. Primarily a test aid that synchronizes with the async dispatcher; production code should not need explicit flushing since the dispatcher drains continuously" meta! drop
+s" channel-flush" s" stack-effect" s" text" s" ( -- )" meta! drop
+s" channel-flush" s" category" s" text" s" manifold" meta! drop
+
+# --- Manifold: loopback API (v2.8.13, doc B §24.3) ---
+
+s" obs-create-channel" s" description" s" text" s" Return a named channel handle (an observable of kind channel) usable as either a writer via obs-message-write or a reader via obs-message-read. Does not install any route; the channel is just a name until a publisher or subscriber attaches" meta! drop
+s" obs-create-channel" s" stack-effect" s" text" s" ( name -- chan-obs )" meta! drop
+s" obs-create-channel" s" category" s" text" s" manifold" meta! drop
+
+s" obs-message-write" s" description" s" text" s" Publish msg onto the channel named by chan-obs. Pre-checks Write RBAC and reports specific denial reasons. Reports cycle_blocked or ttl_exhausted outcomes distinctly instead of silently dropping" meta! drop
+s" obs-message-write" s" stack-effect" s" text" s" ( chan-obs msg -- )" meta! drop
+s" obs-message-write" s" category" s" text" s" manifold" meta! drop
+
+s" obs-message-read" s" description" s" text" s" Return a live observable that emits each payload string published on chan-obs. If chan-obs is a loop destination (see obs-loop-channels) the loop's transform chain is composed into the pipeline as map-with-cancel operators, lazy per-reader. msg-payload is applied internally so reader xts see payload strings, not HeapMaps; use channel-tap-observable if metadata is needed" meta! drop
+s" obs-message-read" s" stack-effect" s" text" s" ( chan-obs -- observable )" meta! drop
+s" obs-message-read" s" category" s" text" s" manifold" meta! drop
+
+s" obs-loop-channels" s" description" s" text" s" Install a forwarding route from out-name to in-name. Messages published to out-name are republished on in-name with route_trace and hops_remaining inherited. Returns a loop handle for use with channel-add-transform and channel-remove-loop. Pre-checks Route on source and Write on destination" meta! drop
+s" obs-loop-channels" s" stack-effect" s" text" s" ( out-name in-name -- loop-handle )" meta! drop
+s" obs-loop-channels" s" category" s" text" s" manifold" meta! drop
+
+s" channel-add-transform" s" description" s" text" s" Append xt to the loop's transform chain. Transforms fire reader-side (lazy) at each obs-message-read — each subscriber re-runs the chain against its own pipeline. Transform xt signature: ( str -- str' bool ) where bool on TOS chooses emit (true) vs drop (false)" meta! drop
+s" channel-add-transform" s" stack-effect" s" text" s" ( loop-handle xt -- )" meta! drop
+s" channel-add-transform" s" category" s" text" s" manifold" meta! drop
+
+s" channel-remove-loop" s" description" s" text" s" Tear down a loop — removes the forwarding route and drops the transform chain. Observables already returned by a prior obs-message-read keep their transforms snapshot and continue running until they complete" meta! drop
+s" channel-remove-loop" s" stack-effect" s" text" s" ( loop-handle -- )" meta! drop
+s" channel-remove-loop" s" category" s" text" s" manifold" meta! drop
+
+s" msg-payload" s" description" s" text" s" Extract the payload string field from a channel-message HeapMap (as emitted by channel-tap-observable / channel-subscribe). Returns empty string when the payload is missing or non-string. obs-message-read already applies this internally" meta! drop
+s" msg-payload" s" stack-effect" s" text" s" ( map -- str )" meta! drop
+s" msg-payload" s" category" s" text" s" manifold" meta! drop
