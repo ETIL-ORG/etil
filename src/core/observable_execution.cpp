@@ -199,7 +199,12 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
         Observer wrapped = [remaining, observer](Value v, ExecutionContext& c) -> bool {
             if (*remaining <= 0) { value_release(v); return false; }
             --(*remaining);
-            return observer(v, c);
+            bool downstream_ok = observer(v, c);
+            // Stop immediately once the Nth value has been emitted, so
+            // hot sources (e.g. channel subscriptions) don't deadlock
+            // waiting for a second message just to trigger completion.
+            if (*remaining <= 0) return false;
+            return downstream_ok;
         };
         return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
     }

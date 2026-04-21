@@ -198,26 +198,21 @@ TEST(ManifoldLoopTil, LoopbackAppliesOneTransform) {
     // We can't easily write TIL colon definitions from C++ test, so
     // we register a C++ primitive that does the same thing and use
     // its xt.
+    // Transform xt receives the payload string (obs-message-read auto-
+    // unwraps the HeapMap). Signature: ( str -- str' bool ).
     auto xform = make_primitive(
         "xform-suffix",
         [](ExecutionContext& c) -> bool {
             auto opt = c.data_stack().pop();
-            if (!opt || opt->type != Value::Type::Map) return false;
-            auto* m = opt->as_map();
-            Value payload;
-            if (!m->get("payload", payload) || payload.type != Value::Type::String) {
-                m->release();
-                return false;
-            }
-            std::string s(payload.as_string()->view());
-            value_release(payload);  // get() addref'd
-            m->release();
+            if (!opt || opt->type != Value::Type::String) return false;
+            std::string s(opt->as_string()->view());
+            opt->as_string()->release();
             s += "-suffix";
             c.data_stack().push(Value::from(HeapString::create(s)));
             c.data_stack().push(Value(true));
             return true;
         },
-        {TypeSignature::Type::Map},
+        {TypeSignature::Type::String},
         {TypeSignature::Type::String, TypeSignature::Type::Boolean});
     fx.dict.register_word("xform-suffix", std::move(xform));
 
@@ -269,28 +264,20 @@ TEST(ManifoldLoopTil, LoopbackAppliesOneTransform) {
 TEST(ManifoldLoopTil, TransformReturnsFalseDropsMessage) {
     LoopFixture fx;
 
-    // A filter-by-first-char transform: keep messages whose payload
-    // starts with 'k', drop others. Returns (value, bool).
+    // Filter-by-first-char — xt receives already-unwrapped string.
     auto xform = make_primitive(
         "xform-keep-k",
         [](ExecutionContext& c) -> bool {
             auto opt = c.data_stack().pop();
-            if (!opt || opt->type != Value::Type::Map) return false;
-            auto* m = opt->as_map();
-            Value payload;
-            if (!m->get("payload", payload) || payload.type != Value::Type::String) {
-                m->release();
-                return false;
-            }
-            std::string s(payload.as_string()->view());
-            value_release(payload);  // get() addref'd
-            m->release();
+            if (!opt || opt->type != Value::Type::String) return false;
+            std::string s(opt->as_string()->view());
+            opt->as_string()->release();
             bool keep = !s.empty() && s[0] == 'k';
             c.data_stack().push(Value::from(HeapString::create(s)));
             c.data_stack().push(Value(keep));
             return true;
         },
-        {TypeSignature::Type::Map},
+        {TypeSignature::Type::String},
         {TypeSignature::Type::String, TypeSignature::Type::Boolean});
     fx.dict.register_word("xform-keep-k", std::move(xform));
 

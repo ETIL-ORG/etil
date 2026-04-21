@@ -1,0 +1,142 @@
+# Manifold loopback — TIL-level end-to-end test.
+#
+# Driven by test_manifold_loop_til_file.cpp (GoogleTest), which binds
+# a ChannelService to the interpreter (the standalone REPL does not),
+# loads this file, and greps the captured output for PASS / FAIL.
+#
+# NOTE: Manifold channels are hot. A reader must install its
+# subscription via obs-message-read BEFORE any publish, otherwise the
+# message is delivered to zero matching routes and never reaches the
+# subject. All tests below follow:
+#
+#   (1) create the loop (forwarding route on OUT)
+#   (2) add transforms to the loop (optional)
+#   (3) obs-message-read on IN      — installs subscription
+#   (4) obs-message-write to OUT    — publishes
+#   (5) channel-flush               — drain async dispatcher
+#   (6) 1 obs-take + obs-subscribe  — drains exactly one value
+#
+# obs-message-read composes an internal msg-payload unwrap so that
+# loop transform xts and reader observer xts always see the payload
+# string (not the full HeapMap). Transform xt signature:
+# ( str -- str' bool ) — bool on TOS chooses emit vs drop.
+
+include /home/tests/til/harness.til
+
+: expect-streq   s= 0> if pass else fail then ;
+
+variable captured
+variable lh
+
+: capture-string   captured ! ;
+
+# ---------------------------------------------------------------------------
+# 1. Direct write and read on the same channel, no loop.
+# ---------------------------------------------------------------------------
+: test-write-read-same-channel
+    s" test.direct" obs-create-channel
+    dup obs-message-read
+    swap s" hello-direct" obs-message-write
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+    captured @ s" hello-direct" expect-streq
+;
+." test-write-read-same-channel: " test-write-read-same-channel
+
+# ---------------------------------------------------------------------------
+# 2. Loopback with no transforms — OUT → IN forwards raw.
+# ---------------------------------------------------------------------------
+: test-loopback-raw
+    s" test.raw.out" s" test.raw.in" obs-loop-channels lh !
+
+    s" test.raw.in" obs-create-channel
+    obs-message-read
+
+    s" test.raw.out" obs-create-channel
+    s" seed-raw" obs-message-write
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" seed-raw" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-raw: " test-loopback-raw
+
+# ---------------------------------------------------------------------------
+# 3. Loopback with one transform. Transforms see strings, not maps.
+# ---------------------------------------------------------------------------
+: xform-add-bang     s" !" s+ true ;
+
+: test-loopback-one-transform
+    s" test.xf1.out" s" test.xf1.in" obs-loop-channels lh !
+    lh @ ['] xform-add-bang channel-add-transform
+
+    s" test.xf1.in" obs-create-channel
+    obs-message-read
+
+    s" test.xf1.out" obs-create-channel
+    s" wow" obs-message-write
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" wow!" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-one-transform: " test-loopback-one-transform
+
+# ---------------------------------------------------------------------------
+# 4. Two transforms chain in insertion order.
+# ---------------------------------------------------------------------------
+: xform-prefix-A     s" A-" swap s+ true ;
+: xform-suffix-Z     s" -Z" s+ true ;
+
+: test-loopback-two-transforms
+    s" test.xf2.out" s" test.xf2.in" obs-loop-channels lh !
+    lh @ ['] xform-prefix-A channel-add-transform
+    lh @ ['] xform-suffix-Z channel-add-transform
+
+    s" test.xf2.in" obs-create-channel
+    obs-message-read
+
+    s" test.xf2.out" obs-create-channel
+    s" mid" obs-message-write
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" A-mid-Z" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-two-transforms: " test-loopback-two-transforms
+
+# ---------------------------------------------------------------------------
+# 5. Transform returns false — drops message; take completes on the
+#    next message that passes.
+# ---------------------------------------------------------------------------
+: xform-reject-empty     dup slength 0 > ;
+
+: test-loopback-cancel
+    s" test.cancel.out" s" test.cancel.in" obs-loop-channels lh !
+    lh @ ['] xform-reject-empty channel-add-transform
+
+    s" test.cancel.in" obs-create-channel
+    obs-message-read
+
+    s" test.cancel.out" obs-create-channel
+    dup s" " obs-message-write     # dropped
+    s" kept" obs-message-write     # passes
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" kept" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-cancel: " test-loopback-cancel

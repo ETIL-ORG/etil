@@ -633,6 +633,16 @@ bool prim_obs_message_read(ExecutionContext& ctx) {
     // messages just like any other IN subscriber. If a loop is
     // registered for this IN, its transform chain is composed into
     // the reader's pipeline as MapWithCancel operators (model B1).
+    //
+    // Composition:
+    //   ChannelSubscription (emits HeapMap)
+    //     -> Map(msg-payload)          always, unwraps to payload string
+    //     -> MapWithCancel(transform1) optional, if loop has transforms
+    //     -> MapWithCancel(transform2) ...
+    //     -> returned observable
+    //
+    // So reader xts and loop transforms always operate on strings.
+    // Metadata consumers should use channel-tap-observable instead.
     const LoopSpec* loop = svc->find_loop_for_destination(name);
     auto sub_sp = svc->observe(name, ctx.permissions());
     if (!sub_sp) {
@@ -642,6 +652,19 @@ bool prim_obs_message_read(ExecutionContext& ctx) {
     }
     auto* sub = sub_sp.get();
     sub->add_ref();  // transfer to stack
+
+    // Always compose the msg-payload unwrap step so downstream
+    // operators see strings, not maps.
+    auto* dict = ctx.dictionary();
+    if (dict) {
+        auto msg_payload_impl = dict->lookup("msg-payload");
+        if (msg_payload_impl) {
+            auto* unwrap_xt = msg_payload_impl->get();
+            auto* next = etil::core::HeapObservable::map(sub, unwrap_xt);
+            sub->release();    // map() addref'd it
+            sub = next;
+        }
+    }
 
     if (loop) {
         for (auto* xt : loop->transform_xts) {
@@ -714,6 +737,22 @@ bool prim_channel_add_transform(ExecutionContext& ctx) {
         ctx.err() << "Error: channel-add-transform: invalid loop handle\n";
         return false;
     }
+    return true;
+}
+
+// --- channel-flush ( -- ) --------------------------------------------------
+// Block until every publish issued before this call has been fully
+// delivered to its sinks. Maps to ChannelService::flush_for_tests().
+// Primarily a test aid — production code shouldn't need explicit
+// synchronization since the dispatcher drains continuously.
+
+bool prim_channel_flush(ExecutionContext& ctx) {
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-flush: no channel service\n";
+        return false;
+    }
+    svc->flush_for_tests();
     return true;
 }
 
@@ -1386,6 +1425,9 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
     dict.register_word("msg-payload",
         make_primitive("msg-payload", prim_msg_payload,
             {T::Map}, {T::String}));
+
+    dict.register_word("channel-flush",
+        make_primitive("channel-flush", prim_channel_flush, {}, {}));
 
     dict.register_word("channel-trace",
         make_primitive("channel-trace", prim_channel_trace, {}, {T::Array}));

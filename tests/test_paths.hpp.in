@@ -1,0 +1,40 @@
+#pragma once
+
+// Copyright (c) 2026 Mark Deazley. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Build-time test-path configuration. Populated by configure_file()
+// in tests/CMakeLists.txt so test binaries can locate fixture files
+// (e.g. .til integration tests, data/builtins.til) regardless of the
+// CWD that gtest / ctest invokes them from.
+//
+// Callers should prefer project_dir() which layers an env-var
+// override on top of the baked-in default.
+
+#include <cstdlib>
+#include <string>
+
+namespace etil::test {
+
+/// Absolute path to the evolutionary-til project root, captured at
+/// CMake configure time. Do not use directly in tests — use
+/// project_dir() instead so environments that relocate the tree
+/// (CI runners, containerized builds, re-mounted worktrees) can
+/// override.
+constexpr const char* ETIL_PROJECT_DIR_BUILT = "@ETIL_PROJECT_DIR@";
+
+/// Environment variable that overrides the baked-in project dir.
+/// Intended for CI / container runs where the source tree lives at
+/// a different absolute path than the build host.
+constexpr const char* ETIL_PROJECT_DIR_ENV = "ETIL_TEST_PROJECT_DIR";
+
+/// Return the project root directory. Reads `ETIL_TEST_PROJECT_DIR`
+/// from the environment first; falls back to the configure-time
+/// default if unset or empty.
+inline std::string project_dir() {
+    const char* env = std::getenv(ETIL_PROJECT_DIR_ENV);
+    if (env && *env) return env;
+    return ETIL_PROJECT_DIR_BUILT;
+}
+
+} // namespace etil::test

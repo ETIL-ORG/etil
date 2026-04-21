@@ -24,6 +24,7 @@ add_executable(etil_tests
     unit/test_manifold_loopback.cpp
     unit/test_manifold_loop_registry.cpp
     unit/test_manifold_loop_til.cpp
+    unit/test_manifold_loop_til_file.cpp
     unit/test_execution_context_channels.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
@@ -50,6 +51,16 @@ target_link_libraries(etil_tests
         etil
         GTest::gtest_main
 )
+
+# Generate test_paths.hpp — baked-in project root for fixture lookup.
+# Runtime override: ETIL_TEST_PROJECT_DIR env var.
+set(ETIL_PROJECT_DIR ${CMAKE_SOURCE_DIR})
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_paths.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/test_paths.hpp
+    @ONLY
+)
+target_include_directories(etil_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 if(ETIL_MANIFOLD_ASYNC_DISPATCH_ENABLED)
     target_compile_definitions(etil_tests
