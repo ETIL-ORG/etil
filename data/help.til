@@ -2284,172 +2284,213 @@ s" channel-publish" s" description" s" text" s" Publish a message string on a na
 s" channel-publish" s" stack-effect" s" text" s" ( msg channel -- )" meta! drop
 s" channel-publish" s" category" s" text" s" manifold" meta! drop
 s" channel-publish" s" semantic-tags" s" text" s" manifold channel io" meta! drop
+s" channel-publish" s" prerequisites" s" text" s| Role flag: channels_enabled=true.\nChannel grant (effect=allow): action "write" on channel.\nState: ChannelService bound to ExecutionContext.\nVerify: s" write" s" <channel>" channel-perm-check returns true.| meta! drop
 
 s" channel-subscribe" s" description" s" text" s" Return a live observable that emits each message on the matching channel pattern" meta! drop
 s" channel-subscribe" s" stack-effect" s" text" s" ( pattern -- observable )" meta! drop
 s" channel-subscribe" s" category" s" text" s" manifold" meta! drop
+s" channel-subscribe" s" prerequisites" s" text" s| Role flag: channels_enabled=true.\nChannel grant (effect=allow): action "read" on a pattern matching the subscribed pattern.\nState: ChannelService bound to ExecutionContext.\nVerify: s" read" s" <pattern>" channel-perm-check returns true.| meta! drop
 
 s" channel-tap-observable" s" description" s" text" s" Alias for channel-subscribe: open an observable tap on a channel pattern" meta! drop
 s" channel-tap-observable" s" stack-effect" s" text" s" ( pattern -- observable )" meta! drop
 s" channel-tap-observable" s" category" s" text" s" manifold" meta! drop
+s" channel-tap-observable" s" prerequisites" s" text" s| Same as channel-subscribe: role flag channels_enabled=true; channel grant action "read" on pattern.| meta! drop
 
 s" channel-route-add" s" description" s" text" s" Install a route whose sink of the given kind receives messages matching pattern. kind is one of null stderr spdlog file ring observable; detail is a sink-specific argument" meta! drop
 s" channel-route-add" s" stack-effect" s" text" s" ( detail kind pattern -- handle )" meta! drop
 s" channel-route-add" s" category" s" text" s" manifold" meta! drop
+s" channel-route-add" s" prerequisites" s" text" s| Role flags: channels_enabled=true AND channels_route_admin=true.\nChannel grant (effect=allow): action "route" on a pattern matching the installed pattern.\nState: ChannelService bound to ExecutionContext.\nVerify: s" route" s" <pattern>" channel-perm-check returns true.| meta! drop
 
 s" channel-route-remove" s" description" s" text" s" Remove a previously-added route by handle" meta! drop
 s" channel-route-remove" s" stack-effect" s" text" s" ( handle -- )" meta! drop
 s" channel-route-remove" s" category" s" text" s" manifold" meta! drop
+s" channel-route-remove" s" prerequisites" s" text" s| Role flags: channels_enabled=true AND channels_route_admin=true.\nState: handle must reference a live route previously returned by channel-route-add or similar.| meta! drop
 
 s" channel-tap-file" s" description" s" text" s" Shortcut for a route with a file sink that appends messages to path" meta! drop
 s" channel-tap-file" s" stack-effect" s" text" s" ( path pattern -- handle )" meta! drop
 s" channel-tap-file" s" category" s" text" s" manifold" meta! drop
+s" channel-tap-file" s" prerequisites" s" text" s| Role flags: channels_enabled=true AND channels_route_admin=true.\nChannel grant (effect=allow): action "route" on pattern.\nState: path must be writable by the process; ChannelService bound.| meta! drop
 
 s" channel-list" s" description" s" text" s" Return an array of channel patterns this role can introspect" meta! drop
 s" channel-list" s" stack-effect" s" text" s" ( -- array )" meta! drop
 s" channel-list" s" category" s" text" s" manifold" meta! drop
+s" channel-list" s" prerequisites" s" text" s| Role flag: channels_enabled=true. Output is filtered to channels where the role has action "introspect" grants.| meta! drop
 
 s" channel-list-routes" s" description" s" text" s" Return an array of per-route stats maps (one per registered route)" meta! drop
 s" channel-list-routes" s" stack-effect" s" text" s" ( -- array )" meta! drop
 s" channel-list-routes" s" category" s" text" s" manifold" meta! drop
+s" channel-list-routes" s" prerequisites" s" text" s| Role flag: channels_enabled=true. Routes with channels the role cannot introspect are filtered out.| meta! drop
 
 s" channel-origin" s" description" s" text" s" Return a map with keys host startup session origintype identifying this process's message origin" meta! drop
 s" channel-origin" s" stack-effect" s" text" s" ( -- map )" meta! drop
 s" channel-origin" s" category" s" text" s" manifold" meta! drop
+s" channel-origin" s" prerequisites" s" text" s| State: origin subsystem must be initialized (init_origin is called automatically at service start).| meta! drop
 
 s" channel-seq" s" description" s" text" s" Return the next sequence counter value without consuming it" meta! drop
 s" channel-seq" s" stack-effect" s" text" s" ( -- seq )" meta! drop
 s" channel-seq" s" category" s" text" s" manifold" meta! drop
+s" channel-seq" s" prerequisites" s" text" s| State: origin subsystem initialized. No RBAC check.| meta! drop
 
 s" channel-last-published" s" description" s" text" s" Return an id string for the most recent publish on this session" meta! drop
 s" channel-last-published" s" stack-effect" s" text" s" ( -- msg-id-str )" meta! drop
 s" channel-last-published" s" category" s" text" s" manifold" meta! drop
+s" channel-last-published" s" prerequisites" s" text" s| State: at least one channel-publish must have executed on this session; ExecutionContext session_id set.| meta! drop
 
 s" channel-cycle-stats" s" description" s" text" s" Return a map of aggregate cycle-detection counters (cycles-detected ttl-exhausted echo-dropped static-warnings)" meta! drop
 s" channel-cycle-stats" s" stack-effect" s" text" s" ( -- map )" meta! drop
 s" channel-cycle-stats" s" category" s" text" s" manifold" meta! drop
+s" channel-cycle-stats" s" prerequisites" s" text" s| State: ChannelService bound. No RBAC (returns process-wide counters).| meta! drop
 
 s" channel-sink-stats" s" description" s" text" s" Return a stats map for one route by handle (accepted-count dropped-count delivery-mode ...)" meta! drop
 s" channel-sink-stats" s" stack-effect" s" text" s" ( handle -- map )" meta! drop
 s" channel-sink-stats" s" category" s" text" s" manifold" meta! drop
+s" channel-sink-stats" s" prerequisites" s" text" s| State: handle must reference a live route. ChannelService bound.| meta! drop
 
 s" channel-all-sink-stats" s" description" s" text" s" Snapshot of stats for every registered route" meta! drop
 s" channel-all-sink-stats" s" stack-effect" s" text" s" ( -- array )" meta! drop
 s" channel-all-sink-stats" s" category" s" text" s" manifold" meta! drop
+s" channel-all-sink-stats" s" prerequisites" s" text" s| Role flag: channels_enabled=true. Results filtered per role introspect grants.| meta! drop
 
 s" channel-trace" s" description" s" text" s" Return the current message's route_trace (only meaningful inside a subscription handler)" meta! drop
 s" channel-trace" s" stack-effect" s" text" s" ( -- array )" meta! drop
 s" channel-trace" s" category" s" text" s" manifold" meta! drop
+s" channel-trace" s" prerequisites" s" text" s| State: must be called from within a subscription xt (obs-subscribe callback on a ChannelSubscription). Returns empty outside that context.| meta! drop
 
 s" channel-hops-left" s" description" s" text" s" Return the current message's hops_remaining (only meaningful inside a subscription handler)" meta! drop
 s" channel-hops-left" s" stack-effect" s" text" s" ( -- n )" meta! drop
 s" channel-hops-left" s" category" s" text" s" manifold" meta! drop
+s" channel-hops-left" s" prerequisites" s" text" s| State: must be called from within a subscription xt (obs-subscribe callback on a ChannelSubscription). Returns 0 outside that context.| meta! drop
 
 s" channel-perm-check" s" description" s" text" s" True if this role may perform action on the given channel pattern. action is one of read write route introspect" meta! drop
 s" channel-perm-check" s" stack-effect" s" text" s" ( action pattern -- bool )" meta! drop
 s" channel-perm-check" s" category" s" text" s" manifold" meta! drop
+s" channel-perm-check" s" prerequisites" s" text" s| No RBAC check (this IS the RBAC inspector). Standalone sessions always return true.| meta! drop
 
 s" channel-perm-list" s" description" s" text" s" Return an array of maps describing this role's channel grants (pattern actions effect)" meta! drop
 s" channel-perm-list" s" stack-effect" s" text" s" ( -- array )" meta! drop
 s" channel-perm-list" s" category" s" text" s" manifold" meta! drop
+s" channel-perm-list" s" prerequisites" s" text" s| No RBAC check (always returns this role's own grants). Standalone sessions return an empty array.| meta! drop
 
 s" role-grant-channel" s" description" s" text" s" Add a grant of the given actions on pattern to the current session's mutable role. Requires role_admin" meta! drop
 s" role-grant-channel" s" stack-effect" s" text" s" ( actions pattern role-name -- )" meta! drop
 s" role-grant-channel" s" category" s" text" s" manifold" meta! drop
+s" role-grant-channel" s" prerequisites" s" text" s| Role flag: role_admin=true.\nState: role-name must match a loaded role (see roles.json); changes affect in-memory permissions only, not on-disk roles.json.\nActions parameter: comma-separated list of "read" "write" "route" "introspect" (e.g. s" read,write").| meta! drop
 
 s" role-revoke-channel" s" description" s" text" s" Remove all grants matching pattern from the current session's mutable role. Requires role_admin" meta! drop
 s" role-revoke-channel" s" stack-effect" s" text" s" ( pattern role-name -- )" meta! drop
 s" role-revoke-channel" s" category" s" text" s" manifold" meta! drop
+s" role-revoke-channel" s" prerequisites" s" text" s| Role flag: role_admin=true.\nState: role-name must match a loaded role. In-memory only.| meta! drop
 
 s" role-channel-enable!" s" description" s" text" s" Set the channels_enabled master switch for the current session's mutable role. Requires role_admin" meta! drop
 s" role-channel-enable!" s" stack-effect" s" text" s" ( bool role-name -- )" meta! drop
 s" role-channel-enable!" s" category" s" text" s" manifold" meta! drop
+s" role-channel-enable!" s" prerequisites" s" text" s| Role flag: role_admin=true.\nState: role-name must match a loaded role. In-memory only.| meta! drop
 
 s" role-network-sink!" s" description" s" text" s" Set the channels_network_sink flag (allow UDP/TCP sinks) for the current session's mutable role. Requires role_admin" meta! drop
 s" role-network-sink!" s" stack-effect" s" text" s" ( bool role-name -- )" meta! drop
 s" role-network-sink!" s" category" s" text" s" manifold" meta! drop
+s" role-network-sink!" s" prerequisites" s" text" s| Role flag: role_admin=true.\nState: role-name must match a loaded role. In-memory only; enabling this flag unlocks broker sink words like channel-tap-nats and channel-tap-amqp.| meta! drop
 
 s" mcp-on-notification" s" description" s" text" s" Subscribe to inbound MCP notifications matching method-pattern. Returns an observable of messages on etil.mcp.in.notification.<pattern>" meta! drop
 s" mcp-on-notification" s" stack-effect" s" text" s" ( method-pattern -- observable )" meta! drop
 s" mcp-on-notification" s" category" s" text" s" manifold" meta! drop
+s" mcp-on-notification" s" prerequisites" s" text" s| Role flags: channels_enabled=true AND receive_client_notification=true.\nChannel grant (effect=allow): action "read" on etil.mcp.in.notification.<pattern>.\nState: MCP session context (ExecutionContext::permissions set).| meta! drop
 
 s" mcp-on-progress" s" description" s" text" s" Subscribe to inbound progress notifications from MCP clients" meta! drop
 s" mcp-on-progress" s" stack-effect" s" text" s" ( -- observable )" meta! drop
 s" mcp-on-progress" s" category" s" text" s" manifold" meta! drop
+s" mcp-on-progress" s" prerequisites" s" text" s| Role flags: channels_enabled=true AND receive_progress=true.\nChannel: etil.mcp.in.progress (subscribes directly).| meta! drop
 
 s" mcp-on-cancelled" s" description" s" text" s" Subscribe to inbound cancellation notifications. Always allowed for the owning session (hard-wired Read)" meta! drop
 s" mcp-on-cancelled" s" stack-effect" s" text" s" ( -- observable )" meta! drop
 s" mcp-on-cancelled" s" category" s" text" s" manifold" meta! drop
+s" mcp-on-cancelled" s" prerequisites" s" text" s| None per role flags. Channel etil.mcp.in.cancelled is hard-wired Read for the owning session (bypasses channel_grants).| meta! drop
 
 s" mcp-on-roots-changed" s" description" s" text" s" Subscribe to inbound notifications/roots/list_changed notifications" meta! drop
 s" mcp-on-roots-changed" s" stack-effect" s" text" s" ( -- observable )" meta! drop
 s" mcp-on-roots-changed" s" category" s" text" s" manifold" meta! drop
+s" mcp-on-roots-changed" s" prerequisites" s" text" s| Role flags: channels_enabled=true AND receive_roots_changed=true.\nChannel: etil.mcp.in.roots.changed.| meta! drop
 
 s" mcp-on-request" s" description" s" text" s" Subscribe to inbound client-initiated requests matching method-pattern (etil.mcp.in.request subtree; populated in Phase 3+)" meta! drop
 s" mcp-on-request" s" stack-effect" s" text" s" ( method-pattern -- observable )" meta! drop
 s" mcp-on-request" s" category" s" text" s" manifold" meta! drop
+s" mcp-on-request" s" prerequisites" s" text" s| Role flag: channels_enabled=true.\nChannel grant (effect=allow): action "read" on etil.mcp.in.request.<pattern>.| meta! drop
 
 s" channel-tap-nats" s" description" s" text" s" Install a NATS broker sink on `pattern` that serializes via `codec` and publishes to `url`. Codecs: json (default), msgpack, cbor, raw. Returns a non-zero route handle, or false on unknown codec / connect failure / binary built without ETIL_BUILD_NATS_SINK. Requires channels_network_sink" meta! drop
 s" channel-tap-nats" s" stack-effect" s" text" s" ( url codec pattern -- handle )" meta! drop
 s" channel-tap-nats" s" category" s" text" s" manifold" meta! drop
+s" channel-tap-nats" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_NATS_SINK=ON at compile time.\nRole flags: channels_enabled=true AND channels_route_admin=true AND channels_network_sink=true.\nChannel grant (effect=allow): action "route" on pattern.\nState: reachable NATS broker at url; ChannelService bound.| meta! drop
 
 s" channel-session-hmac" s" description" s" text" s" Compute the Session-Hmac token the broker sinks put on outbound messages for a given session_id. Used by local subscribers to filter inbound broker traffic by session without exposing the plaintext session_id. Empty input yields empty output (A-5 resolution)" meta! drop
 s" channel-session-hmac" s" stack-effect" s" text" s" ( session -- hmac )" meta! drop
 s" channel-session-hmac" s" category" s" text" s" manifold" meta! drop
+s" channel-session-hmac" s" prerequisites" s" text" s| State: ChannelService bound (the process-local HMAC key is held by the service).| meta! drop
 
 s" channel-tap-amqp" s" description" s" text" s" Install an AMQP 1.0 broker sink on `pattern` that serializes via `codec` and publishes to `url`. Codecs: json (default), msgpack, cbor, raw. Returns a non-zero route handle, or false on unknown codec / connect failure / binary built without ETIL_BUILD_AMQP_SINK. Requires channels_network_sink" meta! drop
 s" channel-tap-amqp" s" stack-effect" s" text" s" ( url codec pattern -- handle )" meta! drop
 s" channel-tap-amqp" s" category" s" text" s" manifold" meta! drop
+s" channel-tap-amqp" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_AMQP_SINK=ON at compile time.\nRole flags: channels_enabled=true AND channels_route_admin=true AND channels_network_sink=true.\nChannel grant (effect=allow): action "route" on pattern.\nState: reachable AMQP 1.0 broker at url.| meta! drop
 
 s" channel-source-nats" s" description" s" text" s" Subscribe to `subject` on a NATS broker at `url`, decode inbound messages via `codec`, and republish them locally on `pattern`. Returns a handle or false. Destination routes that shouldn't echo-back own origin should set reject_own_origin on the route spec" meta! drop
 s" channel-source-nats" s" stack-effect" s" text" s" ( url codec subject pattern -- handle )" meta! drop
 s" channel-source-nats" s" category" s" text" s" manifold" meta! drop
+s" channel-source-nats" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_NATS_SINK=ON.\nRole flags: channels_enabled=true AND channels_route_admin=true AND channels_network_sink=true.\nChannel grant (effect=allow): action "write" on pattern (inbound broker messages are re-published locally).| meta! drop
 
 s" channel-source-amqp" s" description" s" text" s" Subscribe to `address` on an AMQP 1.0 broker at `url`, decode via `codec`, and republish locally on `pattern`. Parallel of channel-source-nats" meta! drop
 s" channel-source-amqp" s" stack-effect" s" text" s" ( url codec address pattern -- handle )" meta! drop
 s" channel-source-amqp" s" category" s" text" s" manifold" meta! drop
+s" channel-source-amqp" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_AMQP_SINK=ON.\nRole flags: channels_enabled=true AND channels_route_admin=true AND channels_network_sink=true.\nChannel grant (effect=allow): action "write" on pattern.| meta! drop
 
 s" mcp-notify-nats" s" description" s" text" s" Install a NATS sink on etil.mcp.out.notification.** with json codec so all sys-notification / user-notification traffic fans out to the broker. Codec is fixed at json per MCP protocol. Returns nothing on success, false on failure" meta! drop
 s" mcp-notify-nats" s" stack-effect" s" text" s" ( url -- )" meta! drop
 s" mcp-notify-nats" s" category" s" text" s" manifold" meta! drop
+s" mcp-notify-nats" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_NATS_SINK=ON.\nRole flags: channels_enabled=true AND channels_route_admin=true AND channels_network_sink=true.\nChannel grant (effect=allow): action "route" on etil.mcp.out.notification.**.| meta! drop
 
 s" mcp-notify-amqp" s" description" s" text" s" AMQP 1.0 parallel of mcp-notify-nats: install a JSON-coded sink on etil.mcp.out.notification.**" meta! drop
 s" mcp-notify-amqp" s" stack-effect" s" text" s" ( url -- )" meta! drop
 s" mcp-notify-amqp" s" category" s" text" s" manifold" meta! drop
+s" mcp-notify-amqp" s" prerequisites" s" text" s| Build flag: ETIL_BUILD_AMQP_SINK=ON.\nRole flags: channels_enabled=true AND channels_route_admin=true AND channels_network_sink=true.\nChannel grant (effect=allow): action "route" on etil.mcp.out.notification.**.| meta! drop
 
 # --- Manifold: producer-keyed registry (v2.8.5, doc B §24.2) ---
 
 s" channel-producer-list" s" description" s" text" s" Return an array of every channel name that has received at least one publish since service start. Order is undefined" meta! drop
 s" channel-producer-list" s" stack-effect" s" text" s" ( -- array )" meta! drop
 s" channel-producer-list" s" category" s" text" s" manifold" meta! drop
+s" channel-producer-list" s" prerequisites" s" text" s| State: ChannelService bound. No RBAC check (returns process-wide producer registry).| meta! drop
 
 s" channel-producer-stats" s" description" s" text" s" Return a stats map for one channel name (keys: channel published-count last-published-ns route-count). Fields default to 0/empty when the channel has never been published to" meta! drop
 s" channel-producer-stats" s" stack-effect" s" text" s" ( channel-str -- map )" meta! drop
 s" channel-producer-stats" s" category" s" text" s" manifold" meta! drop
+s" channel-producer-stats" s" prerequisites" s" text" s| State: ChannelService bound. No RBAC check.| meta! drop
 
 s" channel-producers-by-pattern" s" description" s" text" s" Filter channel-producer-list to channels matching pattern. Same match semantics as route patterns (* single segment, ** tail)" meta! drop
 s" channel-producers-by-pattern" s" stack-effect" s" text" s" ( pattern -- array )" meta! drop
 s" channel-producers-by-pattern" s" category" s" text" s" manifold" meta! drop
+s" channel-producers-by-pattern" s" prerequisites" s" text" s| State: ChannelService bound. No RBAC check.| meta! drop
 
 # --- Manifold: test/diagnostic sync (v2.8.6) ---
 
 s" channel-flush" s" description" s" text" s" Block until every publish issued before this call has been delivered to its sinks. Primarily a test aid that synchronizes with the async dispatcher; production code should not need explicit flushing since the dispatcher drains continuously" meta! drop
 s" channel-flush" s" stack-effect" s" text" s" ( -- )" meta! drop
 s" channel-flush" s" category" s" text" s" manifold" meta! drop
+s" channel-flush" s" prerequisites" s" text" s| State: ChannelService bound. No RBAC check.| meta! drop
 
 # --- Manifold: loopback API (v2.8.13, doc B §24.3) ---
 
 s" obs-create-channel" s" description" s" text" s" Return a named channel handle (an observable of kind channel) usable as either a writer via obs-message-write or a reader via obs-message-read. Does not install any route; the channel is just a name until a publisher or subscriber attaches" meta! drop
 s" obs-create-channel" s" stack-effect" s" text" s" ( name -- chan-obs )" meta! drop
 s" obs-create-channel" s" category" s" text" s" manifold" meta! drop
+s" obs-create-channel" s" prerequisites" s" text" s| None. Does not touch RBAC or the service. Use obs-message-write / obs-message-read to act on the handle; those do the RBAC checks.| meta! drop
 
 s" obs-message-write" s" description" s" text" s" Publish msg onto the channel named by chan-obs. Pre-checks Write RBAC and reports specific denial reasons. Reports cycle_blocked or ttl_exhausted outcomes distinctly instead of silently dropping" meta! drop
 s" obs-message-write" s" stack-effect" s" text" s" ( chan-obs msg -- )" meta! drop
 s" obs-message-write" s" category" s" text" s" manifold" meta! drop
+s" obs-message-write" s" prerequisites" s" text" s| Role flag: channels_enabled=true.\nChannel grant (effect=allow): action "write" on the channel name wrapped by chan-obs.\nState: chan-obs from obs-create-channel (not a ReadOnly handle); ChannelService bound.\nVerify: s" write" s" <channel-name>" channel-perm-check returns true.| meta! drop
 
 s" obs-message-read" s" description" s" text" s" Return a live observable that emits each payload string published on chan-obs. If chan-obs is a loop destination (see obs-loop-channels) the loop's transform chain is composed into the pipeline as map-with-cancel operators, lazy per-reader. msg-payload is applied internally so reader xts see payload strings, not HeapMaps; use channel-tap-observable if metadata is needed" meta! drop
 s" obs-message-read" s" stack-effect" s" text" s" ( chan-obs -- observable )" meta! drop
 s" obs-message-read" s" category" s" text" s" manifold" meta! drop
+s" obs-message-read" s" prerequisites" s" text" s| Role flag: channels_enabled=true.\nChannel grant (effect=allow): action "read" on the channel name wrapped by chan-obs.\nState: chan-obs from obs-create-channel (not a WriteOnly handle); ChannelService bound.\nVerify: s" read" s" <channel-name>" channel-perm-check returns true.| meta! drop
 
 s" obs-loop-channels" s" description" s" text" s" Install a forwarding route from out-name to in-name. Messages published to out-name are republished on in-name with route_trace and hops_remaining inherited. Returns a loop handle for use with channel-add-transform and channel-remove-loop" meta! drop
 s" obs-loop-channels" s" stack-effect" s" text" s" ( out-name in-name -- loop-handle )" meta! drop
@@ -2459,11 +2500,14 @@ s" obs-loop-channels" s" prerequisites" s" text" s| Role flag: channels_enabled=
 s" channel-add-transform" s" description" s" text" s" Append xt to the loop's transform chain. Transforms fire reader-side (lazy) at each obs-message-read — each subscriber re-runs the chain against its own pipeline. Transform xt signature: ( str -- str' bool ) where bool on TOS chooses emit (true) vs drop (false)" meta! drop
 s" channel-add-transform" s" stack-effect" s" text" s" ( loop-handle xt -- )" meta! drop
 s" channel-add-transform" s" category" s" text" s" manifold" meta! drop
+s" channel-add-transform" s" prerequisites" s" text" s| Ordering: obs-loop-channels must have returned a valid loop-handle first.\nNo additional RBAC check (the loop was RBAC-gated at creation).\nTransform xt signature ( str -- str' bool ): push true to emit, false to drop. Transforms are snapshotted into each obs-message-read call; later additions affect only subsequent readers.| meta! drop
 
 s" channel-remove-loop" s" description" s" text" s" Tear down a loop — removes the forwarding route and drops the transform chain. Observables already returned by a prior obs-message-read keep their transforms snapshot and continue running until they complete" meta! drop
 s" channel-remove-loop" s" stack-effect" s" text" s" ( loop-handle -- )" meta! drop
 s" channel-remove-loop" s" category" s" text" s" manifold" meta! drop
+s" channel-remove-loop" s" prerequisites" s" text" s| Ordering: loop-handle must reference a live loop from obs-loop-channels. Idempotent — invalid handles are silent no-ops. No RBAC check.| meta! drop
 
 s" msg-payload" s" description" s" text" s" Extract the payload string field from a channel-message HeapMap (as emitted by channel-tap-observable / channel-subscribe). Returns empty string when the payload is missing or non-string. obs-message-read already applies this internally" meta! drop
 s" msg-payload" s" stack-effect" s" text" s" ( map -- str )" meta! drop
 s" msg-payload" s" category" s" text" s" manifold" meta! drop
+s" msg-payload" s" prerequisites" s" text" s| None. Pure extraction primitive.| meta! drop
