@@ -21,6 +21,7 @@
 #include "etil/manifold/origin.hpp"
 #include "etil/manifold/rbac.hpp"
 #include "etil/manifold/session_hmac.hpp"
+#include "etil/manifold/sink.hpp"
 #include "etil/manifold/subject.hpp"
 #include "etil/mcp/role_permissions.hpp"
 
@@ -360,7 +361,101 @@ public:
         return out;
     }
 
+    // --- Loop registry (model B1 per design discussion) -----------------
+
+    LoopHandle register_loop(std::string out_channel,
+                             std::string in_channel,
+                             const etil::mcp::RolePermissions* principal) override {
+        // Install the forwarding route first — if this fails (RBAC,
+        // invalid pattern), the loop is not registered.
+        auto weak_self = weak_from_this();
+        std::string target = in_channel;
+        auto forward_sink = std::shared_ptr<ISink>(
+            new ForwardingSink(weak_self, std::move(target)));
+
+        RouteSpec spec;
+        spec.channel_pattern = out_channel;
+        spec.sink = forward_sink;
+        RouteHandle route = add_route(std::move(spec), principal);
+        if (!route.valid()) return {};
+
+        LoopHandle h;
+        h.id = next_loop_id_.fetch_add(1, std::memory_order_relaxed);
+
+        {
+            std::lock_guard<std::mutex> lk(loop_mu_);
+            auto& spec_ref = loops_[h.id];
+            spec_ref.handle = h;
+            spec_ref.out_channel = std::move(out_channel);
+            spec_ref.in_channel = in_channel;
+            spec_ref.forward_route = route;
+            loops_by_destination_[in_channel] = h.id;
+        }
+        return h;
+    }
+
+    bool add_loop_transform(LoopHandle handle, etil::core::WordImpl* xt) override {
+        if (!handle.valid() || !xt) return false;
+        std::lock_guard<std::mutex> lk(loop_mu_);
+        auto it = loops_.find(handle.id);
+        if (it == loops_.end()) return false;
+        it->second.transform_xts.push_back(xt);
+        return true;
+    }
+
+    const LoopSpec* find_loop_for_destination(std::string_view in_channel) const override {
+        std::lock_guard<std::mutex> lk(loop_mu_);
+        auto it = loops_by_destination_.find(std::string(in_channel));
+        if (it == loops_by_destination_.end()) return nullptr;
+        auto lit = loops_.find(it->second);
+        if (lit == loops_.end()) return nullptr;
+        return &lit->second;
+    }
+
+    void remove_loop(LoopHandle handle,
+                     const etil::mcp::RolePermissions* principal) override {
+        if (!handle.valid()) return;
+        RouteHandle route_to_remove;
+        std::string dest;
+        {
+            std::lock_guard<std::mutex> lk(loop_mu_);
+            auto it = loops_.find(handle.id);
+            if (it == loops_.end()) return;
+            route_to_remove = it->second.forward_route;
+            dest = it->second.in_channel;
+            loops_.erase(it);
+            auto dit = loops_by_destination_.find(dest);
+            if (dit != loops_by_destination_.end() && dit->second == handle.id) {
+                loops_by_destination_.erase(dit);
+            }
+        }
+        remove_route(route_to_remove, principal);
+    }
+
 private:
+    /// Internal ISink that republishes onto another channel. Used by
+    /// register_loop(). Holds a weak_ptr to the service so it doesn't
+    /// keep the service alive past its natural lifetime; if the
+    /// service is already gone, the republish is silently dropped.
+    class ForwardingSink : public ISink {
+    public:
+        ForwardingSink(std::weak_ptr<ChannelService> svc, std::string target)
+            : svc_(std::move(svc)), target_(std::move(target)) {}
+        void accept(const Message& m) override {
+            auto svc = svc_.lock();
+            if (!svc) return;
+            Message echo = m;
+            echo.channel = target_;
+            // route_trace and hops_remaining carry forward per §20; the
+            // service's dispatch() will reject when hops hit 0.
+            svc->publish(std::move(echo));
+        }
+    private:
+        std::weak_ptr<ChannelService> svc_;
+        std::string target_;
+    };
+
+
     /// Phase 5a.5 — called from publish() immediately after the RBAC
     /// check and origin stamping succeed. One hash-map upsert + one
     /// clock read. The mutex is separate from mu_ so producer-registry
@@ -558,6 +653,13 @@ private:
     };
     mutable std::mutex producer_mu_;
     absl::flat_hash_map<std::string, ProducerRecord> producer_stats_;
+
+    /// Loop registry — keyed by LoopHandle.id; destination-channel
+    /// lookups go through loops_by_destination_ (one loop per IN).
+    mutable std::mutex loop_mu_;
+    absl::flat_hash_map<uint64_t, LoopSpec> loops_;
+    absl::flat_hash_map<std::string, uint64_t> loops_by_destination_;
+    std::atomic<uint64_t> next_loop_id_{1};
 
     std::atomic<uint64_t> next_handle_id_{1};
     std::atomic<uint64_t> cycles_detected_{0};

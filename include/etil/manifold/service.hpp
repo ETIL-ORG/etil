@@ -14,12 +14,14 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "etil/manifold/message.hpp"
 #include "etil/manifold/route_spec.hpp"
 
 namespace etil::core {
 class HeapObservable;
+class WordImpl;
 }
 
 namespace etil::mcp {
@@ -65,6 +67,27 @@ struct ProducerStats {
     uint64_t published_count  = 0;    ///< total publish() calls on this channel
     uint64_t last_published_ns = 0;   ///< IClock::now_ns() at last publish
     uint64_t route_count      = 0;    ///< matching routes at query time
+};
+
+/// Opaque handle for a registered loop (obs-loop-channels). Loops
+/// forward messages from one channel to another and own a mutable
+/// transform chain that readers of the destination channel pick up
+/// at `obs-message-read` time (model B1 per design discussion).
+struct LoopHandle {
+    uint64_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
+/// Snapshot of a single loop's state — returned by a future
+/// introspection word. The transforms vector is a copy of the
+/// opaque WordImpl pointers; invalid to dereference after any
+/// dictionary mutation outside the caller's control.
+struct LoopSpec {
+    LoopHandle handle;
+    std::string out_channel;          ///< source of the loop (where writes go in)
+    std::string in_channel;           ///< destination (where reads come out)
+    RouteHandle forward_route;        ///< the underlying OUT→IN forwarding route
+    std::vector<etil::core::WordImpl*> transform_xts;  ///< lazy, reader-side chain
 };
 
 /// Result of a publish call. Never throws; reports diagnostic outcome.
@@ -159,6 +182,50 @@ public:
         producers_by_pattern(std::string_view pattern) const {
         (void)pattern;
         return {};
+    }
+
+    // --- Loop registry (model B1 per design discussion) -----------------
+
+    /// Register a loop from `out_channel` to `in_channel`. Installs a
+    /// forwarding route so messages published to `out_channel` also
+    /// appear on `in_channel` (with the route_trace/hops_remaining
+    /// cycle guards applied on that re-publish). Returns a handle that
+    /// later calls use to add transforms or tear down.
+    ///
+    /// Loops are keyed internally by `in_channel`; registering a second
+    /// loop with the same destination replaces the prior one
+    /// (its transform chain is dropped). The strawman model assumes
+    /// one loop per destination; a future API could relax this.
+    virtual LoopHandle register_loop(std::string out_channel,
+                                     std::string in_channel,
+                                     const etil::mcp::RolePermissions* principal = nullptr) {
+        (void)out_channel; (void)in_channel; (void)principal;
+        return {};
+    }
+
+    /// Append `xt` to the loop's transform chain. Transforms are
+    /// consulted by `obs-message-read` each time a reader subscribes
+    /// to the loop's destination channel; no effect on already-
+    /// subscribed observables.
+    virtual bool add_loop_transform(LoopHandle handle, etil::core::WordImpl* xt) {
+        (void)handle; (void)xt;
+        return false;
+    }
+
+    /// Look up the loop whose destination is `in_channel`. Returns
+    /// nullptr when no loop is registered for that channel.
+    virtual const LoopSpec* find_loop_for_destination(std::string_view in_channel) const {
+        (void)in_channel;
+        return nullptr;
+    }
+
+    /// Tear down a loop — removes the forwarding route and drops the
+    /// transform chain. Any observable created by a prior
+    /// `obs-message-read` call keeps its snapshot of the chain and is
+    /// unaffected until it completes.
+    virtual void remove_loop(LoopHandle handle,
+                             const etil::mcp::RolePermissions* principal = nullptr) {
+        (void)handle; (void)principal;
     }
 };
 
