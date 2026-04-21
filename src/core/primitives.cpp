@@ -2284,50 +2284,79 @@ bool prim_evolve_dag_stats_interval(ExecutionContext& ctx) {
 namespace {
 
 /// Print help for a single word. Returns true if help was found and printed.
+/// Indent continuation lines of a multi-line metadata value so they
+/// align under the first line of a "Prerequisites:" / similar block.
+/// Input may contain embedded newlines; output starts with the first
+/// line un-indented (callers write the label + space before calling)
+/// and every subsequent line is prefixed with 16 spaces to match
+/// the "  Prerequisites: " column width.
+void print_indented_followups(std::ostream& os, const std::string& text,
+                              const char* continuation_indent) {
+    size_t start = 0;
+    bool first_line = true;
+    while (start <= text.size()) {
+        size_t nl = text.find('\n', start);
+        size_t end = (nl == std::string::npos) ? text.size() : nl;
+        if (!first_line) os << continuation_indent;
+        os << text.substr(start, end - start) << "\n";
+        first_line = false;
+        if (nl == std::string::npos) break;
+        start = nl + 1;
+    }
+}
+
 bool print_help_for_word(const std::string& word, Dictionary* dict, std::ostream& os) {
     std::string description;
     std::string stack_effect;
     std::string category;
+    std::string prerequisites;
     bool found = false;
+
+    auto load_from = [&](auto&& fetch) {
+        auto desc_entry = fetch("description");
+        if (!desc_entry) return false;
+        description = desc_entry->content;
+        auto se_entry = fetch("stack-effect");
+        if (se_entry) stack_effect = se_entry->content;
+        auto cat_entry = fetch("category");
+        if (cat_entry) category = cat_entry->content;
+        auto pre_entry = fetch("prerequisites");
+        if (pre_entry) prerequisites = pre_entry->content;
+        return true;
+    };
 
     // Source 1: Concept-level metadata (from help.til via meta!)
     if (dict) {
-        auto desc_entry = dict->get_concept_metadata(word, "description");
-        if (desc_entry) {
-            description = desc_entry->content;
-            found = true;
-            auto se_entry = dict->get_concept_metadata(word, "stack-effect");
-            if (se_entry) stack_effect = se_entry->content;
-            auto cat_entry = dict->get_concept_metadata(word, "category");
-            if (cat_entry) category = cat_entry->content;
-        }
+        found = load_from([&](const std::string& key) {
+            return dict->get_concept_metadata(word, key);
+        });
     }
 
     // Source 2: Impl-level metadata fallback
     if (!found && dict) {
         auto impl = dict->lookup(word);
         if (impl) {
-            auto desc_entry = (*impl)->metadata().get("description");
-            if (desc_entry) {
-                description = desc_entry->content;
-                found = true;
-                auto se_entry = (*impl)->metadata().get("stack-effect");
-                if (se_entry) stack_effect = se_entry->content;
-                auto cat_entry = (*impl)->metadata().get("category");
-                if (cat_entry) category = cat_entry->content;
-            }
+            found = load_from([&](const std::string& key) {
+                return (*impl)->metadata().get(key);
+            });
         }
     }
 
     if (!found) return false;
 
     os << word << "\n";
-    if (!description.empty())
-        os << "  Description:  " << description << "\n";
+    if (!description.empty()) {
+        os << "  Description:  ";
+        print_indented_followups(os, description, "                ");
+    }
     if (!stack_effect.empty())
         os << "  Stack effect: " << stack_effect << "\n";
     if (!category.empty())
         os << "  Category:     " << category << "\n";
+    if (!prerequisites.empty()) {
+        os << "  Prerequisites:\n    ";
+        print_indented_followups(os, prerequisites, "    ");
+    }
 
     return true;
 }

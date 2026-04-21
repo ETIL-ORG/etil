@@ -2451,9 +2451,10 @@ s" obs-message-read" s" description" s" text" s" Return a live observable that e
 s" obs-message-read" s" stack-effect" s" text" s" ( chan-obs -- observable )" meta! drop
 s" obs-message-read" s" category" s" text" s" manifold" meta! drop
 
-s" obs-loop-channels" s" description" s" text" s" Install a forwarding route from out-name to in-name. Messages published to out-name are republished on in-name with route_trace and hops_remaining inherited. Returns a loop handle for use with channel-add-transform and channel-remove-loop. Pre-checks Route on source and Write on destination" meta! drop
+s" obs-loop-channels" s" description" s" text" s" Install a forwarding route from out-name to in-name. Messages published to out-name are republished on in-name with route_trace and hops_remaining inherited. Returns a loop handle for use with channel-add-transform and channel-remove-loop" meta! drop
 s" obs-loop-channels" s" stack-effect" s" text" s" ( out-name in-name -- loop-handle )" meta! drop
 s" obs-loop-channels" s" category" s" text" s" manifold" meta! drop
+s" obs-loop-channels" s" prerequisites" s" text" s| Role flag: channels_enabled=true.\nChannel grants (effect=allow): action "route" on out-name; action "write" on in-name.\nState: ChannelService bound to ExecutionContext.\nVerify: s" route" s" <out-name>" channel-perm-check  and  s" write" s" <in-name>" channel-perm-check  both return true.| meta! drop
 
 s" channel-add-transform" s" description" s" text" s" Append xt to the loop's transform chain. Transforms fire reader-side (lazy) at each obs-message-read — each subscriber re-runs the chain against its own pipeline. Transform xt signature: ( str -- str' bool ) where bool on TOS chooses emit (true) vs drop (false)" meta! drop
 s" channel-add-transform" s" stack-effect" s" text" s" ( loop-handle xt -- )" meta! drop

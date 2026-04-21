@@ -169,20 +169,78 @@ const char* decision_reason_str(etil::manifold::DecisionReason r) {
 /// internal RBAC check would only surface as a null/bool failure,
 /// so the TIL user sees *why* their call was denied rather than an
 /// opaque "failed" message.
+/// Short lowercase action name suitable for dropping into a JSON
+/// `channel_grants[*].actions[*]` string.
+const char* action_grant_token(etil::manifold::ChannelAction a) {
+    using A = etil::manifold::ChannelAction;
+    switch (a) {
+        case A::Read:       return "read";
+        case A::Write:      return "write";
+        case A::Route:      return "route";
+        case A::Introspect: return "introspect";
+        case A::None:       return "none";
+    }
+    return "unknown";
+}
+
 bool rbac_require(ExecutionContext& ctx, const char* word_name,
                   std::string_view channel,
                   etil::manifold::ChannelAction action,
-                  const char* action_name) {
+                  const char* /*action_name*/) {
     auto* perm = ctx.permissions();
     if (!perm) return true;  // standalone
     auto d = etil::manifold::evaluate_access(perm, channel, action);
     if (d.allowed) return true;
-    ctx.err() << "Error: " << word_name << ": RBAC denied " << action_name
-              << " on '" << channel << "' — " << decision_reason_str(d.reason);
+
+    using R = etil::manifold::DecisionReason;
+    const char* tok = action_grant_token(action);
+
+    ctx.err() << "Error: " << word_name
+              << ": RBAC denied action \"" << tok
+              << "\" on channel '" << channel << "'\n"
+              << "  Reason: " << decision_reason_str(d.reason);
     if (!d.matched_pattern.empty()) {
         ctx.err() << " (matched pattern '" << d.matched_pattern << "')";
     }
     ctx.err() << "\n";
+
+    // Reason-specific remediation. Every fix names the exact
+    // roles.json key / TIL word the user has to change.
+    switch (d.reason) {
+    case R::Denied_MasterOff:
+        ctx.err() << "  Fix: set role flag  channels_enabled: true  in roles.json\n"
+                     "       or run  true s\" <role>\" role-channel-enable!\n";
+        break;
+    case R::Denied_RouteAdminRequired:
+        ctx.err() << "  Fix: set role flag  channels_route_admin: true  in roles.json\n"
+                     "       (required for add_route / obs-loop-channels / tap words)\n";
+        break;
+    case R::Denied_NetworkSinkRequired:
+        ctx.err() << "  Fix: set role flag  channels_network_sink: true  in roles.json\n"
+                     "       (required for channel-tap-nats / channel-tap-amqp etc.)\n";
+        break;
+    case R::Denied_ExplicitDeny:
+        ctx.err() << "  Fix: an effect: \"deny\" grant is blocking this channel.\n"
+                     "       Review roles.json channel_grants under your role.\n"
+                     "       Inspect with  channel-perm-list\n";
+        break;
+    case R::Denied_QuotaExhausted:
+        ctx.err() << "  Fix: channel quota exhausted; raise channels_quota on\n"
+                     "       your role in roles.json or wait for reset.\n";
+        break;
+    case R::Denied_NoMatchingGrant:
+    default:
+        ctx.err() << "  Fix: add a channel_grants entry to your role in roles.json:\n"
+                     "         {\"pattern\": \"" << channel
+                  << "\", \"actions\": [\"" << tok
+                  << "\"], \"effect\": \"allow\"}\n"
+                     "       or at runtime:  s\" " << tok << "\" s\" "
+                  << channel << "\" s\" <role>\" role-grant-channel\n"
+                     "       Verify:  s\" " << tok << "\" s\" " << channel
+                  << "\" channel-perm-check  -> true\n";
+        break;
+    }
+    ctx.err() << "  Full prerequisites:  help " << word_name << "\n";
     return false;
 }
 
