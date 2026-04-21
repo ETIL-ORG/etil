@@ -1096,7 +1096,8 @@ the bytecode and printed each time the word executes:
 > : greet ." Hello, World!" cr ;
 > greet
 Hello, World!
-> : show-pair  ( a b -- )  ." (" swap . ." , " . ." )" cr ;
+# show-pair ( a b -- ) prints "(a, b)"
+> : show-pair  ." (" swap . ." , " . ." )" cr ;
 > 3 7 show-pair
 (3, 7)
 ```
@@ -1105,11 +1106,12 @@ Hello, World!
 
 ```
 > : star 42 emit ;            # ASCII 42 = '*'
-> : stars  ( n -- )  0 do star loop cr ;
+# stars ( n -- ) prints n asterisks and a newline
+> : stars  0 do star loop cr ;
 > 5 stars
 *****
-> : box  ( w h -- )
-    0 do dup stars loop drop ;
+# box ( w h -- ) prints an h-row box of w asterisks
+> : box  0 do dup stars loop drop ;
 > 4 3 box
 ****
 ****
@@ -1249,9 +1251,8 @@ All words below are **compile-only** unless noted.
 `then`) executes. If `false`, the `else` branch executes (or nothing if no `else`).
 
 ```
-> # Simple if/then (no else):
-> : check-positive  ( n -- )
-    0> if ." positive" cr then ;
+# check-positive ( n -- ) prints "positive" when n > 0, nothing otherwise
+> : check-positive  0> if ." positive" cr then ;
 > 5 check-positive
 positive
 > -3 check-positive
@@ -1259,9 +1260,8 @@ positive
 ```
 
 ```
-> # if/else/then:
-> : abs-value  ( n -- |n| )
-    dup 0< if negate then ;
+# abs-value ( n -- |n| ) absolute value
+> : abs-value  dup 0< if negate then ;
 > -42 abs-value .
 42
 > 7 abs-value .
@@ -1269,8 +1269,8 @@ positive
 ```
 
 ```
-> # Nested conditionals:
-> : classify  ( n -- )
+# classify ( n -- ) prints positive / zero / negative
+> : classify
     dup 0> if
       drop ." positive" cr
     else
@@ -1289,8 +1289,8 @@ negative
 ```
 
 ```
-> # Fizzbuzz:
-> : fizzbuzz  ( n -- )
+# fizzbuzz ( n -- ) classic classroom problem
+> : fizzbuzz
     dup 15 mod 0= if drop ." FizzBuzz" else
     dup  3 mod 0= if drop ." Fizz" else
     dup  5 mod 0= if drop ." Buzz" else
@@ -1336,7 +1336,8 @@ with the index going from `start` up to (but not including) `limit`. Inside the 
 Nested loops use `j` for the outer index:
 
 ```
-> : times-table  ( n -- )
+# times-table ( n -- ) prints an n x n multiplication table
+> : times-table
     dup 1+ 1 do
       dup 1+ 1 do
         i j * 4 spaces swap .
@@ -1355,8 +1356,8 @@ Nested loops use `j` for the outer index:
 `true`, the loop exits.
 
 ```
-> # Collatz sequence:
-> : collatz  ( n -- )
+# collatz ( n -- ) print Collatz sequence starting at n
+> : collatz
     begin
       dup . space
       dup 1 = not
@@ -1368,8 +1369,8 @@ Nested loops use `j` for the outer index:
 ```
 
 ```
-> # Count down with begin/until:
-> : count-down  ( n -- )
+# count-down ( n -- ) print n..1 then a newline
+> : count-down
     begin dup . space 1- dup 0= until drop cr ;
 > 5 count-down
 5 4 3 2 1
@@ -1382,8 +1383,8 @@ Nested loops use `j` for the outer index:
 and loops back to `begin`. If `false`, the loop exits past `repeat`.
 
 ```
-> # Process while positive:
-> : halve-until-one  ( n -- )
+# halve-until-one ( n -- ) print n, n/2, n/4 ... until 1
+> : halve-until-one
     begin dup 1 > while
       dup . space
       2 /
@@ -1393,8 +1394,8 @@ and loops back to `begin`. If `false`, the loop exits past `repeat`.
 ```
 
 ```
-> # GCD (Euclid's algorithm):
-> : gcd  ( a b -- gcd )
+# gcd ( a b -- gcd ) Euclid's algorithm
+> : gcd
     begin dup 0 <> while
       swap over mod
     repeat drop ;
@@ -1410,8 +1411,8 @@ and loops back to `begin`. If `false`, the loop exits past `repeat`.
 (exit enclosing `do` loop) to break out.
 
 ```
-> # Find first power of 2 exceeding n:
-> : next-pow2  ( n -- 2^k )
+# next-pow2 ( n -- 2^k ) first power of 2 strictly greater than n
+> : next-pow2
     1 begin
       dup rot dup rot > if nip exit then
       swap dup +
@@ -1429,9 +1430,9 @@ return stack; `r>` moves it back; `r@` copies without removing. Values pushed wi
 `>r` **must** be popped with `r>` before the word returns.
 
 ```
-> # Save a value across a computation (avoid >r/r> across do/loop —
-> # do uses the return stack for its loop counter).
-> : hypot  ( a b -- sqrt(a*a + b*b) )
+# hypot ( a b -- sqrt(a*a + b*b) ) — avoid >r/r> across do/loop,
+# since do uses the return stack for its loop counter.
+> : hypot
     dup * >r                      # save b*b on return stack
     dup *                         # compute a*a
     r> +                          # retrieve b*b, add
@@ -1441,8 +1442,8 @@ return stack; `r>` moves it back; `r@` copies without removing. Values pushed wi
 ```
 
 ```
-> # Use r@ to read without consuming:
-> : repeat-char  ( char n -- )
+# repeat-char ( char n -- ) uses r@ to read return-stack without consuming
+> : repeat-char
     >r begin r@ 0> while
       over emit r> 1- >r
     repeat r> drop drop cr ;
@@ -1455,8 +1456,8 @@ return stack; `r>` moves it back; `r@` copies without removing. Values pushed wi
 `leave` immediately terminates the innermost `do` loop, jumping past `loop`/`+loop`:
 
 ```
-> # Find first even number in a range:
-> : first-even  ( start end -- n )
+# first-even ( start end -- n ) first even number in [start, end)
+> : first-even
     swap do
       i 2 mod 0= if i leave then
     loop ;
@@ -1629,8 +1630,8 @@ tracking prevents infinite recursion.
 ```
 
 ```
-> # Build code dynamically:
-> : make-constant  ( val name-str -- )
+# make-constant ( val name-str -- ) builds a colon def at runtime
+> : make-constant
     s" : " swap s+ s"  " s+ swap number->string s+ s"  ; " s+ evaluate ;
 > 42 s" answer" make-constant
 > answer .
@@ -2870,21 +2871,21 @@ The MLP library provides feedforward neural network training in pure TIL. Load w
 
 **Multiple implementations with weighted selection:**
 
-```forth
-: activate mat-relu ;     \ Implementation 1
-: activate mat-sigmoid ;  \ Implementation 2
+```
+: activate mat-relu ;     # Implementation 1
+: activate mat-sigmoid ;  # Implementation 2
 
-\ Set weights (via MCP set_weight tool or programmatically)
-\ Then switch to weighted random selection:
+# Set weights (via MCP set_weight tool or programmatically),
+# then switch to weighted random selection:
 1 select-strategy
 
-\ Now "activate" probabilistically picks between ReLU and sigmoid
-\ based on their weights. Higher fitness = higher selection probability.
+# Now "activate" probabilistically picks between ReLU and sigmoid
+# based on their weights. Higher fitness = higher selection probability.
 ```
 
 **XOR neural network training:**
 
-```forth
+```
 include data/library/mlp.til
 
 7 random-seed
@@ -2894,7 +2895,7 @@ include data/library/mlp.til
 variable net
 net !
 
-\ Training data: X = 2x4 (inputs), Y = 1x4 (XOR outputs)
+# Training data: X = 2x4 (inputs), Y = 1x4 (XOR outputs)
 array-new
   array-new 0.0 array-push 0.0 array-push 1.0 array-push 1.0 array-push array-push
   array-new 0.0 array-push 1.0 array-push 0.0 array-push 1.0 array-push array-push
@@ -2909,15 +2910,15 @@ variable Y
 Y !
 
 X @ Y @ net @ 1.0 5000 train net !
-\ Output: Epoch 0: loss = 0.2648 ... Epoch 4500: loss = 0.00006
+# Output: Epoch 0: loss = 0.2648 ... Epoch 4500: loss = 0.00006
 ```
 
 **Registering test cases for evolution:**
 
-```forth
+```
 : double dup + ;
 
-\ Build test cases as array of maps with "in" and "out" keys
+# Build test cases as array of maps with "in" and "out" keys
 array-new
   map-new s" in" array-new 3 array-push map-set
          s" out" array-new 6 array-push map-set array-push
@@ -2926,11 +2927,11 @@ array-new
 
 s" double" swap evolve-register drop
 
-\ Run 10 generations of evolution
+# Run 10 generations of evolution
 10 0 do s" double" evolve-word drop loop
 
-\ Check how many generations ran
-s" double" evolve-status .   \ => 10
+# Check how many generations ran
+s" double" evolve-status .   # => 10
 ```
 
 > **Note:** Evolution outcomes are **non-deterministic** — different random seeds produce different mutations, fitness scores, and surviving implementations. The error messages during `evolve-word` (e.g., "Error in 'mat-apply'") are expected — they come from mutated code that calls random words and fails fitness evaluation. The evolution engine discards these failed mutants automatically.
@@ -3052,26 +3053,26 @@ Cross-cutting non-Manifold entries (see **Appendix W** for the full permission r
 **Simple publish/subscribe (in-process, no route needed)**
 
 ```
-\ Consumer — subscribe to a pattern, get an observable
-s" etil.app.**" channel-subscribe   ( -- observable )
-' my-handler obs-subscribe          ( consume each message )
+# Consumer — subscribe to a pattern, get an observable
+s" etil.app.**" channel-subscribe
+' my-handler obs-subscribe
 
-\ Producer — publish a message
+# Producer — publish a message
 s" hello" s" etil.app.greet" channel-publish
 ```
 
 **Tap the MCP request lifecycle to a file (async sink, safe from reentrancy)**
 
 ```
-s" /tmp/mcp-trace.log" s" json" s" etil.mcp.**" channel-tap-file   ( -- handle )
-drop                                                                \ keep the handle if you'll remove later
+# Keep the handle if you plan to remove the route later.
+s" /tmp/mcp-trace.log" s" json" s" etil.mcp.**" channel-tap-file drop
 ```
 
 **Install a NATS broker sink (requires `channels_network_sink`)**
 
 ```
-\ Signature: ( url codec pattern -- handle )
-\ Codecs: json (default), msgpack, cbor, raw
+# channel-tap-nats stack effect: ( url codec pattern -- handle )
+# Codecs: json (default), msgpack, cbor, raw
 s" nats://nats:4222" s" json" s" etil.app.events" channel-tap-nats drop
 ```
 
@@ -3108,7 +3109,7 @@ Payload (JSON codec):
 **Ingest from a broker into a local channel**
 
 ```
-\ Signature: ( url codec pattern -- handle )
+# channel-source-nats stack effect: ( url codec pattern -- handle )
 s" nats://nats:4222" s" json" s" etil.partner.**" channel-source-nats drop
 ```
 
@@ -3117,18 +3118,27 @@ Messages arriving on NATS subject tree `etil.partner.**` are decoded and re-publ
 **Introspection**
 
 ```
-channel-list-routes .                \ every active route
-channel-cycle-stats .                \ visited / ttl_exhausted / echo_dropped counters
-<handle> channel-sink-stats .        \ forwarded / dropped / errors for one route
-s" etil.mcp.**" channel-perm-list .  \ what the current role can do on that pattern
+# Every active route:
+channel-list-routes .
+# Visited / ttl_exhausted / echo_dropped counters:
+channel-cycle-stats .
+# Forwarded / dropped / errors for one route (replace <handle>):
+<handle> channel-sink-stats .
+# What the current role can do on a pattern:
+s" etil.mcp.**" channel-perm-list .
 ```
 
 **Role admin (interactive; mutates the session's role permissions, not roles.json)**
 
 ```
-true role-channel-enable!                                              \ flip master switch on
-s" etil.**" s" read|write|route|introspect" true role-grant-channel    \ grant self
-true role-network-sink!                                                \ allow NATS/AMQP taps
+# Flip the channels_enabled master switch on
+true role-channel-enable!
+
+# Grant self Read/Write/Route/Introspect on the etil.** subtree
+s" etil.**" s" read|write|route|introspect" true role-grant-channel
+
+# Allow NATS/AMQP taps
+true role-network-sink!
 ```
 
 ### V.6 Broker subject conventions
