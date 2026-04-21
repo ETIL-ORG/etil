@@ -141,6 +141,51 @@ HeapMap* sink_stats_to_heap_map(const SinkStats& s) {
     return m;
 }
 
+/// Human-readable rendering of an RBAC DecisionReason. Used by TIL
+/// primitives that gate channel ops behind add_route / publish /
+/// observe, so a denial surfaces *why* rather than just "failed".
+const char* decision_reason_str(etil::manifold::DecisionReason r) {
+    using R = etil::manifold::DecisionReason;
+    switch (r) {
+        case R::Allowed_Standalone:       return "standalone allowed";
+        case R::Allowed_HardWired:        return "hard-wired allowed";
+        case R::Allowed_ByGrant:          return "grant allowed";
+        case R::Denied_MasterOff:         return "channels disabled (role.channels_enabled=false)";
+        case R::Denied_RouteAdminRequired:return "route admin required (role.channels_route_admin=false)";
+        case R::Denied_NetworkSinkRequired:return "network sink required (role.channels_network_sink=false)";
+        case R::Denied_NoMatchingGrant:   return "no grant matches this channel+action";
+        case R::Denied_ExplicitDeny:      return "explicitly denied by a role grant";
+        case R::Denied_QuotaExhausted:    return "quota exhausted";
+    }
+    return "unknown";
+}
+
+/// Require RBAC approval for `action` on `channel`. Returns true when
+/// allowed (or standalone). On denial, writes a specific diagnostic
+/// to ctx.err() including the reason and matched pattern (if any),
+/// then returns false.
+///
+/// Use this in TIL primitives that wrap a ChannelService call whose
+/// internal RBAC check would only surface as a null/bool failure,
+/// so the TIL user sees *why* their call was denied rather than an
+/// opaque "failed" message.
+bool rbac_require(ExecutionContext& ctx, const char* word_name,
+                  std::string_view channel,
+                  etil::manifold::ChannelAction action,
+                  const char* action_name) {
+    auto* perm = ctx.permissions();
+    if (!perm) return true;  // standalone
+    auto d = etil::manifold::evaluate_access(perm, channel, action);
+    if (d.allowed) return true;
+    ctx.err() << "Error: " << word_name << ": RBAC denied " << action_name
+              << " on '" << channel << "' — " << decision_reason_str(d.reason);
+    if (!d.matched_pattern.empty()) {
+        ctx.err() << " (matched pattern '" << d.matched_pattern << "')";
+    }
+    ctx.err() << "\n";
+    return false;
+}
+
 /// Build a sink by short name. Returns nullptr on unknown name; caller
 /// should report via ctx.err().
 std::shared_ptr<ISink> make_sink_by_kind(const std::string& kind,
@@ -170,6 +215,10 @@ bool prim_channel_publish(ExecutionContext& ctx) {
         ctx.err() << "Error: channel-publish: no channel service bound to context\n";
         return false;
     }
+    if (!rbac_require(ctx, "channel-publish", channel,
+                      etil::manifold::ChannelAction::Write, "Write")) {
+        return false;
+    }
     Message m;
     m.channel = channel;
     m.payload = payload;
@@ -177,9 +226,26 @@ bool prim_channel_publish(ExecutionContext& ctx) {
     if (!ctx.session_id().empty()) {
         m.tags["session_id"] = ctx.session_id();
     }
-    svc->publish(std::move(m), ctx.permissions());
+    auto outcome = svc->publish(std::move(m), ctx.permissions());
+    if (!outcome.accepted) {
+        if (outcome.cycle_blocked) {
+            ctx.err() << "Error: channel-publish: cycle detected on '"
+                      << channel << "' (channel already in route_trace)\n";
+        } else if (outcome.ttl_exhausted) {
+            ctx.err() << "Error: channel-publish: TTL exhausted on '"
+                      << channel << "' (hops_remaining reached 0)\n";
+        } else if (outcome.denied_by_rbac) {
+            // Shouldn't reach here since we pre-checked, but surface
+            // defensively in case dispatch-time checks added later.
+            ctx.err() << "Error: channel-publish: RBAC denied on '"
+                      << channel << "'\n";
+        }
+        return false;
+    }
     return true;
 }
+
+// --- obs-message-write ( chan-obs msg-str -- ) ------ (RBAC-checked later in its impl)
 
 // --- channel-route-add ( sink-detail-str sink-kind-str pattern-str -- handle )
 
@@ -502,10 +568,15 @@ bool prim_channel_subscribe(ExecutionContext& ctx) {
         ctx.err() << "Error: channel-subscribe: no channel service\n";
         return false;
     }
+    if (!rbac_require(ctx, "channel-subscribe", pattern,
+                      etil::manifold::ChannelAction::Read, "Read")) {
+        return false;
+    }
     auto obs_sp = svc->observe(pattern, ctx.permissions());
     if (!obs_sp) {
-        ctx.err() << "Error: channel-subscribe: observe() denied or "
-                     "pattern invalid\n";
+        ctx.err() << "Error: channel-subscribe: observe() failed "
+                     "after RBAC passed — likely invalid pattern '"
+                  << pattern << "'\n";
         return false;
     }
     // shared_ptr → raw ptr: observe() returned a shared_ptr with a
@@ -585,12 +656,33 @@ bool prim_obs_message_write(ExecutionContext& ctx) {
         return false;
     }
 
+    std::string channel_name(name_str->view());
+    if (!rbac_require(ctx, "obs-message-write", channel_name,
+                      etil::manifold::ChannelAction::Write, "Write")) {
+        obs->release();
+        return false;
+    }
+
     Message m;
-    m.channel = std::string(name_str->view());
+    m.channel = channel_name;
     m.payload = msg;
     m.payload_type = std::type_index(typeid(std::string));
     if (!ctx.session_id().empty()) m.tags["session_id"] = ctx.session_id();
-    svc->publish(std::move(m), ctx.permissions());
+    auto outcome = svc->publish(std::move(m), ctx.permissions());
+    if (!outcome.accepted) {
+        if (outcome.cycle_blocked) {
+            ctx.err() << "Error: obs-message-write: cycle detected on '"
+                      << channel_name << "'\n";
+        } else if (outcome.ttl_exhausted) {
+            ctx.err() << "Error: obs-message-write: TTL exhausted on '"
+                      << channel_name << "'\n";
+        } else if (outcome.denied_by_rbac) {
+            ctx.err() << "Error: obs-message-write: RBAC denied on '"
+                      << channel_name << "'\n";
+        }
+        obs->release();
+        return false;
+    }
 
     obs->release();
     return true;
@@ -644,9 +736,16 @@ bool prim_obs_message_read(ExecutionContext& ctx) {
     // So reader xts and loop transforms always operate on strings.
     // Metadata consumers should use channel-tap-observable instead.
     const LoopSpec* loop = svc->find_loop_for_destination(name);
+    if (!rbac_require(ctx, "obs-message-read", name,
+                      etil::manifold::ChannelAction::Read, "Read")) {
+        obs->release();
+        return false;
+    }
     auto sub_sp = svc->observe(name, ctx.permissions());
     if (!sub_sp) {
-        ctx.err() << "Error: obs-message-read: observe() denied\n";
+        ctx.err() << "Error: obs-message-read: observe() failed "
+                     "after RBAC passed — likely invalid channel name '"
+                  << name << "'\n";
         obs->release();
         return false;
     }
@@ -697,9 +796,25 @@ bool prim_obs_loop_channels(ExecutionContext& ctx) {
         return false;
     }
 
+    // Pre-check RBAC on both channels so we can surface the actual
+    // denial reason. A loop needs Route on OUT (we install a
+    // forwarding-sink route there) and Write on IN (the forwarding
+    // sink republishes there). Pre-checking closes the security gap
+    // where IN was previously unchecked.
+    if (!rbac_require(ctx, "obs-loop-channels", out_name,
+                      etil::manifold::ChannelAction::Route, "Route (source)")) {
+        return false;
+    }
+    if (!rbac_require(ctx, "obs-loop-channels", in_name,
+                      etil::manifold::ChannelAction::Write, "Write (destination)")) {
+        return false;
+    }
+
     auto h = svc->register_loop(out_name, in_name, ctx.permissions());
     if (!h.valid()) {
-        ctx.err() << "Error: obs-loop-channels: register_loop failed\n";
+        ctx.err() << "Error: obs-loop-channels: register_loop failed "
+                     "after RBAC passed — likely invalid channel name "
+                     "pattern in '" << out_name << "' or '" << in_name << "'\n";
         return false;
     }
     ctx.data_stack().push(Value(static_cast<int64_t>(h.id)));
@@ -838,7 +953,9 @@ bool mcp_on_channel_internal(ExecutionContext& ctx, const std::string& channel) 
     }
     auto obs_sp = svc->observe(channel, ctx.permissions());
     if (!obs_sp) {
-        ctx.err() << "Error: mcp-on: observe denied or pattern invalid\n";
+        ctx.err() << "Error: mcp-on: observe(" << channel
+                  << ") failed — RBAC or pattern invalid (use channel-perm-check "
+                     "to verify Read permission)\n";
         return false;
     }
     auto* raw = obs_sp.get();
