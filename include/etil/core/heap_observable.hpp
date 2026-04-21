@@ -95,6 +95,21 @@ public:
         // HeapObservable::channel_subscription). Execution drains the
         // subject's queue and emits each message as a HeapMap.
         ChannelSubscription,
+
+        // Channel handle — a named handle returned by
+        // obs-create-channel. Carries channel name (state_) + access
+        // mode (param_). Not directly pipeline-executable: consumers
+        // must convert via obs-message-read first. Writers use
+        // obs-message-write which calls ChannelService::publish.
+        Channel,
+
+        // Map-with-cancel — like Map but the xt's output is
+        // ( value' bool ) instead of ( value' ). Bool on TOS controls
+        // whether the transformed value is emitted (true) or dropped
+        // from the stream (false). Allows transforms to cancel
+        // messages. Used by obs-message-read to compose a loop's
+        // transform chain as observable operators.
+        MapWithCancel,
     };
 
     Kind obs_kind() const { return obs_kind_; }
@@ -180,6 +195,29 @@ public:
     // the feeder route — see include/etil/manifold/subject.hpp).
     static HeapObservable* channel_subscription(
         std::shared_ptr<etil::manifold::ChannelSubject> subject);
+
+    // Channel handle modes — what operations are allowed on a
+    // given channel-handle observable. ReadWrite handles are what
+    // obs-create-channel returns; ReadOnly / WriteOnly are reserved
+    // for future capability-tightening APIs.
+    enum class ChannelMode : uint8_t {
+        ReadWrite = 0,
+        ReadOnly  = 1,
+        WriteOnly = 2,
+    };
+
+    // Channel handle — `name` is addref'd. Not directly executable;
+    // must go through obs-message-read to become a subscription.
+    static HeapObservable* channel(HeapString* name, ChannelMode mode);
+
+    // Channel-mode / name accessors — valid only for Kind::Channel.
+    HeapString* channel_name() const;
+    ChannelMode channel_mode() const;
+
+    // Map-with-cancel operator — xt stack effect ( value -- value' bool ).
+    // On execute, drops the value when TOS bool is false; emits
+    // value' otherwise.
+    static HeapObservable* map_with_cancel(HeapObservable* source, WordImpl* xt);
 
     // Gap fill — high-value RxJS operators
     static HeapObservable* tap(HeapObservable* source, WordImpl* xt);

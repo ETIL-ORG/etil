@@ -92,6 +92,30 @@ bool execute_pipeline(HeapObservable* obs, ExecutionContext& ctx,
         return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
     }
 
+    case K::MapWithCancel: {
+        // xt stack effect: ( value -- value' bool ).
+        // bool=true → emit value'; bool=false → drop (stream continues).
+        // Used by obs-message-read to compose a loop's transform chain
+        // into the observable pipeline with per-transform cancel.
+        auto* xt = obs->operator_xt();
+        Observer wrapped = [xt, observer](Value v, ExecutionContext& c) -> bool {
+            c.data_stack().push(v);
+            if (!execute_xt(xt, c)) return false;
+            auto flag_opt = c.data_stack().pop();
+            if (!flag_opt) return false;
+            auto val_opt = c.data_stack().pop();
+            if (!val_opt) return false;
+            bool keep = (flag_opt->type == Value::Type::Boolean)
+                        && flag_opt->as_bool();
+            if (!keep) {
+                value_release(*val_opt);
+                return true;   // cancelled — drop, continue stream
+            }
+            return observer(*val_opt, c);
+        };
+        return execute_pipeline(obs->source(), ctx, wrapped, pipeline);
+    }
+
     case K::MapWith: {
         auto* xt = obs->operator_xt();
         Value context = obs->state();
@@ -1482,6 +1506,14 @@ bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observ
         }
         return true;
     }
+
+    case K::Channel:
+        // A Channel handle is not directly pipeline-executable. It
+        // must be converted to a ChannelSubscription via
+        // obs-message-read (which also applies any registered loop
+        // transforms). Fail here so mistakes are visible rather than
+        // silently producing a dead pipeline.
+        return false;
 
     default:
         return false;

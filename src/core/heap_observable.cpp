@@ -97,6 +97,8 @@ const char* HeapObservable::kind_name() const {
     case Kind::SwitchMap:     return "switch-map";
     case Kind::Catch:         return "catch";
     case Kind::ChannelSubscription: return "channel-subscription";
+    case Kind::Channel:             return "channel";
+    case Kind::MapWithCancel:       return "map-with-cancel";
     }
     return "unknown";
 }
@@ -141,6 +143,34 @@ HeapObservable* HeapObservable::map(HeapObservable* source, WordImpl* xt) {
     source->add_ref(); o->source_ = source;
     xt->add_ref();     o->operator_xt_ = xt;
     return o;
+}
+
+HeapObservable* HeapObservable::map_with_cancel(HeapObservable* source,
+                                                 WordImpl* xt) {
+    auto* o = new HeapObservable(Kind::MapWithCancel);
+    source->add_ref(); o->source_ = source;
+    xt->add_ref();     o->operator_xt_ = xt;
+    return o;
+}
+
+HeapObservable* HeapObservable::channel(HeapString* name, ChannelMode mode) {
+    auto* o = new HeapObservable(Kind::Channel);
+    if (name) {
+        name->add_ref();
+        o->state_ = Value::from(name);
+    }
+    o->param_ = static_cast<int64_t>(mode);
+    return o;
+}
+
+HeapString* HeapObservable::channel_name() const {
+    if (obs_kind_ != Kind::Channel) return nullptr;
+    if (state_.type != Value::Type::String) return nullptr;
+    return state_.as_string();
+}
+
+HeapObservable::ChannelMode HeapObservable::channel_mode() const {
+    return static_cast<ChannelMode>(param_);
 }
 
 HeapObservable* HeapObservable::map_with(HeapObservable* source, WordImpl* xt, Value ctx) {
