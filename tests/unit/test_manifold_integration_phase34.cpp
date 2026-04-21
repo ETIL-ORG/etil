@@ -161,11 +161,13 @@ TEST(Phase34Integration, RejectOwnOriginDropsOwnButAcceptsForeign) {
     foreign.tags["from_broker"] = "true";
     auto out1 = svc->publish(std::move(foreign));
     EXPECT_TRUE(out1.accepted);
+    svc->flush_for_tests();
     EXPECT_EQ(consumer->size(), 1u);
 
     // Own-origin message — publish stamps it with our origin.
     auto out2 = svc->publish(make_msg("etil.test.echo", "own-origin"));
     EXPECT_TRUE(out2.accepted);
+    svc->flush_for_tests();
     // Consumer still at 1 — own-origin got dropped by layer 3.
     EXPECT_EQ(consumer->size(), 1u);
 
@@ -189,6 +191,7 @@ TEST(Phase34Integration, EchoSuppressionAuditEmitted) {
     svc->add_route(std::move(consumer_spec));
 
     svc->publish(make_msg("etil.test.echo", "triggers-echo-audit"));
+    svc->flush_for_tests();
     ASSERT_GE(audit->size(), 1u);
     auto msgs = audit->captured();
     EXPECT_EQ(msgs.front().tags.at("origin_channel"), "etil.test.echo");
@@ -277,6 +280,7 @@ TEST(Phase34Integration, FullLifecycleAllSubtreesReceiveEvents) {
     engine.register_tests("sq", std::move(tests));
     engine.evolve_word("sq");
     engine.logger().stop();
+    svc->flush_for_tests();
 
     // --- Assertions ------------------------------------------------------
     EXPECT_GE(cap_stdout->size(), 1u)

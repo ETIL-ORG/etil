@@ -90,6 +90,7 @@ TEST(ManifoldTil, PublishReachesDirectlyAddedRoute) {
     f.push_string("payload-one");
     f.push_string("etil.test.deep.channel");
     ASSERT_TRUE(f.run("channel-publish"));
+    f.channels->flush_for_tests();
     EXPECT_EQ(capture->size(), 1u);
     auto msgs = capture->captured();
     EXPECT_EQ(msgs[0].tags.at("session_id"), "test-session");
@@ -124,6 +125,7 @@ TEST(ManifoldTil, TapFileCreatesFileRoute) {
     f.push_string("from-til");
     f.push_string("etil.tap.out");
     ASSERT_TRUE(f.run("channel-publish"));
+    f.channels->flush_for_tests();
 
     std::ifstream in(tmp);
     std::string content((std::istreambuf_iterator<char>(in)),
@@ -209,10 +211,16 @@ TEST(ManifoldTil, CycleStatsReturnsExpectedKeys) {
     auto opt = f.ctx.data_stack().pop();
     ASSERT_EQ(opt->type, Value::Type::Map);
     auto* m = opt->as_map();
+    // Cycle-detection keys (Phases 0-3).
     EXPECT_TRUE(m->has("cycles-detected"));
     EXPECT_TRUE(m->has("ttl-exhausted"));
     EXPECT_TRUE(m->has("echo-dropped"));
     EXPECT_TRUE(m->has("static-warnings"));
+    // Dispatcher keys (Phase 5a.6).
+    EXPECT_TRUE(m->has("subscriber-queue-depth"));
+    EXPECT_TRUE(m->has("dropped-by-overflow"));
+    EXPECT_TRUE(m->has("dispatcher-exceptions"));
+    EXPECT_TRUE(m->has("dispatcher-idle-transitions"));
     m->release();
 }
 
@@ -226,6 +234,7 @@ TEST(ManifoldTil, SinkStatsReturnsRouteFacts) {
 
     f.push_string("p"); f.push_string("etil.stats");
     ASSERT_TRUE(f.run("channel-publish"));
+    f.channels->flush_for_tests();
 
     f.ctx.data_stack().push(Value(static_cast<int64_t>(handle.id)));
     ASSERT_TRUE(f.run("channel-sink-stats"));

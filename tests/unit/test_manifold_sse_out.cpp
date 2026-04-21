@@ -58,6 +58,7 @@ TEST(SseOut, SystemNotificationPublishesAndIsTapped) {
         "etil.mcp.out.notification.system",
         "sess-abc",
         "hello world"));
+    server.channels()->flush_for_tests();
 
     EXPECT_EQ(capture->size(), 1u);
     auto msgs = capture->captured();
@@ -80,6 +81,7 @@ TEST(SseOut, UserNotificationCarriesTargetUserIdTag) {
         "sess-abc",
         "targeted",
         "user-42"));
+    server.channels()->flush_for_tests();
 
     ASSERT_EQ(capture->size(), 1u);
     auto msgs = capture->captured();
@@ -100,6 +102,7 @@ TEST(SseOut, MessagesCarryMonotonicSequenceNumbers) {
             "sess-x",
             "m" + std::to_string(i)));
     }
+    server.channels()->flush_for_tests();
 
     auto msgs = capture->captured();
     ASSERT_EQ(msgs.size(), 5u);
@@ -120,6 +123,7 @@ TEST(SseOut, HostnameStampedOnOutbound) {
         "etil.mcp.out.notification.system",
         "sess-h",
         "stamped"));
+    server.channels()->flush_for_tests();
 
     auto msgs = capture->captured();
     ASSERT_EQ(msgs.size(), 1u);

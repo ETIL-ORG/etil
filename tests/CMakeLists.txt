@@ -17,6 +17,10 @@ add_executable(etil_tests
     unit/test_manifold_amqp_sink.cpp
     unit/test_manifold_echo.cpp
     unit/test_manifold_broker_source.cpp
+    unit/test_manifold_test_sinks.cpp
+    unit/test_manifold_async_dispatch.cpp
+    unit/test_manifold_producer_registry.cpp
+    unit/test_manifold_dispatcher_stats.cpp
     unit/test_execution_context_channels.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp
@@ -43,6 +47,11 @@ target_link_libraries(etil_tests
         etil
         GTest::gtest_main
 )
+
+if(ETIL_MANIFOLD_ASYNC_DISPATCH_ENABLED)
+    target_compile_definitions(etil_tests
+        PRIVATE ETIL_MANIFOLD_ASYNC_DISPATCH_ENABLED=1)
+endif()
 
 etil_add_link_map(etil_tests)
 gtest_discover_tests(etil_tests)

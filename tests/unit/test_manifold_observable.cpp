@@ -47,11 +47,18 @@ Message make_msg(std::string channel, std::string payload) {
 }
 
 /// Run execute_pipeline in a background thread so the main thread can
-/// close() the subject and unblock the drain loop. Returns the
+/// close the subject and unblock the drain loop. Returns the
 /// collected HeapMap channel fields in publish order.
+///
+/// The worker holds its own shared_ptr<HeapObservable> copy so the
+/// observable stays alive for the full execute_pipeline run — no UAF
+/// race on obs->param() access. The main thread closes the subject
+/// via HeapObservable::close_channel_subscription() (which does NOT
+/// destroy the observable) after running the caller's work closure.
+/// This gives a deterministic close signal without any sleep-for-settle.
 std::vector<std::string> drain_subject_in_thread(
-    HeapObservable* obs, ExecutionContext& ctx,
-    std::function<void()> work_between_start_and_close) {
+    std::shared_ptr<HeapObservable> obs_sp, ExecutionContext& ctx,
+    std::function<void()> work_before_close) {
     std::vector<std::string> channels;
     Observer observer = [&](Value v, ExecutionContext&) -> bool {
         if (v.type != Value::Type::Map) return true;
@@ -64,10 +71,11 @@ std::vector<std::string> drain_subject_in_thread(
         m->release();
         return true;
     };
-    std::thread worker([&] { execute_pipeline(obs, ctx, observer); });
-    // Let the drain thread settle into pop_wait.
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    work_between_start_and_close();
+    std::thread worker([obs_sp_worker = obs_sp, &ctx, &observer]() {
+        execute_pipeline(obs_sp_worker.get(), ctx, observer);
+    });
+    work_before_close();
+    obs_sp->close_channel_subscription();
     worker.join();
     return channels;
 }
@@ -97,17 +105,15 @@ TEST(ManifoldObservable, PublishesAppearOnSubscription) {
     // after we're done.
     auto obs_sp = svc->observe("etil.obs.**");
     ASSERT_NE(obs_sp, nullptr);
-    auto* obs = obs_sp.get();
 
     ExecutionContext ctx(0);
-    auto collected = drain_subject_in_thread(obs, ctx, [&] {
+    auto collected = drain_subject_in_thread(obs_sp, ctx, [&] {
         svc->publish(make_msg("etil.obs.one", "alpha"));
         svc->publish(make_msg("etil.obs.deep.two", "beta"));
         svc->publish(make_msg("etil.other", "ignored"));
-        // Close the subject by releasing the observable's holder —
-        // done by releasing obs_sp's ref. Because obs_sp holds the
-        // only external shared_ptr ref, this closes the subject.
-        obs_sp.reset();
+        // Drain the dispatcher before closing the subject so the
+        // ObservableSink has pushed all matched messages through.
+        svc->flush_for_tests();
     });
     ASSERT_EQ(collected.size(), 2u);
     EXPECT_EQ(collected[0], "etil.obs.one");
@@ -120,13 +126,10 @@ TEST(ManifoldObservable, ClosingSubjectTerminatesDrain) {
     auto svc = etil::manifold::make_default_channel_service();
     auto obs_sp = svc->observe("etil.term");
     ASSERT_NE(obs_sp, nullptr);
-    auto* obs = obs_sp.get();
 
     ExecutionContext ctx(0);
-    auto collected = drain_subject_in_thread(obs, ctx, [&] {
-        // No publishes; just close after a tick so the drain exits.
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        obs_sp.reset();
+    auto collected = drain_subject_in_thread(obs_sp, ctx, [&] {
+        // No publishes; helper closes the subject after this lambda.
     });
     EXPECT_TRUE(collected.empty());
 }
@@ -136,7 +139,6 @@ TEST(ManifoldObservable, SessionAndSeqAreStamped) {
     init_origin();
     auto svc = etil::manifold::make_default_channel_service();
     auto obs_sp = svc->observe("etil.stamp");
-    auto* obs = obs_sp.get();
 
     std::vector<int64_t> seqs;
     std::vector<std::string> sessions;
@@ -153,8 +155,12 @@ TEST(ManifoldObservable, SessionAndSeqAreStamped) {
         return true;
     };
 
-    std::thread worker([&] { execute_pipeline(obs, ctx, observer); });
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    // Worker holds its own shared_ptr<HeapObservable> so the observable
+    // lives for the full drain. Main closes the subject explicitly via
+    // close_channel_subscription() — no sleep-for-settle, no UAF race.
+    std::thread worker([obs_sp_worker = obs_sp, &ctx, &observer]() {
+        execute_pipeline(obs_sp_worker.get(), ctx, observer);
+    });
 
     Message m1 = make_msg("etil.stamp", "a");
     m1.origin.session_id = "sess-x";
@@ -163,7 +169,8 @@ TEST(ManifoldObservable, SessionAndSeqAreStamped) {
     m2.origin.session_id = "sess-y";
     svc->publish(std::move(m2));
 
-    obs_sp.reset();
+    svc->flush_for_tests();
+    obs_sp->close_channel_subscription();
     worker.join();
 
     ASSERT_EQ(seqs.size(), 2u);

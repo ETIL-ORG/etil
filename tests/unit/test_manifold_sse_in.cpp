@@ -52,6 +52,7 @@ TEST(SseIn, ProgressNotificationRoutesToProgressChannel) {
 
     nlohmann::json params = {{"progressToken", 1}, {"progress", 50}};
     server.publish_inbound_notification("notifications/progress", params);
+    server.channels()->flush_for_tests();
     EXPECT_EQ(capture->size(), 1u);
     auto msgs = capture->captured();
     EXPECT_EQ(msgs[0].tags.at("method"), "notifications/progress");
@@ -67,6 +68,7 @@ TEST(SseIn, CancelledNotificationRoutesToCancelledChannel) {
 
     nlohmann::json params = {{"requestId", 42}};
     server.publish_inbound_notification("notifications/cancelled", params);
+    server.channels()->flush_for_tests();
     EXPECT_EQ(capture->size(), 1u);
 }
 
@@ -80,6 +82,7 @@ TEST(SseIn, RootsListChangedRoutesToRootsChannel) {
 
     server.publish_inbound_notification("notifications/roots/list_changed",
                                         nlohmann::json::object());
+    server.channels()->flush_for_tests();
     EXPECT_EQ(capture->size(), 1u);
 }
 
@@ -93,6 +96,7 @@ TEST(SseIn, ArbitraryNotificationGoesToNotificationSubtree) {
 
     server.publish_inbound_notification("notifications/custom/event",
                                         nlohmann::json{{"k", "v"}});
+    server.channels()->flush_for_tests();
     ASSERT_EQ(capture->size(), 1u);
     EXPECT_EQ(capture->captured()[0].channel,
               "etil.mcp.in.notification.custom.event");

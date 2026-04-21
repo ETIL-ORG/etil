@@ -4,9 +4,11 @@
 #include "etil/core/execution_output_tee.hpp"
 
 #include <cstring>
+#include <exception>
 #include <typeindex>
 #include <utility>
 
+#include "etil/core/logging.hpp"
 #include "etil/manifold/message.hpp"
 #include "etil/manifold/service.hpp"
 
@@ -70,10 +72,20 @@ void ExecutionOutputTeeBuf::flush_line_locked() {
     // Best-effort publish. We must not throw out of a streambuf
     // operation, and we must not let a publish failure break
     // stdout output — the downstream write already happened.
+    // Log via spdlog (not iostream) so diagnostics are observable
+    // without re-entering this tee buffer.
     try {
         channels_->publish(std::move(m));
+    } catch (const std::exception& e) {
+        if (auto log = etil::core::logging::get("etil.manifold"); log) {
+            log->warn("tee publish threw on channel {}: {}",
+                      channel_name_, e.what());
+        }
     } catch (...) {
-        // Swallow.
+        if (auto log = etil::core::logging::get("etil.manifold"); log) {
+            log->warn("tee publish threw non-std exception on channel {}",
+                      channel_name_);
+        }
     }
 }
 

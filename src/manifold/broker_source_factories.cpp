@@ -20,6 +20,7 @@
 #include <proton/receiver.hpp>
 #include <thread>
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #endif
 
@@ -168,9 +169,12 @@ public:
     AmqpSourceHandler(std::string url, std::string address,
                       AmqpSource* owner,
                       std::atomic<bool>& connected,
-                      std::atomic<bool>& stop)
+                      std::atomic<bool>& stop,
+                      std::mutex& connect_mu,
+                      std::condition_variable& connect_cv)
         : url_(std::move(url)), address_(std::move(address)),
-          owner_(owner), connected_(connected), stop_(stop) {}
+          owner_(owner), connected_(connected), stop_(stop),
+          connect_mu_(connect_mu), connect_cv_(connect_cv) {}
 
     void on_container_start(proton::container& c) override {
         c.connect(url_);
@@ -179,7 +183,11 @@ public:
         conn.open_receiver(address_);
     }
     void on_receiver_open(proton::receiver& /*r*/) override {
-        connected_.store(true, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lk(connect_mu_);
+            connected_.store(true, std::memory_order_release);
+        }
+        connect_cv_.notify_all();
     }
     void on_message(proton::delivery& /*d*/,
                     proton::message& m) override;
@@ -188,7 +196,11 @@ public:
         auto log = etil::core::logging::get("etil.manifold");
         if (log) log->error("amqp_source: transport error: {}",
                             t.error().what());
-        connected_.store(false, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lk(connect_mu_);
+            connected_.store(false, std::memory_order_release);
+        }
+        connect_cv_.notify_all();
     }
 
 private:
@@ -197,6 +209,8 @@ private:
     AmqpSource* owner_;
     std::atomic<bool>& connected_;
     std::atomic<bool>& stop_;
+    std::mutex& connect_mu_;
+    std::condition_variable& connect_cv_;
 };
 
 class AmqpSource : public BrokerSourceBase {
@@ -210,7 +224,7 @@ public:
     bool start() {
         handler_ = std::make_unique<AmqpSourceHandler>(
             config().broker_url, config().subject, this,
-            connected_, stop_);
+            connected_, stop_, connect_mu_, connect_cv_);
         try {
             container_ = std::make_unique<proton::container>(*handler_);
         } catch (const std::exception& e) {
@@ -226,10 +240,10 @@ public:
             }
         });
         auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-        while (!connected_.load(std::memory_order_acquire) &&
-               std::chrono::steady_clock::now() < deadline) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        }
+        std::unique_lock<std::mutex> lk(connect_mu_);
+        connect_cv_.wait_until(lk, deadline, [this] {
+            return connected_.load(std::memory_order_acquire);
+        });
         return connected_.load(std::memory_order_acquire);
     }
 
@@ -272,6 +286,8 @@ private:
     std::thread thread_;
     std::atomic<bool> connected_{false};
     std::atomic<bool> stop_{false};
+    std::mutex connect_mu_;
+    std::condition_variable connect_cv_;
 };
 
 void AmqpSourceHandler::on_message(proton::delivery& /*d*/,

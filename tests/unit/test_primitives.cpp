@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 385u);  // +7 in Phase 3b/3c/3d: channel-tap-{nats,amqp}, channel-source-{nats,amqp}, mcp-notify-{nats,amqp}, channel-session-hmac
+    EXPECT_EQ(dict.concept_count(), 388u);  // +3 in Phase 5a.5: channel-producer-list, channel-producer-stats, channel-producers-by-pattern
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

@@ -39,12 +39,32 @@ struct SinkStats {
     uint64_t dropped_count  = 0;   // messages dropped at this route
 };
 
-/// Aggregate cycle-detection stats (channel-cycle-stats).
+/// Aggregate cycle-detection + dispatcher stats (channel-cycle-stats).
+/// Phase 5a.6 added the lower four counters; they surface dispatcher-
+/// internal state through the same TIL word operators already use for
+/// cycle diagnostics.
 struct CycleStats {
-    uint64_t cycles_detected    = 0;  // layer 1 (route_trace)
-    uint64_t ttl_exhausted      = 0;  // layer 2 (hops_remaining)
-    uint64_t echo_dropped       = 0;  // layer 3 (origin echo) — phase 3
-    uint64_t static_warnings    = 0;  // add_route SCC warnings
+    uint64_t cycles_detected         = 0;  // layer 1 (route_trace)
+    uint64_t ttl_exhausted           = 0;  // layer 2 (hops_remaining)
+    uint64_t echo_dropped            = 0;  // layer 3 (origin echo)
+    uint64_t static_warnings         = 0;  // add_route SCC warnings
+    // --- Phase 5a.6 dispatcher counters ---
+    uint64_t subscriber_queue_depth   = 0; // items currently queued
+    uint64_t dropped_by_overflow      = 0; // RingBuffered/DropOldest drops (Phase 5a.7)
+    uint64_t dispatcher_exceptions    = 0; // sink throws caught by dispatcher
+    uint64_t dispatcher_idle_transitions = 0; // queue-empty edges
+};
+
+/// Per-channel producer-side snapshot — returned by the Phase 5a.5
+/// channel-producer-stats TIL word. Unlike SinkStats (which is
+/// route-keyed), ProducerStats is keyed by channel *name* and
+/// reflects publish activity whether or not any route is installed.
+/// See doc B §24.2.
+struct ProducerStats {
+    std::string channel;              ///< channel name
+    uint64_t published_count  = 0;    ///< total publish() calls on this channel
+    uint64_t last_published_ns = 0;   ///< IClock::now_ns() at last publish
+    uint64_t route_count      = 0;    ///< matching routes at query time
 };
 
 /// Result of a publish call. Never throws; reports diagnostic outcome.
@@ -104,10 +124,55 @@ public:
     /// Output is a 22-character base64url string (128-bit HMAC-SHA256
     /// truncate).
     virtual std::string session_hmac(std::string_view session_id) const = 0;
+
+    /// Test helper — block until every publish issued before this call
+    /// has been fully delivered to its sinks. Default implementation
+    /// is a no-op (sync implementations such as the current
+    /// DefaultChannelService deliver on the caller's stack, so there
+    /// is nothing to flush). The Phase 5a ThreadDispatcher override
+    /// will actually block on the dispatcher queue.
+    ///
+    /// Introduced in Phase 5a.1 as a forward-compatibility seam: tests
+    /// written today will be correct after Phase 5a.3 flips delivery
+    /// onto a worker thread.
+    virtual void flush_for_tests() {}
+
+    // --- Phase 5a.5 producer registry (doc B §24.2) ---
+
+    /// Every channel name that has received at least one publish()
+    /// since service start. Not ordered (hash-map snapshot).
+    virtual std::vector<std::string> producer_list() const { return {}; }
+
+    /// Snapshot of a single channel's producer stats. Returns a
+    /// ProducerStats with channel set to an empty string (and counts
+    /// at their defaults) when the channel has never been published
+    /// to.
+    virtual ProducerStats producer_stats(std::string_view channel) const {
+        (void)channel;
+        return {};
+    }
+
+    /// producer_list() filtered to channels matching the pattern
+    /// (same match semantics as route patterns: `*` single segment,
+    /// `**` tail).
+    virtual std::vector<std::string>
+        producers_by_pattern(std::string_view pattern) const {
+        (void)pattern;
+        return {};
+    }
 };
 
 /// Factory for the production implementation. Defined in
 /// src/manifold/default_service.cpp.
 std::shared_ptr<ChannelService> make_default_channel_service();
+
+class IClock;
+
+/// Test-oriented factory that lets callers inject a custom clock
+/// (typically a ManualClock) for deterministic time-stamp assertions
+/// in producer-registry tests. Production code should use the
+/// default factory above.
+std::shared_ptr<ChannelService> make_default_channel_service_with_clock(
+    std::shared_ptr<IClock> clock);
 
 } // namespace etil::manifold

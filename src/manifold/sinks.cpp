@@ -3,11 +3,14 @@
 
 #include "etil/manifold/sinks.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
+#include <thread>
 #include <typeindex>
 
 #include <spdlog/spdlog.h>
@@ -227,6 +230,98 @@ void RingBufferSink::clear() {
 std::shared_ptr<RingBufferSink> make_ring_buffer_sink(size_t capacity,
                                                      bool drop_first) {
     return std::make_shared<RingBufferSink>(capacity, drop_first);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5a test-sink helpers
+// ---------------------------------------------------------------------------
+
+void SubscriberCountingSink::accept(const Message& /*msg*/) {
+    count_.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t SubscriberCountingSink::count() const {
+    return count_.load(std::memory_order_relaxed);
+}
+
+void SubscriberCountingSink::reset() {
+    count_.store(0, std::memory_order_relaxed);
+}
+
+std::shared_ptr<SubscriberCountingSink> make_subscriber_counting_sink() {
+    return std::make_shared<SubscriberCountingSink>();
+}
+
+// ---
+
+void BlockingSink::accept(const Message& /*msg*/) {
+    std::unique_lock<std::mutex> lk(mu_);
+    in_progress_.store(true, std::memory_order_release);
+    in_progress_cv_.notify_all();        // wake anyone in wait_until_accept_in_progress()
+    cv_.wait(lk, [this] { return released_; });
+    in_progress_.store(false, std::memory_order_release);
+    in_progress_cv_.notify_all();        // wake waiters observing the exit edge too
+    count_.fetch_add(1, std::memory_order_relaxed);
+}
+
+void BlockingSink::release() {
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        released_ = true;
+    }
+    cv_.notify_all();
+}
+
+void BlockingSink::block() {
+    std::lock_guard<std::mutex> lk(mu_);
+    released_ = false;
+}
+
+uint64_t BlockingSink::count() const {
+    return count_.load(std::memory_order_relaxed);
+}
+
+bool BlockingSink::accept_in_progress() const {
+    return in_progress_.load(std::memory_order_acquire);
+}
+
+void BlockingSink::wait_until_accept_in_progress() {
+    std::unique_lock<std::mutex> lk(mu_);
+    in_progress_cv_.wait(lk, [this] {
+        return in_progress_.load(std::memory_order_acquire);
+    });
+}
+
+std::shared_ptr<BlockingSink> make_blocking_sink() {
+    return std::make_shared<BlockingSink>();
+}
+
+// ---
+
+ExceptionInjectingSink::ExceptionInjectingSink(uint64_t throw_on_call_n,
+                                               std::string what)
+    : throw_on_call_n_(throw_on_call_n), what_(std::move(what)) {}
+
+void ExceptionInjectingSink::accept(const Message& /*msg*/) {
+    uint64_t n = count_.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (throw_on_call_n_ != 0 && n == throw_on_call_n_) {
+        thrown_count_.fetch_add(1, std::memory_order_relaxed);
+        throw std::runtime_error(what_);
+    }
+}
+
+uint64_t ExceptionInjectingSink::count() const {
+    return count_.load(std::memory_order_relaxed);
+}
+
+uint64_t ExceptionInjectingSink::thrown_count() const {
+    return thrown_count_.load(std::memory_order_relaxed);
+}
+
+std::shared_ptr<ExceptionInjectingSink> make_exception_injecting_sink(
+    uint64_t throw_on_call_n, std::string what) {
+    return std::make_shared<ExceptionInjectingSink>(throw_on_call_n,
+                                                    std::move(what));
 }
 
 } // namespace etil::manifold

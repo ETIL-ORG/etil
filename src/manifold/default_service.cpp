@@ -16,11 +16,15 @@
 #include "etil/core/heap_observable.hpp"
 #include "etil/core/logging.hpp"
 #include "etil/manifold/channel_name.hpp"
+#include "etil/manifold/clock.hpp"
+#include "etil/manifold/dispatcher.hpp"
 #include "etil/manifold/origin.hpp"
 #include "etil/manifold/rbac.hpp"
 #include "etil/manifold/session_hmac.hpp"
 #include "etil/manifold/subject.hpp"
 #include "etil/mcp/role_permissions.hpp"
+
+#include "route_state.hpp"
 
 namespace etil::manifold {
 
@@ -31,20 +35,107 @@ auto& log() {
     return l;
 }
 
-/// Per-route runtime state — held inside the service under its mutex.
-struct RouteState {
-    RouteHandle handle;
-    RouteSpec   spec;
-    std::atomic<uint64_t> accepted{0};
-    std::atomic<uint64_t> dropped{0};
-};
+// RouteState is defined in route_state.hpp (Phase 5a.3 extraction) so
+// both default_service.cpp and dispatcher.cpp can reach it.
+
+/// Phase 5a.1 seam extraction — the pure transform-application +
+/// sink-delivery tail of deliver(). No service state references; takes
+/// only the route state, the message, and (forward-compat) the clock.
+/// Echo-suppression (layer 3) and audit emission stay in the service
+/// method that invokes this.
+///
+/// Invariants:
+///   - Does not throw. Sink exceptions are caught and logged; the
+///     loop continues so one bad sink does not drop the entire
+///     pipeline.
+///   - `state.accepted` is incremented per successfully delivered
+///     transformed message.
+///   - Does not mutate the caller's `msg` (copies for retarget).
+///
+/// The `clock` parameter is reserved for Phase 5a.5 producer-registry
+/// time-stamping from within the delivery path; currently unused.
+void apply_transforms_and_deliver(RouteState& state,
+                                  const Message& msg,
+                                  IClock& /*clock*/) {
+    // Apply the transform chain. Each transform may emit 0..N messages.
+    std::vector<Message> pipeline = {msg};
+    for (auto& transform : state.spec.transforms) {
+        std::vector<Message> next;
+        next.reserve(pipeline.size());
+        for (auto& m : pipeline) {
+            auto emitted = transform->apply(std::move(m));
+            for (auto& em : emitted) next.push_back(std::move(em));
+        }
+        pipeline = std::move(next);
+        if (pipeline.empty()) break;
+    }
+
+    if (pipeline.empty()) return;
+
+    // For each transformed message, deliver to the sink. Messages
+    // retargeted onto a different channel via fan_out still go to
+    // this route's sink (transform-driven retargeting through the
+    // router is a Phase 2+ follow-up per doc B §20.5).
+    for (auto& m : pipeline) {
+        Message to_deliver = m;
+        if (to_deliver.channel != msg.channel) {
+            if (to_deliver.route_trace.size() < kMaxRouteTraceEntries) {
+                to_deliver.route_trace.push_back(msg.channel);
+            }
+            if (to_deliver.hops_remaining > 0) --to_deliver.hops_remaining;
+        }
+
+        // Phase 5a.6 note: sink exceptions propagate up to the
+        // dispatcher's try/catch, which counts them via
+        // DispatcherStats::dispatcher_exceptions. Catching here would
+        // double-swallow the exception before the counter sees it.
+        // Invariant I5: dispatcher_exceptions increments atomically
+        // from the dispatcher thread.
+        if (state.spec.sink) {
+            state.spec.sink->accept(to_deliver);
+            state.accepted.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+}
 
 /// Forward declaration — dispatch helper for recursive (transform-
 /// fan-out) publishes without reentering the public publish() path.
 class DefaultChannelService : public ChannelService {
 public:
-    DefaultChannelService() {
+    DefaultChannelService()
+        : DefaultChannelService(make_system_clock(), nullptr) {}
+
+    explicit DefaultChannelService(std::shared_ptr<IClock> clock)
+        : DefaultChannelService(std::move(clock), nullptr) {}
+
+    /// Full-control constructor (Phase 5a.3). If `dispatcher` is null,
+    /// a ThreadDispatcher is created with a delivery closure bound to
+    /// this->deliver. Tests can pass an InlineDispatcher for
+    /// deterministic synchronous delivery; supply it pre-configured
+    /// with the desired DeliveryFn.
+    DefaultChannelService(std::shared_ptr<IClock> clock,
+                          std::unique_ptr<IDispatcher> dispatcher)
+        : clock_(std::move(clock)) {
         if (!origin_is_initialized()) init_origin();
+        if (!dispatcher) {
+            dispatcher = make_thread_dispatcher(
+                [this](std::shared_ptr<RouteState>& state,
+                       const Message& msg) { this->deliver(state, msg); });
+        }
+        dispatcher_ = std::move(dispatcher);
+    }
+
+    /// Shutdown the dispatcher before any member is destroyed, so
+    /// closures capturing `this` see a live object for their entire
+    /// run. Invariant I3 (shutdown drains) is enforced by the
+    /// dispatcher.
+    ~DefaultChannelService() override {
+        if (dispatcher_) dispatcher_->shutdown();
+    }
+
+    /// Override — forward to the dispatcher's flush(). Invariant I2.
+    void flush_for_tests() override {
+        if (dispatcher_) dispatcher_->flush();
     }
 
     PublishOutcome publish(Message msg,
@@ -87,6 +178,14 @@ public:
                 msg.origin.session_id = o.session_id;
             }
         }
+
+        // Phase 5a.5 — producer-registry bookkeeping. Happens AFTER
+        // origin stamping so the stamp timestamp and producer stamp
+        // agree on ordering. Before dispatch so a publish that the
+        // cycle detector rejects is still counted as "the producer
+        // tried" — matches operator expectations for observability
+        // (failed-publish count visible).
+        record_publisher(msg.channel);
 
         dispatch(msg, outcome);
         return outcome;
@@ -199,6 +298,17 @@ public:
         c.ttl_exhausted   = ttl_exhausted_.load(std::memory_order_relaxed);
         c.echo_dropped    = echo_dropped_.load(std::memory_order_relaxed);
         c.static_warnings = static_warnings_.load(std::memory_order_relaxed);
+        // Phase 5a.6 — dispatcher-internal counters merged in so one
+        // `channel-cycle-stats` call surfaces both cycle diagnostics
+        // and dispatcher health.
+        if (dispatcher_) {
+            auto ds = dispatcher_->stats();
+            c.subscriber_queue_depth       = ds.queue_depth;
+            c.dispatcher_exceptions        = ds.dispatcher_exceptions;
+            c.dispatcher_idle_transitions  = ds.idle_transitions;
+            // dropped_by_overflow stays at DispatcherStats default (0)
+            // in Phase 5a.6; Phase 5a.7 adds enforcement + counter.
+        }
         return c;
     }
 
@@ -206,7 +316,62 @@ public:
         return etil::manifold::session_hmac(process_key_, session_id);
     }
 
+    // --- Phase 5a.5 producer registry ---
+
+    std::vector<std::string> producer_list() const override {
+        std::vector<std::string> out;
+        std::lock_guard<std::mutex> lk(producer_mu_);
+        out.reserve(producer_stats_.size());
+        for (const auto& [name, _] : producer_stats_) out.push_back(name);
+        return out;
+    }
+
+    ProducerStats producer_stats(std::string_view channel) const override {
+        ProducerStats s;
+        {
+            std::lock_guard<std::mutex> lk(producer_mu_);
+            auto it = producer_stats_.find(std::string(channel));
+            if (it == producer_stats_.end()) return s;
+            s.channel           = it->first;
+            s.published_count   = it->second.published_count;
+            s.last_published_ns = it->second.last_published_ns;
+        }
+        // route_count is derived at query time — walk the route map
+        // under its own lock.
+        {
+            absl::MutexLock lock(&mu_);
+            for (const auto& [id, state] : routes_) {
+                if (channel_matches(state->spec.channel_pattern, s.channel)) {
+                    ++s.route_count;
+                }
+            }
+        }
+        return s;
+    }
+
+    std::vector<std::string>
+    producers_by_pattern(std::string_view pattern) const override {
+        std::vector<std::string> out;
+        std::string pat(pattern);
+        std::lock_guard<std::mutex> lk(producer_mu_);
+        for (const auto& [name, _] : producer_stats_) {
+            if (channel_matches(pat, name)) out.push_back(name);
+        }
+        return out;
+    }
+
 private:
+    /// Phase 5a.5 — called from publish() immediately after the RBAC
+    /// check and origin stamping succeed. One hash-map upsert + one
+    /// clock read. The mutex is separate from mu_ so producer-registry
+    /// writes don't contend with route lookups in dispatch().
+    void record_publisher(const std::string& channel) {
+        uint64_t now = clock_ ? clock_->now_ns() : 0;
+        std::lock_guard<std::mutex> lk(producer_mu_);
+        auto& stats = producer_stats_[channel];
+        stats.published_count += 1;
+        stats.last_published_ns = now;
+    }
     /// Core dispatch — for each matching route, apply transforms then
     /// deliver to the sink. Transforms may emit onto different
     /// channels; those secondary publishes go through dispatch_message
@@ -248,8 +413,13 @@ private:
         }
         outcome.routes_matched = matched.size();
 
+        // Phase 5a.3 — enqueue one DeliveryItem per matched route
+        // rather than invoking deliver() on the caller's stack.
+        // The dispatcher thread drains and calls deliver() outside
+        // this call path. See doc B §24.1 and the plan §4 Phase 5a.3
+        // invariants I1, I2, I4, I6.
         for (auto& state : matched) {
-            deliver(state, msg, outcome);
+            dispatcher_->enqueue(DeliveryItem{state, msg});
         }
     }
 
@@ -263,9 +433,12 @@ private:
         return true;
     }
 
+    /// Called from the dispatcher thread (ThreadDispatcher) or from the
+    /// caller's thread (InlineDispatcher). Layer-3 echo check lives
+    /// here because it mutates service-owned counters; the pure
+    /// transform+sink tail is in apply_transforms_and_deliver().
     void deliver(std::shared_ptr<RouteState>& state,
-                 const Message& msg,
-                 PublishOutcome& /*outcome*/) {
+                 const Message& msg) {
         // Layer 3 cycle detection (doc B §20.3). When the route
         // opted in with reject_own_origin, compare the incoming
         // message's origin against this process's own identity; if
@@ -282,55 +455,10 @@ private:
             }
         }
 
-        // Apply the transform chain. Each transform may emit 0..N messages.
-        std::vector<Message> pipeline = {msg};
-        for (auto& transform : state->spec.transforms) {
-            std::vector<Message> next;
-            next.reserve(pipeline.size());
-            for (auto& m : pipeline) {
-                auto emitted = transform->apply(std::move(m));
-                for (auto& em : emitted) next.push_back(std::move(em));
-            }
-            pipeline = std::move(next);
-            if (pipeline.empty()) break;
-        }
-
-        if (pipeline.empty()) return;
-
-        // For each transformed message, deliver to the sink. Transforms
-        // that retargeted onto a different channel would, in a fuller
-        // implementation, re-enter the router — Phase 1 keeps things
-        // simple: messages emitted with a different channel still go
-        // to THIS route's sink (fan_out replicates at sink level). A
-        // future phase adds transform-driven retargeting through the
-        // router.
-        for (auto& m : pipeline) {
-            // Append this route's channel pattern to the trace and
-            // decrement hops_remaining on the copy we deliver. We do
-            // not mutate the caller's `msg`.
-            Message to_deliver = m;
-            // route_trace append happens when a transform retargets
-            // onto a new channel; single-route delivery to the same
-            // channel does not re-add. Detect retargeting:
-            if (to_deliver.channel != msg.channel) {
-                if (to_deliver.route_trace.size() < kMaxRouteTraceEntries) {
-                    to_deliver.route_trace.push_back(msg.channel);
-                }
-                if (to_deliver.hops_remaining > 0) --to_deliver.hops_remaining;
-            }
-
-            try {
-                if (state->spec.sink) {
-                    state->spec.sink->accept(to_deliver);
-                    state->accepted.fetch_add(1, std::memory_order_relaxed);
-                }
-            } catch (const std::exception& e) {
-                // Isolate sink failures — one bad sink must not
-                // poison the dispatch loop.
-                log()->warn("Sink threw during accept on channel {}: {}",
-                            to_deliver.channel, e.what());
-            }
-        }
+        // Phase 5a.1: the pure tail is now a free function so it can be
+        // exercised in isolation (tests construct a RouteState + Message
+        // + IClock without needing a full ChannelService).
+        apply_transforms_and_deliver(*state, msg, *clock_);
     }
 
     // --- audit emission (bypasses RBAC + cycle checks) ---
@@ -404,8 +532,32 @@ private:
         // self-loop (rare but easy to catch).
     }
 
+    /// Injectable clock — production defaults to SystemClock, tests
+    /// inject ManualClock for deterministic last_published_ns. Phase
+    /// 5a.1: owned but not yet read on the hot path (Phase 5a.5 wires
+    /// producer-registry stamping through it).
+    std::shared_ptr<IClock> clock_;
+
+    /// Phase 5a.3 — owns the subscriber/sink dispatcher. Default is
+    /// ThreadDispatcher; tests may inject InlineDispatcher for
+    /// deterministic sync delivery. The dtor explicitly calls
+    /// shutdown() before any other member is destroyed so in-flight
+    /// closures capturing `this` see a live object.
+    std::unique_ptr<IDispatcher> dispatcher_;
+
     mutable absl::Mutex mu_;
     std::unordered_map<uint64_t, std::shared_ptr<RouteState>> routes_ ABSL_GUARDED_BY(mu_);
+
+    /// Phase 5a.5 — producer-keyed channel registry (doc B §24.2).
+    /// Keyed by channel name; updated once per successful publish()
+    /// under a dedicated mutex so it doesn't contend with route
+    /// lookups in dispatch().
+    struct ProducerRecord {
+        uint64_t published_count  = 0;
+        uint64_t last_published_ns = 0;
+    };
+    mutable std::mutex producer_mu_;
+    absl::flat_hash_map<std::string, ProducerRecord> producer_stats_;
 
     std::atomic<uint64_t> next_handle_id_{1};
     std::atomic<uint64_t> cycles_detected_{0};
@@ -422,6 +574,11 @@ private:
 
 std::shared_ptr<ChannelService> make_default_channel_service() {
     return std::make_shared<DefaultChannelService>();
+}
+
+std::shared_ptr<ChannelService> make_default_channel_service_with_clock(
+    std::shared_ptr<IClock> clock) {
+    return std::make_shared<DefaultChannelService>(std::move(clock));
 }
 
 } // namespace etil::manifold

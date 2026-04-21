@@ -35,6 +35,13 @@ HeapObservable::~HeapObservable() {
     }
 }
 
+void HeapObservable::close_channel_subscription() {
+    if (obs_kind_ != Kind::ChannelSubscription || param_ == 0) return;
+    auto* holder = reinterpret_cast<
+        std::shared_ptr<etil::manifold::ChannelSubject>*>(param_);
+    if (*holder) (*holder)->close();
+}
+
 const char* HeapObservable::kind_name() const {
     switch (obs_kind_) {
     case Kind::FromArray: return "from-array";

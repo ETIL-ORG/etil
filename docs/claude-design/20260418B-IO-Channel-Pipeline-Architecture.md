@@ -2462,6 +2462,46 @@ Two architecture gaps discovered during v2.7.3 interactive TUI debugging, not pr
 
 **Decision:** go with **option 1** as the real fix, in a new phase (Phase 5a). Ship option 2 as an interim patch only if MCP users hit the deadlock during the interval. Option 3 rejected — too coarse.
 
+#### 24.1.1 Why not "just use the libuv loop"?
+
+MCP server already owns a `uv_loop_t`. Natural question: reuse it for subscriber dispatch instead of introducing a dedicated thread. Three libuv-shaped sub-options, only one of which actually fixes the deadlock:
+
+1. **`uv_async_t` on the main loop** — `publish()` enqueues then `uv_async_send()`; async handler drains on the loop thread.
+   - *Doesn't fix the deadlock*: subscribers still run on the same thread as the HTTP handlers, MCP request processing, and every other loop callback. A hung TIL subscriber now freezes the HTTP transport instead of the caller's stack — no real isolation gained.
+2. **`uv_queue_work` — libuv's built-in thread pool** — each subscriber call becomes a work item; "after" callback fires on the loop when done.
+   - *Starves the shared pool*: the pool is finite (default 4 threads) and shared with legitimate users (file I/O, DNS, crypto, TLS handshake). Slow subscribers block unrelated I/O.
+   - *Fights `ExecutionContext` thread-locality*: TIL execution assumes `ExecutionContext` is thread-local with no cross-thread access. A subscriber invoking TIL on a pool thread needs either a freshly-minted context per callback (heavy create/tear-down) or a shared context with synchronization (violates the invariant).
+   - *Per-message overhead*: at the expected publish rate (Phase 4b instruments every MCP request), pool-job enqueue/dequeue overhead becomes visible.
+3. **Per-service `uv_loop_t` on a dedicated thread, wake via `uv_async_send`** — effectively option 1 from §24.1 but wired with libuv primitives instead of `std::condition_variable + std::queue`.
+   - *Same semantics as option 1*, just libuv-consistent. Effort and risk comparable.
+
+**Conclusion:** the deadlock is about *which thread the subscriber executes on*, not about the signaling primitive. Whichever primitive we pick (libuv async, bare condvar, channel), subscriber execution must be isolated from the MCP response path — and that means a dedicated thread boundary. Phase 5a uses option 3 above: dedicated dispatcher thread with `uv_async_send` as the wake primitive, keeping the codebase libuv-consistent.
+
+#### 24.1.2 Cross-platform mapping (native ↔ etil-web)
+
+The same architectural shape needs to work when `etil` is compiled as WebAssembly for the `etil-web` target. etil-web has no libuv, no native threads by default, and no shared memory unless `SharedArrayBuffer` is enabled (gated on COOP/COEP response headers). The equivalent isolation primitive in the browser is a **Web Worker**.
+
+| Concern | Native (etil) | WebAssembly (etil-web) |
+|---|---|---|
+| Subscriber execution boundary | Dedicated thread owned by `DefaultChannelService` | Dedicated Web Worker owned by `DefaultChannelService` |
+| Wake signal | `uv_async_send` to the dispatcher's `uv_loop_t` | `postMessage()` from publisher-scope to worker scope |
+| Queue | MPSC `std::queue` + `std::mutex` | Browser-managed postMessage queue |
+| Message transfer | Pointer ref-count (same address space) | Structured clone OR transferable; or JSON/msgpack via codec transform |
+| `ExecutionContext` ownership | One TIL interpreter per service, lives on dispatcher thread | One TIL interpreter per worker, lives in that worker's wasm instance |
+| Shutdown | Stop-flag + join | `worker.terminate()` (or graceful drain message then terminate) |
+
+Web Workers force a stricter isolation than native threads: no accidental shared-state mutation across the boundary, no deadlock on shared mutexes (because there aren't any), and subscriber execution can't block the browser main thread no matter how pathological the TIL callback.
+
+#### 24.1.3 Codec boundary — one model or two?
+
+Opens a design question worth settling in Phase 5a:
+
+**(a) Subscriber boundary IS always a codec boundary.** Even in native, the dispatcher queue holds serialized bytes (json/msgpack/cbor per the route's codec transform). Subscriber worker decodes before invoking the TIL callback. Native and etil-web use the same code path end-to-end. Cost: one encode + one decode per subscriber delivery even when both sides share address space.
+
+**(b) Native pointer-passes, web serializes.** Dispatcher queue holds `Message` values with refcount. etil-web uses the same Message struct but with a codec shim at the `postMessage()` boundary. Native avoids serialization overhead; etil-web pays for structured clone. Cost: two subtly different delivery paths to maintain + test.
+
+Recommendation for Phase 5a: start with **(b)** — pointer-pass natively, serialize on the etil-web `postMessage` boundary. The codec transforms already exist on the publish-side, so etil-web's serialization is "just use the route's existing codec, then `postMessage(bytes)`". Native gets the efficiency. If cross-platform testing reveals that behavioral divergence is painful, reconsider (a) as a Phase 5b cleanup.
+
 ### 24.2 `channel-list` only shows channels with routes, not channels with producers
 
 **Observed:** User opened a fresh session, ran `channel-list`, saw only the one channel they had just routed (`etil.test.nats`). Expected to see `etil.mcp.request.*`, `etil.mcp.session.*`, `etil.evolution.*`, `etil.repl.stdout`, etc. — all of which receive publishes continuously.

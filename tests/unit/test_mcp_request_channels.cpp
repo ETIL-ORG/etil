@@ -48,6 +48,7 @@ TEST(McpRequestChannels, PublishRequestEventEmitsOnReceivedChannel) {
     svc->add_route(std::move(spec));
 
     server.publish_request_event("received", "sess-1", "tools/call", -1);
+    svc->flush_for_tests();
     ASSERT_EQ(cap->size(), 1u);
     auto msgs = cap->captured();
     EXPECT_EQ(msgs.front().channel, "etil.mcp.request.received");
@@ -65,6 +66,7 @@ TEST(McpRequestChannels, PublishRequestEventCompletedCarriesLatency) {
     svc->add_route(std::move(spec));
 
     server.publish_request_event("completed", "sess-7", "ping", 12345);
+    svc->flush_for_tests();
     ASSERT_EQ(cap->size(), 1u);
     auto msgs = cap->captured();
     EXPECT_EQ(msgs.front().tags.at("latency_us"), "12345");
@@ -82,6 +84,7 @@ TEST(McpRequestChannels, PublishRequestEventFailedCarriesError) {
 
     server.publish_request_event("failed", "sess-9", "tools/call", 500,
                                    "bad-args");
+    svc->flush_for_tests();
     ASSERT_EQ(cap->size(), 1u);
     auto msgs = cap->captured();
     EXPECT_EQ(msgs.front().tags.at("error"), "bad-args");
@@ -97,6 +100,7 @@ TEST(McpRequestChannels, PublishRequestEventUnknownStageIsNoOp) {
     svc->add_route(std::move(spec));
 
     server.publish_request_event("bogus-stage", "sess-1", "m", 0);
+    svc->flush_for_tests();
     EXPECT_EQ(cap->size(), 0u);
 }
 
@@ -110,6 +114,7 @@ TEST(McpSessionChannels, OpenedEventEmitted) {
     svc->add_route(std::move(spec));
 
     server.publish_session_event("opened", "sess-11", "alice");
+    svc->flush_for_tests();
     ASSERT_EQ(cap->size(), 1u);
     auto msgs = cap->captured();
     EXPECT_EQ(msgs.front().tags.at("session_id"), "sess-11");
@@ -126,5 +131,6 @@ TEST(McpSessionChannels, ClosedEventEmitted) {
     svc->add_route(std::move(spec));
 
     server.publish_session_event("closed", "sess-11");
+    svc->flush_for_tests();
     ASSERT_EQ(cap->size(), 1u);
 }

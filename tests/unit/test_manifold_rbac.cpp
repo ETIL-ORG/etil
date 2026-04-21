@@ -176,6 +176,7 @@ TEST(ChannelServiceRBAC, HardwiredWriteBypassesMasterOff) {
     auto out = svc->publish(make_msg("etil.aaa.audit.channel.denied", "forced"),
                             &r);
     EXPECT_TRUE(out.accepted);
+    svc->flush_for_tests();
     EXPECT_EQ(capture->size(), 1u);
 }
 

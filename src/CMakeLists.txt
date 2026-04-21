@@ -3,6 +3,8 @@ set(ETIL_MANIFOLD_SOURCES
     manifold/origin.cpp
     manifold/channel_name.cpp
     manifold/rbac.cpp
+    manifold/clock.cpp
+    manifold/dispatcher.cpp
     manifold/sinks.cpp
     manifold/transforms.cpp
     manifold/subject.cpp
@@ -121,7 +123,6 @@ else()
         PUBLIC
             Threads::Threads
             ${llvm_libs}
-            TBB::tbb
             absl::flat_hash_map
             absl::flat_hash_set
             absl::synchronization

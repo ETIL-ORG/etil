@@ -37,17 +37,6 @@ set(COMMON_CMAKE_ARGS
     -DCMAKE_CXX_STANDARD_REQUIRED=ON
 )
 
-# --- TBB ---
-ExternalProject_Add(tbb
-    GIT_REPOSITORY https://github.com/oneapi-src/oneTBB.git
-    GIT_TAG        v2021.11.0
-    GIT_SHALLOW    ON
-    CMAKE_ARGS     ${COMMON_CMAKE_ARGS}
-        -DTBB_TEST=OFF
-        -DTBB_STRICT=OFF
-        -DBUILD_SHARED_LIBS=OFF
-)
-
 # --- Abseil ---
 ExternalProject_Add(abseil
     GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git

@@ -130,6 +130,7 @@ TEST(ChannelService, RouteAddReceivesMatchingMessages) {
     svc->publish(make_msg("etil.test.a", "first"));
     svc->publish(make_msg("etil.test.nested.b", "second"));
     svc->publish(make_msg("etil.other", "ignored"));
+    svc->flush_for_tests();
 
     EXPECT_EQ(capture->size(), 2u);
 }
@@ -143,8 +144,10 @@ TEST(ChannelService, RouteRemoveStopsDelivery) {
     auto handle = svc->add_route(std::move(spec));
 
     svc->publish(make_msg("etil.removal", "before"));
+    svc->flush_for_tests();  // drain before remove so the in-flight item lands
     svc->remove_route(handle);
     svc->publish(make_msg("etil.removal", "after"));
+    svc->flush_for_tests();
 
     EXPECT_EQ(capture->size(), 1u);
 }
@@ -165,6 +168,7 @@ TEST(ChannelService, TagFilterSelectsMessages) {
     auto blue = make_msg("etil.tagged", "b");
     blue.tags["color"] = "blue";
     svc->publish(std::move(blue));
+    svc->flush_for_tests();
 
     EXPECT_EQ(capture->size(), 1u);
 }
@@ -179,6 +183,7 @@ TEST(ChannelService, TransformsRunBeforeSink) {
     svc->add_route(std::move(spec));
 
     svc->publish(make_msg("etil.xform"));
+    svc->flush_for_tests();
     ASSERT_EQ(capture->size(), 1u);
     auto msgs = capture->captured();
     EXPECT_EQ(msgs[0].tags.at("annotated"), "yes");
@@ -200,6 +205,7 @@ TEST(ChannelService, LevelFilterDropsBelowThreshold) {
     auto warn = make_msg("etil.lvl", "warn-line");
     warn.tags["level"] = "warn";
     svc->publish(std::move(warn));
+    svc->flush_for_tests();
 
     EXPECT_EQ(capture->size(), 1u);
 }
@@ -215,6 +221,7 @@ TEST(ChannelService, SinkStatsTrackAccepted) {
     for (int i = 0; i < 5; ++i) {
         svc->publish(make_msg("etil.stats"));
     }
+    svc->flush_for_tests();
     auto stats = svc->all_sink_stats();
     ASSERT_EQ(stats.size(), 1u);
     EXPECT_EQ(stats[0].accepted_count, 5u);
@@ -245,6 +252,7 @@ TEST(ChannelService, ConcurrentPublishersDeliverAllMessages) {
         });
     }
     for (auto& th : threads) th.join();
+    svc->flush_for_tests();
 
     EXPECT_EQ(capture->size(), static_cast<size_t>(kThreads * kPerThread));
 }
@@ -272,6 +280,7 @@ TEST(ChannelService, OriginSeqsAreUniquePerPublish) {
         });
     }
     for (auto& th : threads) th.join();
+    svc->flush_for_tests();
 
     auto msgs = capture->captured();
     std::vector<int64_t> seqs;
