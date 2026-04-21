@@ -529,6 +529,242 @@ bool prim_channel_tap_observable(ExecutionContext& ctx) {
 }
 
 // ---------------------------------------------------------------------------
+// Loopback API — obs-create-channel / obs-message-write / obs-message-read
+// / obs-loop-channels / channel-add-transform / channel-remove-loop.
+// See design discussion §B1: loops are producer-side forwarding routes
+// with a reader-side transform chain consulted at obs-message-read time.
+// ---------------------------------------------------------------------------
+
+// --- obs-create-channel ( name-str -- chan-obs ) ---------------------------
+
+bool prim_obs_create_channel(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string name = pop_string(ctx, &ok);
+    if (!ok) return false;
+    auto* hs = HeapString::create(name);
+    auto* chan = etil::core::HeapObservable::channel(
+        hs, etil::core::HeapObservable::ChannelMode::ReadWrite);
+    hs->release();  // channel() addref'd; our local ref no longer needed
+    ctx.data_stack().push(Value::from(chan));
+    return true;
+}
+
+// --- obs-message-write ( chan-obs msg-str -- ) -----------------------------
+// msg-str is on TOS; chan-obs is TOS-1.
+
+bool prim_obs_message_write(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string msg = pop_string(ctx, &ok);
+    if (!ok) return false;
+
+    auto obs_opt = ctx.data_stack().pop();
+    if (!obs_opt) { push_string(ctx, msg); return false; }
+    if (obs_opt->type != Value::Type::Observable || !obs_opt->as_ptr) {
+        ctx.data_stack().push(*obs_opt);
+        push_string(ctx, msg);
+        return false;
+    }
+    auto* obs = obs_opt->as_observable();
+    if (obs->obs_kind() != etil::core::HeapObservable::Kind::Channel) {
+        ctx.err() << "Error: obs-message-write: not a channel handle\n";
+        obs->release();
+        return false;
+    }
+    if (obs->channel_mode() == etil::core::HeapObservable::ChannelMode::ReadOnly) {
+        ctx.err() << "Error: obs-message-write: channel is read-only\n";
+        obs->release();
+        return false;
+    }
+    auto* name_str = obs->channel_name();
+    if (!name_str) { obs->release(); return false; }
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: obs-message-write: no channel service\n";
+        obs->release();
+        return false;
+    }
+
+    Message m;
+    m.channel = std::string(name_str->view());
+    m.payload = msg;
+    m.payload_type = std::type_index(typeid(std::string));
+    if (!ctx.session_id().empty()) m.tags["session_id"] = ctx.session_id();
+    svc->publish(std::move(m), ctx.permissions());
+
+    obs->release();
+    return true;
+}
+
+// --- obs-message-read ( chan-obs -- sub-obs ) ------------------------------
+
+bool prim_obs_message_read(ExecutionContext& ctx) {
+    auto obs_opt = ctx.data_stack().pop();
+    if (!obs_opt) return false;
+    if (obs_opt->type != Value::Type::Observable || !obs_opt->as_ptr) {
+        ctx.data_stack().push(*obs_opt);
+        return false;
+    }
+    auto* obs = obs_opt->as_observable();
+    if (obs->obs_kind() != etil::core::HeapObservable::Kind::Channel) {
+        ctx.err() << "Error: obs-message-read: not a channel handle\n";
+        obs->release();
+        return false;
+    }
+    if (obs->channel_mode() == etil::core::HeapObservable::ChannelMode::WriteOnly) {
+        ctx.err() << "Error: obs-message-read: channel is write-only\n";
+        obs->release();
+        return false;
+    }
+    auto* name_str = obs->channel_name();
+    if (!name_str) { obs->release(); return false; }
+    std::string name(name_str->view());
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: obs-message-read: no channel service\n";
+        obs->release();
+        return false;
+    }
+
+    // Always subscribe to the requested channel (IN). The loop's
+    // forwarding route (if any) republishes OUT messages onto IN via
+    // the normal dispatch path, so this reader sees those forwarded
+    // messages just like any other IN subscriber. If a loop is
+    // registered for this IN, its transform chain is composed into
+    // the reader's pipeline as MapWithCancel operators (model B1).
+    const LoopSpec* loop = svc->find_loop_for_destination(name);
+    auto sub_sp = svc->observe(name, ctx.permissions());
+    if (!sub_sp) {
+        ctx.err() << "Error: obs-message-read: observe() denied\n";
+        obs->release();
+        return false;
+    }
+    auto* sub = sub_sp.get();
+    sub->add_ref();  // transfer to stack
+
+    if (loop) {
+        for (auto* xt : loop->transform_xts) {
+            if (!xt) continue;
+            auto* next = etil::core::HeapObservable::map_with_cancel(sub, xt);
+            sub->release();    // map_with_cancel addref'd it
+            sub = next;
+        }
+    }
+
+    obs->release();
+    ctx.data_stack().push(Value::from(sub));
+    return true;
+}
+
+// --- obs-loop-channels ( out-name in-name -- loop-handle ) -----------------
+// in-name on TOS. Registers a forwarding route OUT → IN and returns
+// an integer loop-handle.
+
+bool prim_obs_loop_channels(ExecutionContext& ctx) {
+    bool ok = false;
+    std::string in_name = pop_string(ctx, &ok);
+    if (!ok) return false;
+    std::string out_name = pop_string(ctx, &ok);
+    if (!ok) { push_string(ctx, in_name); return false; }
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: obs-loop-channels: no channel service\n";
+        return false;
+    }
+
+    auto h = svc->register_loop(out_name, in_name, ctx.permissions());
+    if (!h.valid()) {
+        ctx.err() << "Error: obs-loop-channels: register_loop failed\n";
+        return false;
+    }
+    ctx.data_stack().push(Value(static_cast<int64_t>(h.id)));
+    return true;
+}
+
+// --- channel-add-transform ( loop-handle xt -- ) ---------------------------
+// xt on TOS; loop-handle (integer) is TOS-1.
+
+bool prim_channel_add_transform(ExecutionContext& ctx) {
+    auto xt_opt = ctx.data_stack().pop();
+    if (!xt_opt) return false;
+    if (xt_opt->type != Value::Type::Xt || !xt_opt->as_ptr) {
+        ctx.data_stack().push(*xt_opt);
+        return false;
+    }
+    auto handle_opt = ctx.data_stack().pop();
+    if (!handle_opt) { ctx.data_stack().push(*xt_opt); return false; }
+    if (handle_opt->type != Value::Type::Integer) {
+        ctx.data_stack().push(*handle_opt);
+        ctx.data_stack().push(*xt_opt);
+        return false;
+    }
+
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-add-transform: no channel service\n";
+        return false;
+    }
+
+    LoopHandle h;
+    h.id = static_cast<uint64_t>(handle_opt->as_int);
+    auto* xt = xt_opt->as_xt_impl();
+    if (!svc->add_loop_transform(h, xt)) {
+        ctx.err() << "Error: channel-add-transform: invalid loop handle\n";
+        return false;
+    }
+    return true;
+}
+
+// --- msg-payload ( map -- str ) --------------------------------------------
+// Convenience extractor: pops a HeapMap (as emitted by ChannelSubscription
+// via obs-message-read) and pushes its "payload" string field. Returns
+// empty string when the map lacks the field (e.g. non-string payload
+// type). Used heavily by loop transform chains that only care about
+// the message body.
+
+bool prim_msg_payload(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    if (opt->type != Value::Type::Map || !opt->as_ptr) {
+        ctx.data_stack().push(*opt);
+        return false;
+    }
+    auto* m = opt->as_map();
+    Value v;
+    if (!m->get("payload", v) || v.type != Value::Type::String) {
+        m->release();
+        push_string(ctx, "");
+        return true;
+    }
+    // get() already addref'd v for the caller; push transfers that ref.
+    ctx.data_stack().push(v);
+    m->release();
+    return true;
+}
+
+// --- channel-remove-loop ( loop-handle -- ) --------------------------------
+
+bool prim_channel_remove_loop(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    if (opt->type != Value::Type::Integer) {
+        ctx.data_stack().push(*opt);
+        return false;
+    }
+    auto* svc = ctx.channels();
+    if (!svc) {
+        ctx.err() << "Error: channel-remove-loop: no channel service\n";
+        return false;
+    }
+    LoopHandle h;
+    h.id = static_cast<uint64_t>(opt->as_int);
+    svc->remove_loop(h, ctx.permissions());
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // MCP SSE inbound — convenience wrappers over channel-subscribe for
 // specific inbound channels (doc B §21.3 / §17.3).
 // ---------------------------------------------------------------------------
@@ -1120,6 +1356,36 @@ void register_manifold_primitives(etil::core::Dictionary& dict) {
         make_primitive("channel-producers-by-pattern",
             prim_channel_producers_by_pattern,
             {T::String}, {T::Array}));
+
+    // Loopback API (model B1): channel-as-observable handles, lazy
+    // reader-side transform chains per loop destination.
+    dict.register_word("obs-create-channel",
+        make_primitive("obs-create-channel", prim_obs_create_channel,
+            {T::String}, {T::Observable}));
+
+    dict.register_word("obs-message-write",
+        make_primitive("obs-message-write", prim_obs_message_write,
+            {T::Observable, T::String}, {}));
+
+    dict.register_word("obs-message-read",
+        make_primitive("obs-message-read", prim_obs_message_read,
+            {T::Observable}, {T::Observable}));
+
+    dict.register_word("obs-loop-channels",
+        make_primitive("obs-loop-channels", prim_obs_loop_channels,
+            {T::String, T::String}, {T::Integer}));
+
+    dict.register_word("channel-add-transform",
+        make_primitive("channel-add-transform", prim_channel_add_transform,
+            {T::Integer, T::Xt}, {}));
+
+    dict.register_word("channel-remove-loop",
+        make_primitive("channel-remove-loop", prim_channel_remove_loop,
+            {T::Integer}, {}));
+
+    dict.register_word("msg-payload",
+        make_primitive("msg-payload", prim_msg_payload,
+            {T::Map}, {T::String}));
 
     dict.register_word("channel-trace",
         make_primitive("channel-trace", prim_channel_trace, {}, {T::Array}));

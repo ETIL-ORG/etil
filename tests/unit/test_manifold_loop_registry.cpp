@@ -7,6 +7,8 @@
 // ExecutionContext) is out of scope here; this test covers the
 // plumbing only.
 
+#include "etil/core/primitives.hpp"
+#include "etil/core/word_impl.hpp"
 #include "etil/manifold/service.hpp"
 
 #include <atomic>
@@ -18,6 +20,20 @@
 #include <gtest/gtest.h>
 
 using namespace etil::manifold;
+
+namespace {
+
+/// Throwaway primitive for refcount-aware registry tests — never
+/// executed, but provides a real heap-allocated WordImpl that the
+/// registry can add_ref / release.
+etil::core::WordImplPtr make_noop_primitive(const char* name) {
+    return etil::core::make_primitive(
+        name,
+        [](etil::core::ExecutionContext&) { return true; },
+        {}, {});
+}
+
+} // namespace
 
 namespace {
 
@@ -83,22 +99,22 @@ TEST(ManifoldLoopRegistry, AddLoopTransformAppendsInOrder) {
     auto svc = make_default_channel_service();
     auto h = svc->register_loop("etil.x", "etil.y");
 
-    // Use distinct fake pointers — the registry doesn't dereference
-    // them, so aliasing to int storage is safe for this test.
-    auto* a = reinterpret_cast<etil::core::WordImpl*>(0x1000);
-    auto* b = reinterpret_cast<etil::core::WordImpl*>(0x2000);
-    auto* c = reinterpret_cast<etil::core::WordImpl*>(0x3000);
+    // Real WordImpls — the registry addref's on insert and releases
+    // on remove_loop / service destruction.
+    auto a = make_noop_primitive("a");
+    auto b = make_noop_primitive("b");
+    auto c = make_noop_primitive("c");
 
-    EXPECT_TRUE(svc->add_loop_transform(h, a));
-    EXPECT_TRUE(svc->add_loop_transform(h, b));
-    EXPECT_TRUE(svc->add_loop_transform(h, c));
+    EXPECT_TRUE(svc->add_loop_transform(h, a.get()));
+    EXPECT_TRUE(svc->add_loop_transform(h, b.get()));
+    EXPECT_TRUE(svc->add_loop_transform(h, c.get()));
 
     auto* spec = svc->find_loop_for_destination("etil.y");
     ASSERT_NE(spec, nullptr);
     ASSERT_EQ(spec->transform_xts.size(), 3u);
-    EXPECT_EQ(spec->transform_xts[0], a);
-    EXPECT_EQ(spec->transform_xts[1], b);
-    EXPECT_EQ(spec->transform_xts[2], c);
+    EXPECT_EQ(spec->transform_xts[0], a.get());
+    EXPECT_EQ(spec->transform_xts[1], b.get());
+    EXPECT_EQ(spec->transform_xts[2], c.get());
 }
 
 // ---------------------------------------------------------------------------
@@ -109,10 +125,10 @@ TEST(ManifoldLoopRegistry, AddLoopTransformRejectsInvalid) {
     auto svc = make_default_channel_service();
 
     LoopHandle bogus{.id = 9999};
-    auto* fake = reinterpret_cast<etil::core::WordImpl*>(0x1000);
+    auto real_xt = make_noop_primitive("real");
 
-    EXPECT_FALSE(svc->add_loop_transform(bogus, fake));
-    EXPECT_FALSE(svc->add_loop_transform(LoopHandle{.id = 0}, fake));
+    EXPECT_FALSE(svc->add_loop_transform(bogus, real_xt.get()));
+    EXPECT_FALSE(svc->add_loop_transform(LoopHandle{.id = 0}, real_xt.get()));
 
     auto h = svc->register_loop("etil.x", "etil.y");
     EXPECT_FALSE(svc->add_loop_transform(h, nullptr));

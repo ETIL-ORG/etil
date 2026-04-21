@@ -983,7 +983,7 @@ TEST_F(PrimitivesTest, WordsNoDictionary) {
 TEST_F(PrimitivesTest, RegisterPrimitives) {
     Dictionary dict;
     register_primitives(dict);
-    EXPECT_EQ(dict.concept_count(), 388u);  // +3 in Phase 5a.5: channel-producer-list, channel-producer-stats, channel-producers-by-pattern
+    EXPECT_EQ(dict.concept_count(), 395u);  // +7 for loopback API: obs-create-channel, obs-message-write, obs-message-read, obs-loop-channels, channel-add-transform, channel-remove-loop, msg-payload
     // Arithmetic
     EXPECT_TRUE(dict.lookup("+").has_value());
     EXPECT_TRUE(dict.lookup("-").has_value());

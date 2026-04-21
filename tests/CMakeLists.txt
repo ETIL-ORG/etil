@@ -23,6 +23,7 @@ add_executable(etil_tests
     unit/test_manifold_dispatcher_stats.cpp
     unit/test_manifold_loopback.cpp
     unit/test_manifold_loop_registry.cpp
+    unit/test_manifold_loop_til.cpp
     unit/test_execution_context_channels.cpp
     unit/test_word_impl.cpp
     unit/test_dictionary.cpp

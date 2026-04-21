@@ -132,6 +132,14 @@ public:
     /// dispatcher.
     ~DefaultChannelService() override {
         if (dispatcher_) dispatcher_->shutdown();
+        // Release any transform xt refs left on loops that weren't
+        // explicitly torn down via remove_loop.
+        std::lock_guard<std::mutex> lk(loop_mu_);
+        for (auto& [id, spec] : loops_) {
+            for (auto* xt : spec.transform_xts) {
+                if (xt) xt->release();
+            }
+        }
     }
 
     /// Override — forward to the dispatcher's flush(). Invariant I2.
@@ -399,6 +407,7 @@ public:
         std::lock_guard<std::mutex> lk(loop_mu_);
         auto it = loops_.find(handle.id);
         if (it == loops_.end()) return false;
+        xt->add_ref();
         it->second.transform_xts.push_back(xt);
         return true;
     }
@@ -423,6 +432,10 @@ public:
             if (it == loops_.end()) return;
             route_to_remove = it->second.forward_route;
             dest = it->second.in_channel;
+            // Release the transform xt refs the registry held.
+            for (auto* xt : it->second.transform_xts) {
+                if (xt) xt->release();
+            }
             loops_.erase(it);
             auto dit = loops_by_destination_.find(dest);
             if (dit != loops_by_destination_.end() && dit->second == handle.id) {
