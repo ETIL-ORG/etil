@@ -543,6 +543,7 @@ are not yet implemented:
 | [T](#appendix-t-evolution-and-selection) | Evolution and Selection | 7 |
 | [U](#appendix-u-evolution-logging) | Evolution Logging | 11 |
 | [V](#appendix-v-manifold-channels) | Manifold — I/O Channels | 34 |
+| [W](#appendix-w-rolepermissions-complete-reference) | RolePermissions — complete reference | — |
 
 ---
 
@@ -2995,6 +2996,57 @@ Hard-wired channels bypass `channel_grants` for their designated action:
 
 Stack effects are in `data/help.til` and visible via the TUI's F1 help browser.
 
+### V.4.1 Per-word prerequisites
+
+Each word below lists the exact `RolePermissions` fields, `channel_grants` entries, build flags, and required state. Full text is also in `help <word>` at runtime.
+
+| Word | Required role flag(s) | Required channel grant | Other |
+|---|---|---|---|
+| `channel-publish` | `channels_enabled` | `"write"` on channel | ChannelService bound |
+| `channel-subscribe` / `channel-tap-observable` | `channels_enabled` | `"read"` on pattern | — |
+| `channel-route-add` | `channels_enabled`, `channels_route_admin` | `"route"` on pattern | — |
+| `channel-route-remove` | `channels_enabled`, `channels_route_admin` | — | Handle from a prior add |
+| `channel-tap-file` | `channels_enabled`, `channels_route_admin` | `"route"` on pattern | Path writable by process |
+| `channel-tap-nats` | `channels_enabled`, `channels_route_admin`, `channels_network_sink` | `"route"` on pattern | Build: `ETIL_BUILD_NATS_SINK=ON`; reachable broker |
+| `channel-tap-amqp` | `channels_enabled`, `channels_route_admin`, `channels_network_sink` | `"route"` on pattern | Build: `ETIL_BUILD_AMQP_SINK=ON`; reachable broker |
+| `channel-source-nats` | `channels_enabled`, `channels_route_admin`, `channels_network_sink` | `"write"` on local pattern | Build: `ETIL_BUILD_NATS_SINK=ON` |
+| `channel-source-amqp` | `channels_enabled`, `channels_route_admin`, `channels_network_sink` | `"write"` on local pattern | Build: `ETIL_BUILD_AMQP_SINK=ON` |
+| `mcp-notify-nats` / `mcp-notify-amqp` | `channels_enabled`, `channels_route_admin`, `channels_network_sink` | `"route"` on `etil.mcp.out.notification.**` | Corresponding build flag |
+| `channel-list` / `channel-list-routes` / `channel-all-sink-stats` | `channels_enabled` | `"introspect"` grants filter output | — |
+| `channel-origin` / `channel-seq` / `channel-cycle-stats` / `channel-sink-stats` / `channel-producer-*` / `channel-flush` / `channel-session-hmac` | — (no RBAC) | — | ChannelService bound |
+| `channel-last-published` | — | — | `session_id` set; at least one prior publish |
+| `channel-trace` / `channel-hops-left` | — | — | Must execute inside a subscription xt |
+| `channel-perm-check` / `channel-perm-list` | — | — | Pure RBAC inspectors |
+| `role-grant-channel` / `role-revoke-channel` / `role-channel-enable!` / `role-network-sink!` | `role_admin` | — | Target role-name must be loaded |
+| `mcp-on-notification` | `channels_enabled`, `receive_client_notification` | `"read"` on `etil.mcp.in.notification.<pat>` | MCP session |
+| `mcp-on-progress` | `channels_enabled`, `receive_progress` | — (channel is fixed) | MCP session |
+| `mcp-on-cancelled` | — (hard-wired Read for session) | — | MCP session |
+| `mcp-on-roots-changed` | `channels_enabled`, `receive_roots_changed` | — | MCP session |
+| `mcp-on-request` | `channels_enabled` | `"read"` on `etil.mcp.in.request.<pat>` | MCP session |
+| `obs-create-channel` / `msg-payload` | — | — | Pure |
+| `obs-message-write` | `channels_enabled` | `"write"` on channel name | Handle not ReadOnly |
+| `obs-message-read` | `channels_enabled` | `"read"` on channel name | Handle not WriteOnly |
+| `obs-loop-channels` | `channels_enabled` | `"route"` on out-name, `"write"` on in-name | — |
+| `channel-add-transform` / `channel-remove-loop` | — | — | Live loop-handle from `obs-loop-channels` |
+
+Cross-cutting non-Manifold entries (see **Appendix W** for the full permission reference):
+
+| Word | Role flag(s) / quota | Build flag | Other |
+|---|---|---|---|
+| `http-get` / `http-post` | `net_client_allowed`; url host in `net_client_domains`; `net_client_quota` | `ETIL_BUILD_HTTP_CLIENT=ON` | SSRF guards; tainted result |
+| `mongo-find` / `mongo-count` / `mongo-insert` / `mongo-update` / `mongo-delete` | `mongo_access`; `mongo_query_quota` | `ETIL_BUILD_MONGODB=ON` | Reachable MongoDB; tainted result |
+| `evaluate` | `evaluate`; plus `evaluate_tainted` if input is tainted | — | Respects `interpret_execution_limit` |
+| `sys-notification` | `send_system_notification` | — | Active MCP session |
+| `user-notification` | `send_user_notification` | — | Target user must have session |
+| `read-file` | — | — | Path under `/home/` or `/library/`; Lvfs bound; tainted result |
+| `write-file` / `append-file` / `copy-file` / `rename-file` / `mkdir` / `mkdir-tmp` / `rmdir` | `lvfs_modify`; `disk_quota` headroom | — | Path under `/home/` |
+| `evolve-seed!` | — | — | Call **before** other `evolve-*` words |
+| `evolve-register` / `evolve-register-pool` | — | — | Target word must be defined |
+| `evolve-word` / `evolve-all` | — (uses `instruction_budget`) | — | `evolve-register` first |
+| `evolve-sub` / `evolve-chain` | — | — | Chain word has registered tests |
+| `evolve-bridge` | — | — | Bridge word defined; register **before** evolve-* |
+| `evolve-dag-register` / `evolve-dag` | — | — | DAG register before DAG evolve |
+
 ### V.5 Usage examples
 
 **Simple publish/subscribe (in-process, no route needed)**
@@ -3124,6 +3176,184 @@ The `nats_sink` / `amqp_sink` set the following headers on each outbound message
 | `Msg-RouteTrace` | Comma-separated pattern trail (for layer-1 loop detection) | `etil.app.**,etil.replay.**` |
 
 On the consumer side, reconstructing the original message requires only the `Msg-Codec` header to decode the payload. The other headers are used by the ingress route and by `channel-origin` / `channel-seq` for introspection.
+
+---
+
+## Appendix W: RolePermissions — complete reference
+
+Every role defined in `roles.json` is deserialized into a `RolePermissions` struct (`include/etil/mcp/role_permissions.hpp`). This appendix enumerates every field: its JSON key, C++ type, default value, what it controls, and which TIL words check it. Standalone sessions (no principal bound) bypass all RBAC — every field is treated as permissive.
+
+### W.1 System / session
+
+| JSON key | Type | Default | Controls | Gates these words |
+|---|---|---|---|---|
+| `max_sessions` | int | 2 | Max concurrent sessions per user | — (enforced in session manager) |
+| `instruction_budget` | int | 10_000_000 | Max VM instructions per `interpret` call | Caps every TIL execution; `evolve-*` can tune this under `evolve-instruction-budget` |
+| `allowlist_admin` | bool | false | Grant authority to edit the HTTP domain allowlist | — (admin APIs) |
+| `list_sessions` | bool | false | See other users' sessions | — |
+| `session_kick` | bool | false | Forcibly end another session | — |
+| `send_system_notification` | bool | false | Emit process-wide MCP notifications | `sys-notification` |
+| `send_user_notification` | bool | false | Target a specific user's sessions with an MCP notification | `user-notification` |
+| `role_admin` | bool | false | Mutate any role's fields in-memory | `role-grant-channel`, `role-revoke-channel`, `role-channel-enable!`, `role-network-sink!` |
+| `session_idle_timeout_seconds` | int | 1800 (30 min) | Idle timeout before session is reaped | — |
+| `interpret_execution_limit` | int seconds | 30 (0 = unlimited) | Wall-clock cap per `interpret` call | Every TIL execution |
+| `session_execution_limit` | int seconds | 0 (unlimited) | Cumulative wall-clock cap per session | Every TIL execution |
+
+### W.2 LVFS (virtual filesystem)
+
+| JSON key | Type | Default | Controls | Gates these words |
+|---|---|---|---|---|
+| *(lvfs_read)* | — | always true | Read from `/home/` and `/library/` | `read-file`, `readdir`, `lstat`, `exists?` |
+| `lvfs_modify` | bool | false | Write / delete / rename under `/home/` | `write-file`, `append-file`, `copy-file`, `rename-file`, `mkdir`, `mkdir-tmp`, `rmdir` |
+| `disk_quota` | int64 bytes | 1_048_576 (1 MB) | Per-session disk footprint under `/home/` | All LVFS modify words check remaining quota |
+
+### W.3 Network client (outbound HTTP)
+
+| JSON key | Type | Default | Controls | Gates |
+|---|---|---|---|---|
+| `net_client_allowed` | bool | false | Master switch for outbound HTTP | `http-get`, `http-post` |
+| `net_client_domains` | array of strings | `[]` | Allowed hostnames (wildcards supported; `["*"]` = any) | Outbound URL's host must match one pattern |
+| `net_client_quota` | int | 100 | Outbound requests per session | Counts down on each `http-*` call |
+
+SSRF guards (always on regardless of role): loopback, RFC1918 private ranges, link-local, cloud-metadata IPs are rejected at resolution time.
+
+### W.4 Network server (reserved — not yet enforced)
+
+| JSON key | Type | Default | Controls |
+|---|---|---|---|
+| `net_server_bind` | bool | false | Allow binding a listening socket |
+| `net_server_tcp` | bool | false | Accept raw TCP |
+| `net_server_udp` | bool | false | Accept UDP |
+
+These fields are parsed and preserved in memory but no TIL words currently consult them — reserved for future `net-listen` / `net-accept` primitives.
+
+### W.5 Code execution
+
+| JSON key | Type | Default | Controls | Gates |
+|---|---|---|---|---|
+| `evaluate` | bool | true | Interpret a dynamic string as TIL | `evaluate` |
+| `evaluate_tainted` | bool | false | Interpret a tainted string (from `http-get` / `read-file` / `mongo-find`) | `evaluate` (auto-required when input is tainted) |
+
+### W.6 Database (MongoDB)
+
+| JSON key | Type | Default | Controls | Gates |
+|---|---|---|---|---|
+| `mongo_access` | bool | false | All MongoDB operations | `mongo-find`, `mongo-count`, `mongo-insert`, `mongo-update`, `mongo-delete` |
+| `mongo_query_quota` | int | 1000 (0 = unlimited) | Queries per session | All `mongo-*` words check remaining quota |
+
+Compile-time gate: `ETIL_BUILD_MONGODB=ON` is required — otherwise `mongo-*` words are not registered.
+
+### W.7 Channels (Manifold I/O pipeline)
+
+| JSON key | Type | Default | Controls | Gates |
+|---|---|---|---|---|
+| `channels_enabled` | bool | false | Master switch for all Manifold operations | Every `channel-*` / `obs-message-*` / `mcp-on-*` / `mcp-notify-*` word except the pure inspectors (`channel-perm-check`, `channel-perm-list`, `obs-create-channel`, `msg-payload`, `channel-cycle-stats`, `channel-origin`, `channel-seq`, `channel-session-hmac`, `channel-flush`, `channel-producer-*`) |
+| `channel_grants` | array of grants | `[]` | Per-action, per-pattern allow/deny | Consulted by `evaluate_access` for every action against the channel name |
+| `channels_route_admin` | bool | false | Install / remove routes | `channel-route-add`, `channel-route-remove`, `channel-tap-*`, `channel-source-*`, `mcp-notify-*`, `obs-loop-channels` |
+| `channels_network_sink` | bool | false | Attach broker / UDP / TCP sinks | `channel-tap-nats`, `channel-tap-amqp`, `channel-source-nats`, `channel-source-amqp`, `mcp-notify-nats`, `mcp-notify-amqp` |
+| `channel_publish_quota` | int | 1000 | Publishes per session | Counted per `channel-publish` / `obs-message-write` |
+| `channel_subscribe_quota` | int | 10 | Concurrent subscriptions per session | Counted per `channel-subscribe` / `channel-tap-observable` / `obs-message-read` / `mcp-on-*` |
+
+Grant shape:
+
+```json
+{
+  "pattern": "etil.app.**",
+  "actions": ["read", "write", "route", "introspect"],
+  "effect": "allow"
+}
+```
+
+`actions` is a subset of `{"read", "write", "route", "introspect"}`. `effect` is `"allow"` or `"deny"`. Most-specific matching pattern wins; at equal specificity `deny` beats `allow`.
+
+Hard-wired channel bypasses for the listed action (no `channel_grants` needed):
+
+| Channel | Bypass action |
+|---|---|
+| `etil.aaa.audit.**`, `etil.security.**`, `etil.system.bootstrap.**`, `etil.logging.error` | Write |
+| `etil.health.**`, `etil.manifold.sink.**` | Write |
+| `etil.mcp.in.cancelled` | Read (for the session owner) |
+
+### W.8 MCP inbound SSE
+
+| JSON key | Type | Default | Controls | Gates |
+|---|---|---|---|---|
+| `receive_client_notification` | bool | false | Subscribe to `etil.mcp.in.notification.**` | `mcp-on-notification` |
+| `receive_progress` | bool | false | Subscribe to `etil.mcp.in.progress` | `mcp-on-progress` |
+| `receive_cancelled` | bool | true | Subscribe to `etil.mcp.in.cancelled` (hard-wired bypass also applies) | `mcp-on-cancelled` (always works for session owner) |
+| `receive_roots_changed` | bool | false | Subscribe to `etil.mcp.in.roots.changed` | `mcp-on-roots-changed` |
+| `mcp_subscribe_quota` | int | 10 | Concurrent `mcp-on-*` subscriptions per session | All `mcp-on-*` words |
+
+### W.9 Example role definitions
+
+**Minimal sandbox** — safe defaults:
+
+```json
+{
+  "interpret_execution_limit": 30,
+  "instruction_budget": 10000000,
+  "evaluate": true
+}
+```
+
+**Development role** — can read/write its own channels, reach MongoDB, call HTTP:
+
+```json
+{
+  "interpret_execution_limit": 120,
+  "instruction_budget": 50000000,
+  "evaluate": true,
+  "lvfs_modify": true,
+  "disk_quota": 10485760,
+  "net_client_allowed": true,
+  "net_client_domains": ["*.internal.corp", "github.com"],
+  "net_client_quota": 1000,
+  "mongo_access": true,
+  "channels_enabled": true,
+  "channel_grants": [
+    {"pattern": "user.<name>.**", "actions": ["read","write","route","introspect"], "effect": "allow"}
+  ]
+}
+```
+
+**Admin** — full authority:
+
+```json
+{
+  "role_admin": true,
+  "send_system_notification": true,
+  "send_user_notification": true,
+  "allowlist_admin": true,
+  "list_sessions": true,
+  "session_kick": true,
+  "evaluate": true,
+  "evaluate_tainted": true,
+  "lvfs_modify": true,
+  "disk_quota": 104857600,
+  "net_client_allowed": true,
+  "net_client_domains": ["*"],
+  "net_client_quota": 1000,
+  "mongo_access": true,
+  "channels_enabled": true,
+  "channels_route_admin": true,
+  "channels_network_sink": true,
+  "channel_grants": [
+    {"pattern": "etil.**", "actions": ["read","write","route","introspect"], "effect": "allow"}
+  ],
+  "receive_client_notification": true,
+  "receive_progress": true,
+  "receive_roots_changed": true
+}
+```
+
+### W.10 Verifying at runtime
+
+```
+channel-perm-list .                  \ this role's active channel_grants
+s" write" s" etil.app.x" channel-perm-check . \ would this publish succeed?
+```
+
+`help <word>` prints the per-word `Prerequisites` block detailing the exact fields to set.
 
 ---
 
