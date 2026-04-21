@@ -281,6 +281,9 @@ TEST(Phase34Integration, FullLifecycleAllSubtreesReceiveEvents) {
     engine.evolve_word("sq");
     engine.logger().stop();
     svc->flush_for_tests();
+    // server has its own ChannelService; async dispatcher on that side
+    // also needs to drain before the cap_server_* assertions run.
+    server_svc->flush_for_tests();
 
     // --- Assertions ------------------------------------------------------
     EXPECT_GE(cap_stdout->size(), 1u)
