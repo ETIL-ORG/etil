@@ -2942,14 +2942,118 @@ s" double" evolve-status .   # => 10
 
 **Manifold** is ETIL's named-channel dataflow substrate. Every log line, every MCP request, every evolution event, every REPL stdout write — they all publish onto named channels. Routes match patterns and deliver to sinks (file, spdlog, stderr, null, broker, in-process observable). Transforms compose along the route. Subscribers observe channels at runtime without pre-registration.
 
-### V.1 When to reach for Manifold
+### V.1 Quick reference
+
+Every Manifold word with its stack effect and a one-line description. For RBAC / build-flag / ordering prerequisites see **V.5.1**; for full help including denial reasons, run `help <word>` at the REPL.
+
+**Publish / subscribe**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `channel-publish` | `( msg channel -- )` | Publish a message string on a named channel. |
+| `channel-subscribe` | `( pattern -- observable )` | Return a live observable that emits each message on the matching channel pattern. |
+| `channel-tap-observable` | `( pattern -- observable )` | Alias for `channel-subscribe`: open an observable tap on a channel pattern. |
+
+**Observable channels (handle-based I/O)**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `obs-create-channel` | `( name -- chan-obs )` | Return a named channel handle usable as writer (`obs-message-write`) or reader (`obs-message-read`). No route is installed. |
+| `obs-message-write` | `( chan-obs msg -- )` | Publish `msg` onto the channel named by `chan-obs`. Pre-checks Write RBAC and reports cycle/TTL denials distinctly. |
+| `obs-message-read` | `( chan-obs -- observable )` | Live observable of payload strings published on `chan-obs`. If a loop destination, the loop's transform chain is composed lazily per reader. |
+| `msg-payload` | `( map -- str )` | Extract the `payload` string field from a channel-message HeapMap (as emitted by `channel-subscribe`). |
+
+**Loopback (channel-to-channel forwarding with transforms)**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `obs-loop-channels` | `( out-name in-name -- loop-handle )` | Install a forwarding route from `out-name` to `in-name` with `route_trace` / `hops_remaining` inherited. |
+| `channel-add-transform` | `( loop-handle xt -- )` | Append `xt` to the loop's transform chain. `xt` signature: `( str -- str' bool )` — `bool` on TOS chooses emit (true) vs drop (false). |
+| `channel-remove-loop` | `( loop-handle -- )` | Tear down a loop — remove the forwarding route and drop the transform chain. Live readers keep their snapshot. |
+
+**Route install**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `channel-route-add` | `( detail kind pattern -- handle )` | Install a route with a sink of the given kind (`null` / `stderr` / `spdlog` / `file` / `ring` / `observable`) for messages matching pattern. |
+| `channel-route-remove` | `( handle -- )` | Remove a previously-added route by handle. |
+| `channel-tap-file` | `( path pattern -- handle )` | Shortcut for a route with a file sink that appends messages to `path`. |
+| `channel-tap-nats` | `( url codec pattern -- handle )` | Install a NATS broker sink on pattern. Codecs: `json` / `msgpack` / `cbor` / `raw`. |
+| `channel-tap-amqp` | `( url codec pattern -- handle )` | Install an AMQP 1.0 broker sink on pattern. Codecs as above. |
+
+**Broker source (inbound from broker → local channel)**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `channel-source-nats` | `( url codec subject pattern -- handle )` | Subscribe to `subject` on NATS at `url`, decode via `codec`, republish locally on `pattern`. |
+| `channel-source-amqp` | `( url codec address pattern -- handle )` | Subscribe to `address` on AMQP 1.0 at `url`, decode via `codec`, republish locally on `pattern`. |
+
+**MCP outbound on broker**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `mcp-notify-nats` | `( url -- )` | Install a JSON NATS sink on `etil.mcp.out.notification.**` so `sys-notification` / `user-notification` fans out to the broker. |
+| `mcp-notify-amqp` | `( url -- )` | AMQP 1.0 parallel of `mcp-notify-nats`. |
+
+**Introspection**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `channel-list` | `( -- array )` | Channel patterns this role can introspect. |
+| `channel-list-routes` | `( -- array )` | Per-route stats maps, one per registered route. |
+| `channel-perm-list` | `( -- array )` | Maps describing this role's channel grants (pattern / actions / effect). |
+| `channel-perm-check` | `( action pattern -- bool )` | True if this role may perform `action` (`read` / `write` / `route` / `introspect`) on pattern. |
+| `channel-session-hmac` | `( session -- hmac )` | Compute the `Session-Hmac` token broker sinks put on outbound messages for a given `session_id`. |
+| `channel-flush` | `( -- )` | Block until every publish issued before this call has been delivered to its sinks (test aid). |
+
+**Message identity**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `channel-origin` | `( -- map )` | Map with `host` / `startup` / `session` / `origintype` identifying this process's message origin. |
+| `channel-seq` | `( -- seq )` | Next sequence counter value without consuming it. |
+| `channel-last-published` | `( -- msg-id-str )` | Id string for the most recent publish on this session. |
+| `channel-trace` | `( -- array )` | Current message's `route_trace` (meaningful only inside a subscription handler). |
+| `channel-hops-left` | `( -- n )` | Current message's `hops_remaining` (meaningful only inside a subscription handler). |
+
+**Producer & sink stats**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `channel-cycle-stats` | `( -- map )` | Aggregate cycle-detection counters (`cycles-detected` / `ttl-exhausted` / `echo-dropped` / `static-warnings`). |
+| `channel-sink-stats` | `( handle -- map )` | Stats map for one route by handle. |
+| `channel-all-sink-stats` | `( -- array )` | Snapshot of stats for every registered route. |
+| `channel-producer-list` | `( -- array )` | Every channel name that has received at least one publish since service start. |
+| `channel-producer-stats` | `( channel-str -- map )` | Stats for one channel name (`channel` / `published-count` / `last-published-ns` / `route-count`). |
+| `channel-producers-by-pattern` | `( pattern -- array )` | Filter `channel-producer-list` to channels matching pattern. |
+
+**MCP inbound subscribers**
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `mcp-on-notification` | `( method-pattern -- observable )` | Subscribe to inbound MCP notifications matching `method-pattern`. |
+| `mcp-on-progress` | `( -- observable )` | Subscribe to inbound progress notifications from MCP clients. |
+| `mcp-on-cancelled` | `( -- observable )` | Subscribe to inbound cancellation notifications (hard-wired Read for owning session). |
+| `mcp-on-roots-changed` | `( -- observable )` | Subscribe to inbound `notifications/roots/list_changed`. |
+| `mcp-on-request` | `( method-pattern -- observable )` | Subscribe to inbound client-initiated requests matching `method-pattern`. |
+
+**Role admin** (mutates the session's role; requires `role_admin`)
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `role-grant-channel` | `( actions pattern role-name -- )` | Add a grant of given `actions` on `pattern` to the named role. |
+| `role-revoke-channel` | `( pattern role-name -- )` | Remove all grants matching `pattern` from the named role. |
+| `role-channel-enable!` | `( bool role-name -- )` | Set the `channels_enabled` master switch for the named role. |
+| `role-network-sink!` | `( bool role-name -- )` | Set the `channels_network_sink` flag (allow UDP/TCP sinks) for the named role. |
+
+### V.2 When to reach for Manifold
 
 - **Observability.** Tap `etil.mcp.**` or `etil.evolution.**` during a long-running session to see what's happening, without restarting or recompiling.
 - **Integration.** Forward specific ETIL events to an external message broker (NATS or AMQP 1.0) so other processes can react — e.g., a dashboard service that subscribes to `etil.evolution.generation.end`.
 - **Audit.** Hard-wired channels like `etil.aaa.audit.**` always deliver — routes can't silence them, RBAC can't deny Write to them.
 - **Cross-fleet correlation.** Every message carries a `MessageOrigin` tuple `(host, app_startup_us, session_id, seq)` that uniquely identifies the event across all ETIL processes.
 
-### V.2 Core concepts
+### V.3 Core concepts
 
 | Concept | What it is |
 |---|---|
@@ -2962,7 +3066,7 @@ s" double" evolve-status .   # => 10
 | **Origin tuple** | `(host, startup_us, session, seq)` stamped on every `publish()` by the service. |
 | **Session-HMAC** | HMAC-SHA256 of `session_id` under a process-local CSPRNG key, base64url-truncated to 22 chars. Broker sinks send this, not the raw session_id. |
 
-### V.3 RBAC — seven actions under `RolePermissions`
+### V.4 RBAC — seven actions under `RolePermissions`
 
 | Field | Controls |
 |---|---|
@@ -2981,7 +3085,7 @@ Hard-wired channels bypass `channel_grants` for their designated action:
 | `etil.health.**`, `etil.manifold.sink.**` | Write (with ring-buffered delivery) |
 | `etil.mcp.in.cancelled` | Read for the session owner (cancellation always reaches the target session) |
 
-### V.4 Word reference (34 words)
+### V.5 Word reference (34 words, grouped)
 
 | Category | Words |
 |---|---|
@@ -2995,9 +3099,9 @@ Hard-wired channels bypass `channel_grants` for their designated action:
 | **MCP inbound subscribers** | `mcp-on-notification` `mcp-on-progress` `mcp-on-cancelled` `mcp-on-roots-changed` `mcp-on-request` |
 | **Role admin** | `role-grant-channel` `role-revoke-channel` `role-channel-enable!` `role-network-sink!` |
 
-Stack effects are in `data/help.til` and visible via the TUI's F1 help browser.
+Stack effects are listed in **V.1** above; full help including denial reasons is in `data/help.til` and visible via the TUI's F1 help browser.
 
-### V.4.1 Per-word prerequisites
+### V.5.1 Per-word prerequisites
 
 Each word below lists the exact `RolePermissions` fields, `channel_grants` entries, build flags, and required state. Full text is also in `help <word>` at runtime.
 
@@ -3048,7 +3152,7 @@ Cross-cutting non-Manifold entries (see **Appendix W** for the full permission r
 | `evolve-bridge` | — | — | Bridge word defined; register **before** evolve-* |
 | `evolve-dag-register` / `evolve-dag` | — | — | DAG register before DAG evolve |
 
-### V.5 Usage examples
+### V.6 Usage examples
 
 **Simple publish/subscribe (in-process, no route needed)**
 
@@ -3141,7 +3245,7 @@ s" etil.**" s" read|write|route|introspect" true role-grant-channel
 true role-network-sink!
 ```
 
-### V.6 Broker subject conventions
+### V.7 Broker subject conventions
 
 When `channel-tap-*` forwards an ETIL channel to a broker, the broker subject is **identical** to the ETIL channel name — dot segments preserved. NATS and AMQP 1.0 both handle dotted subjects natively.
 
@@ -3170,7 +3274,7 @@ nats sub --server=nats://broker:4222 'etil.mcp.request.>'
 nats sub --server=nats://broker:4222 'etil.**' --filter-header "Session-Hmac=NjTy..."
 ```
 
-### V.7 Wire headers (broker sinks)
+### V.8 Wire headers (broker sinks)
 
 The `nats_sink` / `amqp_sink` set the following headers on each outbound message. `channel-source-nats` / `channel-source-amqp` parse them on ingress back into a `MessageOrigin` tuple.
 
