@@ -342,3 +342,58 @@ ASYNC_DISPATCH_TEST(AsyncDispatch,
     // dispatcher threads, which is covered by the session_id,
     // hostname, and app_startup_us checks above.
 }
+
+// ---------------------------------------------------------------------------
+// 11. InlineDeliveryRunsSinkOnPublisherThread
+//   Proves: routes with delivery_mode=DeliveryMode::Inline bypass the
+//   ThreadDispatcher and run sink->accept() on the publisher's stack.
+//   This restores the v2.4.2-v2.8.2 streaming behavior for the MCP
+//   SSE-out route — sys-/user-notification events must reach the SSE
+//   response stream as they are published, not at end-of-handler.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+class ThreadIdRecordingSink : public ISink {
+public:
+    void accept(const Message&) override {
+        std::lock_guard<std::mutex> lk(mu_);
+        accepted_on_.push_back(std::this_thread::get_id());
+    }
+    void flush() override {}
+
+    std::vector<std::thread::id> ids() const {
+        std::lock_guard<std::mutex> lk(mu_);
+        return accepted_on_;
+    }
+
+private:
+    mutable std::mutex mu_;
+    std::vector<std::thread::id> accepted_on_;
+};
+
+} // namespace
+
+// NOT gated by ETIL_MANIFOLD_ASYNC_DISPATCH_ENABLED — Inline delivery
+// short-circuits the dispatcher entirely, so it must work regardless of
+// which dispatcher implementation the build option selects.
+TEST(AsyncDispatch, InlineDeliveryRunsSinkOnPublisherThread) {
+    auto svc = make_default_channel_service();
+    auto recorder = std::make_shared<ThreadIdRecordingSink>();
+    RouteSpec spec;
+    spec.channel_pattern = "etil.inline.test";
+    spec.sink = recorder;
+    spec.delivery_mode = DeliveryMode::Inline;  // the bit under test
+    svc->add_route(std::move(spec));
+
+    const auto publisher_tid = std::this_thread::get_id();
+    svc->publish(make_msg("etil.inline.test"));
+    // No flush — Inline delivery is synchronous; sink should already
+    // have fired before publish() returned.
+
+    auto ids = recorder->ids();
+    ASSERT_EQ(ids.size(), 1u)
+        << "Inline route must deliver synchronously inside publish()";
+    EXPECT_EQ(ids.front(), publisher_tid)
+        << "Inline route must run sink on publisher thread, not worker";
+}
