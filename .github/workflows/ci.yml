@@ -18,31 +18,58 @@ jobs:
       matrix:
         build_type: [Debug, Release]
 
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: "2G"
+      CCACHE_COMPRESS: "true"
+      CCACHE_COMPRESSLEVEL: "6"
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install dependencies (cached apt)
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: build-essential cmake ninja-build ccache llvm-18-dev libllvm18 libtbb-dev libssl-dev libopenblas-dev liblapacke-dev
+          version: 1.0
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ runner.os }}-${{ matrix.build_type }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.build_type }}-
+
+      - name: Restore _deps cache
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+
+      - name: Prime ccache stats
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            llvm-18-dev libllvm18 \
-            libtbb-dev \
-            libssl-dev \
-            libopenblas-dev \
-            liblapacke-dev
+          ccache --version
+          ccache --zero-stats
+          ccache --show-config | grep -E 'cache_dir|max_size|compression'
 
       - name: Configure
         run: |
           cmake -B build -GNinja \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DETIL_BUILD_JWT=ON \
             -DETIL_BUILD_HTTP_CLIENT=ON \
             -DETIL_BUILD_MONGODB=OFF
 
       - name: Build
         run: ninja -C build
+
+      - name: Show ccache stats
+        if: always()
+        run: ccache --show-stats --verbose
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -j$(nproc)
