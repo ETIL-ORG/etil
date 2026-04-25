@@ -521,13 +521,25 @@ private:
         }
         outcome.routes_matched = matched.size();
 
-        // Phase 5a.3 — enqueue one DeliveryItem per matched route
-        // rather than invoking deliver() on the caller's stack.
-        // The dispatcher thread drains and calls deliver() outside
-        // this call path. See doc B §24.1 and the plan §4 Phase 5a.3
-        // invariants I1, I2, I4, I6.
+        // Phase 5a.3 — async dispatch by default: enqueue one
+        // DeliveryItem per matched route; the dispatcher thread drains
+        // and calls deliver() outside this call path. See doc B §24.1
+        // and the plan §4 Phase 5a.3 invariants I1, I2, I4, I6.
+        //
+        // v2.11.1 — routes that opted in with DeliveryMode::Inline
+        // (route_spec.hpp: "producer thread drives sink synchronously")
+        // bypass the dispatcher and run deliver() on the caller's
+        // stack. Used by the MCP SSE-out route so sys-/user-notification
+        // events stream as they are published rather than batching at
+        // the end of the request handler. Re-entrancy risk is bounded
+        // by cycle-detection layers 1-2 (visited-trace + hop-TTL),
+        // which already protect against publish-from-sink loops.
         for (auto& state : matched) {
-            dispatcher_->enqueue(DeliveryItem{state, msg});
+            if (state->spec.delivery_mode == DeliveryMode::Inline) {
+                deliver(state, msg);
+            } else {
+                dispatcher_->enqueue(DeliveryItem{state, msg});
+            }
         }
     }
 
