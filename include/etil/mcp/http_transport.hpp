@@ -17,6 +17,7 @@
 // Forward declare httplib types to avoid header leak
 namespace httplib {
 class Server;
+class DataSink;
 }
 
 namespace etil::aaa {
@@ -148,6 +149,14 @@ private:
 
     /// Dispatch a message to the legacy handler with catch-all protection.
     std::optional<nlohmann::json> dispatch(const nlohmann::json& msg);
+
+    /// Common SSE-response finalizer: flush async dispatch (so worker-thread
+    /// sinks finish publishing), drain notifications buffered by those
+    /// sinks, write each as an SSE event, then write the (optional)
+    /// response event and close the sink. Called by every POST chunked
+    /// content provider after its handler returns.
+    void finalize_sse_response(httplib::DataSink& sink,
+                               const std::optional<nlohmann::json>& response);
 
     /// Notification buffer drained by POST handlers between session_handler_
     /// completion and the response SSE write. Shared across all threads
