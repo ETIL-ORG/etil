@@ -46,6 +46,12 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-${{ matrix.build_type }}-
 
+      - name: Restore _deps cache
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+
       - name: Prime ccache stats
         run: |
           ccache --version
