@@ -71,6 +71,15 @@ McpServer::McpServer() {
     etil::manifold::RouteSpec sse_spec;
     sse_spec.channel_pattern = "etil.mcp.out.notification.**";
     sse_spec.sink = make_mcp_sse_out_sink(this);
+    // Inline delivery: sys-/user-notification publishes from TIL must
+    // reach the SSE response stream as they fire, not after the request
+    // handler returns. The publisher (request) thread runs the sink,
+    // which calls emit_notification → transport.send() → writes to
+    // active_sink (still set, still on this thread). Restores the
+    // pre-v2.8.3 streaming behavior. v2.10.2's flush+drain in
+    // finalize_sse_response remains as a safety net for any other
+    // worker-thread sinks that publish onto this channel.
+    sse_spec.delivery_mode = etil::manifold::DeliveryMode::Inline;
     sse_out_route_handle_ = channels_->add_route(std::move(sse_spec));
 
     init_auth();
