@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <set>
 #include <regex>
+#include <thread>
 
 using namespace etil::mcp;
 
@@ -143,17 +144,9 @@ TEST(SessionIdTest, GeneratesUniqueIds) {
 // SSE notification buffering tests
 // ---------------------------------------------------------------------------
 
-class SseNotificationTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        // Ensure clean state before each test
-        HttpTransport::clear_pending_notifications();
-    }
-    void TearDown() override {
-        // Clean up after each test
-        HttpTransport::clear_pending_notifications();
-    }
-};
+// SseNotificationTest: instance buffer per transport — fresh transport is
+// already empty, so no fixture setup is needed.
+class SseNotificationTest : public ::testing::Test {};
 
 TEST_F(SseNotificationTest, SendBuffersNotification) {
     HttpTransportConfig config;
@@ -166,7 +159,7 @@ TEST_F(SseNotificationTest, SendBuffersNotification) {
     };
 
     transport.send(notif);
-    auto drained = HttpTransport::drain_pending_notifications();
+    auto drained = transport.drain_pending_notifications();
 
     ASSERT_EQ(drained.size(), 1u);
     EXPECT_EQ(drained[0]["params"]["data"], "hello");
@@ -179,11 +172,11 @@ TEST_F(SseNotificationTest, DrainClearsBuffer) {
     nlohmann::json notif = {{"jsonrpc", "2.0"}, {"method", "test"}};
     transport.send(notif);
 
-    auto first = HttpTransport::drain_pending_notifications();
+    auto first = transport.drain_pending_notifications();
     EXPECT_EQ(first.size(), 1u);
 
     // Second drain should be empty
-    auto second = HttpTransport::drain_pending_notifications();
+    auto second = transport.drain_pending_notifications();
     EXPECT_TRUE(second.empty());
 }
 
@@ -195,8 +188,8 @@ TEST_F(SseNotificationTest, ClearEmptiesBuffer) {
     transport.send(notif);
     transport.send(notif);
 
-    HttpTransport::clear_pending_notifications();
-    auto drained = HttpTransport::drain_pending_notifications();
+    transport.clear_pending_notifications();
+    auto drained = transport.drain_pending_notifications();
     EXPECT_TRUE(drained.empty());
 }
 
@@ -213,11 +206,33 @@ TEST_F(SseNotificationTest, MultipleNotificationsBuffered) {
         transport.send(notif);
     }
 
-    auto drained = HttpTransport::drain_pending_notifications();
+    auto drained = transport.drain_pending_notifications();
     ASSERT_EQ(drained.size(), 5u);
     for (int i = 0; i < 5; ++i) {
         EXPECT_EQ(drained[i]["params"]["data"], "msg" + std::to_string(i));
     }
+}
+
+TEST_F(SseNotificationTest, CrossThreadFillAndDrain) {
+    // Regression for the v2.10.1 thread_local bug: the v2.8.3 ThreadDispatcher
+    // delivers Manifold sinks on a worker thread, where send() runs and must
+    // buffer into the same shared pending buffer that the request thread
+    // drains. Pre-fix this lost every cross-thread notification.
+    HttpTransportConfig config;
+    HttpTransport transport(config);
+
+    nlohmann::json notif = {
+        {"jsonrpc", "2.0"},
+        {"method", "notifications/message"},
+        {"params", {{"data", "from_worker"}}}
+    };
+
+    std::thread worker([&] { transport.send(notif); });
+    worker.join();
+
+    auto drained = transport.drain_pending_notifications();
+    ASSERT_EQ(drained.size(), 1u);
+    EXPECT_EQ(drained[0]["params"]["data"], "from_worker");
 }
 
 TEST_F(SseNotificationTest, BuildSseBodyFormat) {
@@ -275,6 +290,8 @@ TEST_F(SseNotificationTest, BuildSseBodyNoNotifications) {
 }
 
 TEST_F(SseNotificationTest, EmptyDrainOnFreshState) {
-    auto drained = HttpTransport::drain_pending_notifications();
+    HttpTransportConfig config;
+    HttpTransport transport(config);
+    auto drained = transport.drain_pending_notifications();
     EXPECT_TRUE(drained.empty());
 }

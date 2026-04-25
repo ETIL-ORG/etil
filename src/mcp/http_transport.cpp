@@ -26,11 +26,12 @@
 namespace etil::mcp {
 
 // Thread-local notification buffer — one per request thread.
-thread_local std::vector<nlohmann::json> HttpTransport::pending_notifications_;
-
 // Thread-local pointer to the active chunked response sink.
-// When non-null, send() writes SSE events directly to the sink for real-time
-// streaming instead of buffering into pending_notifications_.
+// When non-null on the calling thread, send() writes SSE events directly to
+// the sink for real-time streaming. Under Manifold's ThreadDispatcher
+// (default since v2.8.3), sinks fire on a worker thread where active_sink
+// is always null — those calls fall through to pending_notifications_,
+// which the request thread drains after channels_->flush_for_tests().
 namespace {
 thread_local httplib::DataSink* active_sink = nullptr;
 
@@ -54,11 +55,16 @@ static constexpr size_t MAX_PENDING_NOTIFICATIONS = 1000;
 void HttpTransport::send(const nlohmann::json& message) {
     if (active_sink) {
         // Streaming mode: write SSE event directly to the response sink.
+        // Only effective on the request thread (active_sink is thread_local);
+        // sinks running on a Manifold worker thread always take the
+        // buffered path below.
         std::string event = "data: " + message.dump() + "\n\n";
         active_sink->write(event.c_str(), event.size());
     } else {
-        // Fallback: buffer for batch response (non-streaming callers).
-        // Cap to prevent unbounded memory growth from notification floods.
+        // Fallback: buffer for batch response (non-streaming callers and
+        // worker-thread sinks). Cap to prevent unbounded memory growth
+        // from notification floods.
+        std::lock_guard<std::mutex> lk(pending_notifications_mutex_);
         if (pending_notifications_.size() < MAX_PENDING_NOTIFICATIONS) {
             pending_notifications_.push_back(message);
         }
@@ -66,10 +72,12 @@ void HttpTransport::send(const nlohmann::json& message) {
 }
 
 void HttpTransport::clear_pending_notifications() {
+    std::lock_guard<std::mutex> lk(pending_notifications_mutex_);
     pending_notifications_.clear();
 }
 
 std::vector<nlohmann::json> HttpTransport::drain_pending_notifications() {
+    std::lock_guard<std::mutex> lk(pending_notifications_mutex_);
     std::vector<nlohmann::json> result;
     result.swap(pending_notifications_);
     return result;
