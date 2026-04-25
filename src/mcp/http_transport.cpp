@@ -26,11 +26,12 @@
 namespace etil::mcp {
 
 // Thread-local notification buffer — one per request thread.
-thread_local std::vector<nlohmann::json> HttpTransport::pending_notifications_;
-
 // Thread-local pointer to the active chunked response sink.
-// When non-null, send() writes SSE events directly to the sink for real-time
-// streaming instead of buffering into pending_notifications_.
+// When non-null on the calling thread, send() writes SSE events directly to
+// the sink for real-time streaming. Under Manifold's ThreadDispatcher
+// (default since v2.8.3), sinks fire on a worker thread where active_sink
+// is always null — those calls fall through to pending_notifications_,
+// which the request thread drains after channels_->flush_for_tests().
 namespace {
 thread_local httplib::DataSink* active_sink = nullptr;
 
@@ -54,11 +55,16 @@ static constexpr size_t MAX_PENDING_NOTIFICATIONS = 1000;
 void HttpTransport::send(const nlohmann::json& message) {
     if (active_sink) {
         // Streaming mode: write SSE event directly to the response sink.
+        // Only effective on the request thread (active_sink is thread_local);
+        // sinks running on a Manifold worker thread always take the
+        // buffered path below.
         std::string event = "data: " + message.dump() + "\n\n";
         active_sink->write(event.c_str(), event.size());
     } else {
-        // Fallback: buffer for batch response (non-streaming callers).
-        // Cap to prevent unbounded memory growth from notification floods.
+        // Fallback: buffer for batch response (non-streaming callers and
+        // worker-thread sinks). Cap to prevent unbounded memory growth
+        // from notification floods.
+        std::lock_guard<std::mutex> lk(pending_notifications_mutex_);
         if (pending_notifications_.size() < MAX_PENDING_NOTIFICATIONS) {
             pending_notifications_.push_back(message);
         }
@@ -66,13 +72,43 @@ void HttpTransport::send(const nlohmann::json& message) {
 }
 
 void HttpTransport::clear_pending_notifications() {
+    std::lock_guard<std::mutex> lk(pending_notifications_mutex_);
     pending_notifications_.clear();
 }
 
 std::vector<nlohmann::json> HttpTransport::drain_pending_notifications() {
+    std::lock_guard<std::mutex> lk(pending_notifications_mutex_);
     std::vector<nlohmann::json> result;
     result.swap(pending_notifications_);
     return result;
+}
+
+void HttpTransport::finalize_sse_response(
+    httplib::DataSink& sink,
+    const std::optional<nlohmann::json>& response) {
+    // Wait for Manifold's ThreadDispatcher (default since v2.8.3) to deliver
+    // every publish enqueued during request handling. Without this, sinks
+    // running on the worker thread (mcp_sse_out_sink, etc.) may still be
+    // mid-flight when we close the response, dropping notifications.
+    // Legacy single-session handler has no channels — skip the flush.
+    if (session_callbacks_.channels) {
+        session_callbacks_.channels->flush_for_tests();
+    }
+
+    // Drain notifications buffered by worker-thread sinks. The buffer is
+    // shared (since v2.10.1); pre-fix it was thread_local and silently
+    // lost everything fired across threads.
+    auto pending = drain_pending_notifications();
+    for (const auto& notif : pending) {
+        std::string event = "data: " + notif.dump() + "\n\n";
+        sink.write(event.c_str(), event.size());
+    }
+
+    if (response.has_value()) {
+        std::string event = "data: " + response->dump() + "\n\n";
+        sink.write(event.c_str(), event.size());
+    }
+    sink.done();
 }
 
 std::string HttpTransport::build_sse_body(
@@ -180,12 +216,7 @@ void HttpTransport::setup_routes() {
                     clear_pending_notifications();
                     auto response = dispatch(msg_copy);
                     active_sink = nullptr;
-
-                    if (response.has_value()) {
-                        std::string event = "data: " + response->dump() + "\n\n";
-                        sink.write(event.c_str(), event.size());
-                    }
-                    sink.done();
+                    finalize_sse_response(sink, response);
                     return true;
                 }
             );
@@ -309,12 +340,7 @@ void HttpTransport::setup_session_routes() {
                     clear_pending_notifications();
                     auto response = session_handler_(new_session, msg_copy);
                     active_sink = nullptr;
-
-                    if (response.has_value()) {
-                        std::string event = "data: " + response->dump() + "\n\n";
-                        sink.write(event.c_str(), event.size());
-                    }
-                    sink.done();
+                    finalize_sse_response(sink, response);
                     return true;
                 }
             );
@@ -359,12 +385,7 @@ void HttpTransport::setup_session_routes() {
                     clear_pending_notifications();
                     auto response = session_handler_(session_copy, msg_copy);
                     active_sink = nullptr;
-
-                    if (response.has_value()) {
-                        std::string event = "data: " + response->dump() + "\n\n";
-                        sink.write(event.c_str(), event.size());
-                    }
-                    sink.done();
+                    finalize_sse_response(sink, response);
                     return true;
                 }
             );

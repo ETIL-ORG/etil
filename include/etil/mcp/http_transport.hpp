@@ -17,6 +17,7 @@
 // Forward declare httplib types to avoid header leak
 namespace httplib {
 class Server;
+class DataSink;
 }
 
 namespace etil::aaa {
@@ -131,10 +132,10 @@ public:
                                       const nlohmann::json& response);
 
     /// Clear any buffered notifications (call before request processing).
-    static void clear_pending_notifications();
+    void clear_pending_notifications();
 
     /// Drain and return all buffered notifications (call after request processing).
-    static std::vector<nlohmann::json> drain_pending_notifications();
+    std::vector<nlohmann::json> drain_pending_notifications();
 
 private:
     HttpTransportConfig config_;
@@ -149,8 +150,23 @@ private:
     /// Dispatch a message to the legacy handler with catch-all protection.
     std::optional<nlohmann::json> dispatch(const nlohmann::json& msg);
 
-    /// Thread-local notification buffer (per-request, drained in POST handler).
-    static thread_local std::vector<nlohmann::json> pending_notifications_;
+    /// Common SSE-response finalizer: flush async dispatch (so worker-thread
+    /// sinks finish publishing), drain notifications buffered by those
+    /// sinks, write each as an SSE event, then write the (optional)
+    /// response event and close the sink. Called by every POST chunked
+    /// content provider after its handler returns.
+    void finalize_sse_response(httplib::DataSink& sink,
+                               const std::optional<nlohmann::json>& response);
+
+    /// Notification buffer drained by POST handlers between session_handler_
+    /// completion and the response SSE write. Shared across all threads
+    /// because under Manifold's ThreadDispatcher (default since v2.8.3),
+    /// mcp_sse_out_sink calls emit_notification → transport.send() on a
+    /// worker thread, while the request thread reads the buffer to write
+    /// the response. Was thread_local pre-v2.10.1 and silently lost
+    /// every cross-thread notification (sys-notification regression).
+    mutable std::mutex pending_notifications_mutex_;
+    std::vector<nlohmann::json> pending_notifications_;
 };
 
 } // namespace etil::mcp
