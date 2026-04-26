@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(EvolutionaryTIL VERSION 2.11.2 LANGUAGES C CXX)
+project(EvolutionaryTIL VERSION 2.12.2 LANGUAGES C CXX)
 
 # All executables go to <builddir>/bin/
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -67,16 +67,17 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # Find dependencies
 include(Dependencies)
 
-# Generate version header at configure time.
-# ninja auto-reconfigures when CMakeLists.txt changes, so a version bump
-# regenerates version.hpp and recompiles all dependents automatically.
-# (The old add_custom_target approach ran every build but didn't declare
-# outputs, so ninja couldn't track file-level dependencies — version
-# changes silently left stale object files.)
+# Generate version definitions at configure time.
+# v2.12.2: configure src/core/version.cpp instead of include/etil/core/version.hpp
+# so a version bump or fresh ETIL_BUILD_TIMESTAMP recompiles exactly one TU
+# rather than every consumer of the header. ETIL_VERSION and ETIL_BUILD_TIMESTAMP
+# are now extern in the header (checked in, stable) and defined in the generated
+# .cpp. Ninja auto-reconfigures on CMakeLists.txt change (version bump) and
+# rebuilds the one .cpp; ccache hits everything else.
 string(TIMESTAMP ETIL_BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S UTC" UTC)
 configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/etil/core/version.hpp.in
-    ${CMAKE_CURRENT_BINARY_DIR}/include/etil/core/version.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/version.cpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/src/core/version.cpp
     @ONLY
 )
 
