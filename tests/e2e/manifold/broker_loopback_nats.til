@@ -1,0 +1,115 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Manifold E2E #2 — NATS broker round-trip.
+#
+# Round-trip pattern:
+#   local channel  e2e.test.broker.out
+#         │
+#         ▼  channel-tap-nats         (Manifold writes to NATS subject X)
+#         X  NATS broker
+#         │  channel-source-nats      (Manifold reads from NATS subject X)
+#         ▼
+#   local channel  e2e.test.broker.in
+#         │
+#         ▼  obs-message-read + obs-take + obs-subscribe   (assert)
+#
+# NATS URL is provided at the top by the driver, since the broker DNS
+# name is environment-specific. To customize, the driver substitutes
+# the NATS_URL placeholder before sending the file via tools/call
+# interpret. Default placeholder shown below uses the deployment's
+# compose-internal service name.
+#
+# Required role permissions:
+#   channels_enabled: true
+#   channels_network_sink: true
+#   channel_grants: read+write+route+introspect on "e2e.test.**"
+#
+# Self-contained — no include directives.
+
+# ── Inline harness ─────────────────────────────────────────────────
+: pass         ." PASS" cr ;
+: fail         ." FAIL" cr ;
+: expect-eq    = if pass else fail then ;
+: expect-streq s= 0> if pass else fail then ;
+
+variable captured
+: capture-string  captured ! ;
+
+# Driver substitutes NATS_URL with e.g. "nats://nats:4222" before send.
+# Codec defaults to json for header readability when sniffing the wire.
+
+# ── 1. Single-message broker round-trip ──────────────────────────
+: test-broker-single
+    # Install source first so we are subscribed when the tap fires.
+    s" NATS_URL" s" json"
+    s" e2e.test.broker.subject.single" s" e2e.test.broker.in.single"
+    channel-source-nats drop
+
+    s" e2e.test.broker.in.single" obs-create-channel
+    obs-message-read
+
+    # Now install the tap on the OUT side. tap-nats publishes onto the
+    # given NATS subject for every message arriving on the local
+    # channel.
+    s" NATS_URL" s" json"
+    s" e2e.test.broker.out.single"
+    s" e2e.test.broker.subject.single"
+    channel-tap-nats drop
+
+    s" e2e.test.broker.out.single" obs-create-channel
+    s" round-trip-payload" obs-message-write
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" round-trip-payload" expect-streq
+;
+." test-broker-single: " test-broker-single
+
+# ── 2. Multi-message ordering preservation ───────────────────────
+# NATS guarantees per-publisher per-subject ordering. Verify three
+# messages arrive in the order they were sent.
+variable seen1
+variable seen2
+variable seen3
+variable seen-idx
+
+: capture-ordered
+    seen-idx @ 0 = if seen1 ! 0 else
+    seen-idx @ 1 = if seen2 ! 0 else
+    seen-idx @ 2 = if seen3 ! 0 else drop then then then
+    seen-idx @ 1 + seen-idx !
+;
+
+: test-broker-ordering
+    0 seen-idx !
+    s" " seen1 ! s" " seen2 ! s" " seen3 !
+
+    s" NATS_URL" s" json"
+    s" e2e.test.broker.subject.order" s" e2e.test.broker.in.order"
+    channel-source-nats drop
+
+    s" e2e.test.broker.in.order" obs-create-channel
+    obs-message-read
+
+    s" NATS_URL" s" json"
+    s" e2e.test.broker.out.order"
+    s" e2e.test.broker.subject.order"
+    channel-tap-nats drop
+
+    s" e2e.test.broker.out.order" obs-create-channel
+    dup s" first"  obs-message-write
+    dup s" second" obs-message-write
+        s" third"  obs-message-write
+
+    channel-flush
+    3 obs-take
+    ['] capture-ordered obs-subscribe
+
+    seen1 @ s" first"  expect-streq
+    seen2 @ s" second" expect-streq
+    seen3 @ s" third"  expect-streq
+;
+." test-broker-ordering: " test-broker-ordering

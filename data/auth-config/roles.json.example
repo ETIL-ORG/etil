@@ -84,6 +84,41 @@
 
       "evaluate": true,
       "evaluate_tainted": false
+    },
+    "e2e_test": {
+      "max_sessions": 4,
+      "instruction_budget": 10000000,
+      "allowlist_admin": false,
+      "list_sessions": false,
+      "session_kick": false,
+      "send_system_notification": false,
+      "send_user_notification": false,
+      "session_idle_timeout_seconds": 900,
+      "interpret_execution_limit": 60,
+      "session_execution_limit": 0,
+
+      "lvfs_modify": false,
+      "disk_quota": 0,
+
+      "net_client_allowed": false,
+      "net_client_domains": [],
+      "net_client_quota": 0,
+
+      "net_server_bind": false,
+      "net_server_tcp": false,
+      "net_server_udp": false,
+
+      "evaluate": true,
+      "evaluate_tainted": false,
+
+      "channels_enabled": true,
+      "channels_route_admin": true,
+      "channels_network_sink": true,
+      "channel_grants": [
+        { "pattern": "e2e.test.**",
+          "actions": ["read", "write", "route", "introspect"],
+          "effect": "allow" }
+      ]
     }
   },
   "default_role": "beta-tester"

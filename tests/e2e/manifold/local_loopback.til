@@ -1,0 +1,157 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Manifold E2E #1 — Local channel round-trip.
+#
+# Runs against a deployed ETIL MCP server via tools/call interpret.
+# Self-contained: defines its own harness words inline so it does not
+# depend on tests/til/harness.til being mounted in the deployed image.
+#
+# Hot-stream invariant (see tests/til/manifold-e2e/manifold_loop.til):
+#   1. create the loop (forwarding route on OUT)
+#   2. add transforms to the loop (optional)
+#   3. obs-message-read on IN      — installs subscription
+#   4. obs-message-write to OUT    — publishes
+#   5. channel-flush               — drain async dispatcher
+#   6. 1 obs-take + obs-subscribe  — drains exactly one value
+#
+# Transform xt signature: ( str -- str' bool )
+#   bool on TOS chooses emit (true) vs drop (false).
+#
+# Each test prints "<name>: PASS" or "<name>: FAIL"; the driver greps
+# for FAIL to determine exit status.
+
+# ── Inline harness ─────────────────────────────────────────────────
+: pass         ." PASS" cr ;
+: fail         ." FAIL" cr ;
+: expect-eq    = if pass else fail then ;
+: expect-streq s= 0> if pass else fail then ;
+
+variable captured
+variable lh
+variable count
+
+: capture-string  captured ! ;
+: bump-count      drop count @ 1 + count ! ;
+
+# ── 1. Direct write and read on same channel, no loop ─────────────
+: test-direct-write-read
+    s" e2e.test.direct" obs-create-channel
+    dup obs-message-read
+    swap s" hello-direct" obs-message-write
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+    captured @ s" hello-direct" expect-streq
+;
+." test-direct-write-read: " test-direct-write-read
+
+# ── 2. Loopback raw (OUT → IN, no transforms) ─────────────────────
+: test-loopback-raw
+    s" e2e.test.raw.out" s" e2e.test.raw.in" obs-loop-channels lh !
+
+    s" e2e.test.raw.in" obs-create-channel
+    obs-message-read
+
+    s" e2e.test.raw.out" obs-create-channel
+    s" seed-raw" obs-message-write
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" seed-raw" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-raw: " test-loopback-raw
+
+# ── 3. Loopback + 1 transform ─────────────────────────────────────
+: xform-add-bang   s" !" s+ true ;
+
+: test-loopback-one-xform
+    s" e2e.test.xf1.out" s" e2e.test.xf1.in" obs-loop-channels lh !
+    lh @ ['] xform-add-bang channel-add-transform
+
+    s" e2e.test.xf1.in" obs-create-channel
+    obs-message-read
+
+    s" e2e.test.xf1.out" obs-create-channel
+    s" wow" obs-message-write
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" wow!" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-one-xform: " test-loopback-one-xform
+
+# ── 4. Loopback + 2 transforms (insertion order chains) ───────────
+: xform-prefix-A   s" A-" swap s+ true ;
+: xform-suffix-Z   s" -Z" s+ true ;
+
+: test-loopback-two-xforms
+    s" e2e.test.xf2.out" s" e2e.test.xf2.in" obs-loop-channels lh !
+    lh @ ['] xform-prefix-A channel-add-transform
+    lh @ ['] xform-suffix-Z channel-add-transform
+
+    s" e2e.test.xf2.in" obs-create-channel
+    obs-message-read
+
+    s" e2e.test.xf2.out" obs-create-channel
+    s" mid" obs-message-write
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" A-mid-Z" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-two-xforms: " test-loopback-two-xforms
+
+# ── 5. Transform false → drop; next message passes ───────────────
+: xform-reject-empty   dup slength 0 > ;
+
+: test-loopback-cancel
+    s" e2e.test.cancel.out" s" e2e.test.cancel.in" obs-loop-channels lh !
+    lh @ ['] xform-reject-empty channel-add-transform
+
+    s" e2e.test.cancel.in" obs-create-channel
+    obs-message-read
+
+    s" e2e.test.cancel.out" obs-create-channel
+    dup s" " obs-message-write     # dropped
+    s" kept" obs-message-write     # passes
+
+    channel-flush
+    1 obs-take
+    ['] capture-string obs-subscribe
+
+    captured @ s" kept" expect-streq
+    lh @ channel-remove-loop
+;
+." test-loopback-cancel: " test-loopback-cancel
+
+# ── 6. Burst: publish 100 messages, take 100, count them ─────────
+# Exercises the async dispatcher (Phase 5a ThreadDispatcher) under
+# rapid intra-session burst. All publishes happen before any take;
+# channel-flush must drain everything that was enqueued.
+: test-burst-100
+    0 count !
+    s" e2e.test.burst" obs-create-channel
+    dup obs-message-read
+
+    100 0 do
+        dup s" m" obs-message-write
+    loop
+    drop
+
+    channel-flush
+    100 obs-take
+    ['] bump-count obs-subscribe
+
+    count @ 100 expect-eq
+;
+." test-burst-100: " test-burst-100

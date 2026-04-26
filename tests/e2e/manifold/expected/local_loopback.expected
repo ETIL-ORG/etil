@@ -1,0 +1,6 @@
+test-direct-write-read: PASS
+test-loopback-raw: PASS
+test-loopback-one-xform: PASS
+test-loopback-two-xforms: PASS
+test-loopback-cancel: PASS
+test-burst-100: PASS
