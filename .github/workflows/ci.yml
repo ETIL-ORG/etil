@@ -20,6 +20,13 @@ jobs:
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
+      # Make compile commands path-relative so absolute -I/-iquote args
+      # don't fragment the hash space across runners or workspaces.
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      # Permit ccache to ignore non-deterministic content that doesn't
+      # affect output: time/date macros and file-mtime in headers (we
+      # rebuild often enough that mtime doesn't track real change).
+      CCACHE_SLOPPINESS: "time_macros,include_file_mtime,include_file_ctime,locale"
       CCACHE_MAXSIZE: "2G"
       CCACHE_COMPRESS: "true"
       CCACHE_COMPRESSLEVEL: "6"
