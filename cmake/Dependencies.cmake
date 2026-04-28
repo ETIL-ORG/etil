@@ -287,6 +287,12 @@ if(NOT ETIL_WASM_TARGET)
     endif()
 
     # OpenBLAS/LAPACK for linear algebra (mat-* primitives)
+    # Prefer system OpenBLAS (Ubuntu's libopenblas-dev) over FetchContent —
+    # the apt-packaged build is portable (DYNAMIC_ARCH at runtime). Setting
+    # BLA_VENDOR=OpenBLAS gives FindBLAS an explicit search hint so it picks
+    # up Ubuntu's install at /usr/lib/x86_64-linux-gnu/libopenblas.* without
+    # needing pkg-config gymnastics.
+    set(BLA_VENDOR OpenBLAS)
     find_package(BLAS QUIET)
     find_package(LAPACK QUIET)
     if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
@@ -298,6 +304,13 @@ if(NOT ETIL_WASM_TARGET)
         )
         set(NOFORTRAN ON CACHE BOOL "")
         set(BUILD_TESTING OFF CACHE BOOL "")
+        # Fallback only — system OpenBLAS preferred. If we ever do hit this
+        # path, force a runtime-dispatched build (DYNAMIC_ARCH=ON) so the
+        # resulting library is portable across CPU feature sets. Without this,
+        # OpenBLAS configures for the build host's apparent architecture and
+        # bakes in CPU-specific instructions (e.g. AVX-512BW kernels selected
+        # for SKYLAKEX), which SIGILL on hosts that lack those features.
+        set(DYNAMIC_ARCH ON CACHE BOOL "")
         FetchContent_MakeAvailable(OpenBLAS)
         set(BLAS_LIBRARIES openblas)
         set(LAPACK_LIBRARIES openblas)
