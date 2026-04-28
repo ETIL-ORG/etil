@@ -243,11 +243,9 @@ namespace etil::core {
         // Data stacks
         ValueStack& data_stack() { return data_stack_; }
         ValueStack& return_stack() { return return_stack_; }
-        ValueStack& float_stack() { return float_stack_; }
 
         const ValueStack& data_stack() const { return data_stack_; }
         const ValueStack& return_stack() const { return return_stack_; }
-        const ValueStack& float_stack() const { return float_stack_; }
 
         // Hardware contexts
         SIMDContext& simd() { return simd_; }
@@ -353,8 +351,7 @@ namespace etil::core {
         size_t memory_used() const
         {
             return data_stack_.size() * sizeof(Value) +
-                return_stack_.size() * sizeof(Value) +
-                float_stack_.size() * sizeof(Value);
+                return_stack_.size() * sizeof(Value);
         }
 
         // --- Execution limits ---
@@ -480,7 +477,6 @@ namespace etil::core {
         // Stacks
         ValueStack data_stack_;
         ValueStack return_stack_;
-        ValueStack float_stack_;
 
         // Dictionary
         Dictionary* dictionary_ = nullptr;
