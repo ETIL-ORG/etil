@@ -110,6 +110,34 @@ jobs:
               -ex "info registers rip rsp rbp" \
               -ex "x/4i \$rip" \
               ./build/bin/etil_signature_index_tests 2>&1 | tail -60
+          echo "=== addr2line for crash PC (offset within binary) ==="
+          # PC 0x...0444 in PIE binary — strip the load offset (gdb showed 0x5555561e0444; binary base is 0x555555554000-ish)
+          # use objdump to find the load addr, then compute offset
+          objdump -h build/bin/etil_signature_index_tests | grep -E '\.text\s' | head -2
+          # the function symbol is what we know precisely:
+          nm build/bin/etil_signature_index_tests 2>/dev/null | grep '_M_move_assign.*basic_string.*char.*integral_constant' | head -3
+          echo "=== Scan all .o files in build/ for AVX-512BW instructions ==="
+          # vpbroadcastb with GPR source + vmovdqu8 are AVX-512BW-only.
+          # Find which TUs have them, so we know the source of the crashing code.
+          count=0
+          for o in $(find build -name '*.o' 2>/dev/null | head -2000); do
+              if objdump -d "$o" 2>/dev/null | grep -qE 'vpbroadcastb\s+%e[a-d]x,%xmm|vmovdqu8'; then
+                  echo "AVX-512BW: $o"
+                  count=$((count+1))
+              fi
+          done
+          echo "Total .o files with AVX-512BW: $count"
+          echo "=== Sample compile command for gtest-all.cc.o (from compile_commands.json) ==="
+          # Use python since jq may not be present and json may have nested commas
+          python3 -c "
+import json
+with open('build/compile_commands.json') as f:
+    cc = json.load(f)
+for e in cc:
+    if 'gtest-all.cc' in e.get('file', ''):
+        print(e.get('command', ''))
+        break
+" 2>&1 || true
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -j$(nproc)
