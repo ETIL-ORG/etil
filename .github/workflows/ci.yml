@@ -78,5 +78,38 @@ jobs:
         if: always()
         run: ccache --show-stats --verbose
 
+      - name: Diagnose Debug build failure
+        if: failure() && matrix.build_type == 'Debug'
+        run: |
+          set +e
+          echo "=== CPU flags ==="
+          grep -m1 flags /proc/cpuinfo | tr ' ' '\n' | sort -u | tr '\n' ' '
+          echo ""
+          echo "=== Kernel ==="
+          uname -a
+          echo "=== gcc / asan / ubsan versions ==="
+          gcc --version | head -1
+          dpkg -l | grep -E "libasan|libubsan|libgcc" | head -10
+          echo "=== Binary info ==="
+          file build/bin/etil_signature_index_tests || true
+          echo "=== ldd ==="
+          ldd build/bin/etil_signature_index_tests || true
+          echo "=== Direct invoke (capture exit signal) ==="
+          ulimit -c unlimited
+          ./build/bin/etil_signature_index_tests --gtest_list_tests
+          rc=$?
+          echo "EXIT=$rc"
+          echo "=== strace signals + execve (last 80 lines) ==="
+          sudo apt-get install -y strace gdb >/dev/null 2>&1 || true
+          strace -f -e signal,execve,exit_group ./build/bin/etil_signature_index_tests --gtest_list_tests 2>&1 | tail -80
+          echo "=== gdb: bt, registers, instruction at PC ==="
+          gdb -batch \
+              -ex "set pagination off" \
+              -ex "run --gtest_list_tests" \
+              -ex "bt 30" \
+              -ex "info registers rip rsp rbp" \
+              -ex "x/4i \$rip" \
+              ./build/bin/etil_signature_index_tests 2>&1 | tail -60
+
       - name: Test
         run: ctest --test-dir build --output-on-failure -j$(nproc)
