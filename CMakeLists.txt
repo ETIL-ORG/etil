@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(EvolutionaryTIL VERSION 2.13.2 LANGUAGES C CXX)
+project(EvolutionaryTIL VERSION 2.13.3 LANGUAGES C CXX)
 
 # All executables go to <builddir>/bin/
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -23,11 +23,21 @@ if(NOT ETIL_WASM_TARGET)
         # Our one pedantic case (HeapString flexible array member) is suppressed
         # with a targeted #pragma in heap_string.hpp.
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address,undefined")
+        # -mno-avx512f appended to both build-type flag sets so it wins over
+        # any -march= that came earlier (build-type flags are appended after
+        # CMAKE_CXX_FLAGS on the cmd line; the last -m wins). GCC's ASan
+        # instrumentation was emitting vpbroadcastb (GPR form) and vmovdqu8
+        # — both AVX-512BW-only — for inline shadow zero-clears, causing
+        # SIGILL on AVX2-only hosts (GitHub Actions runners are heterogeneous,
+        # AVX-512 is not guaranteed). We have no AVX-512 dependencies, so opt
+        # out explicitly.
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address,undefined -mno-avx512f")
+        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -mno-avx512f")
         # LTO disabled: GCC 13.3 ICE in try_forward_edges (cfgcleanup.cc:580)
         # Non-deterministic crash during LTO link phase, hits different files each build.
         # Re-enable when upgrading to GCC 14+.
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native -mno-avx512f")
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -mno-avx512f")
     endif()
 endif()
 
