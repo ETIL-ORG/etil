@@ -12,24 +12,51 @@ if [[ ! -x "$REPL" ]]; then
     exit 1
 fi
 
-# Capture output; allow non-zero exit from ASan leak detection in debug builds
+TMPDIR_RUN=$(mktemp -d -t til-type-directed-XXXXXX)
+trap 'rm -rf "$TMPDIR_RUN"' EXIT
+STDOUT_FILE="$TMPDIR_RUN/stdout"
+STDERR_FILE="$TMPDIR_RUN/stderr"
+
 set +e
-OUTPUT=$(cd "$PROJECT_DIR" && "$REPL" --quiet 2>/dev/null <<'EOF'
+( cd "$PROJECT_DIR" && "$REPL" --quiet >"$STDOUT_FILE" 2>"$STDERR_FILE" <<'EOF'
 include tests/til/test_type_directed.til
 /quit
 EOF
 )
+RC=$?
 set -e
+
+OUTPUT=$(cat "$STDOUT_FILE")
+ERRORS=$(cat "$STDERR_FILE")
 
 echo "$OUTPUT"
 
+dump_diagnostics() {
+    local why="$1"
+    echo "--- TIL TYPE-DIRECTED TEST $why ---"
+    echo "REPL: $REPL"
+    echo "REPL exit code: $RC"
+    echo "stdout bytes: $(wc -c < "$STDOUT_FILE")"
+    echo "stderr bytes: $(wc -c < "$STDERR_FILE")"
+    echo "--- stdout (cat -v) ---"
+    cat -v "$STDOUT_FILE"
+    echo "--- stderr (cat -v) ---"
+    cat -v "$STDERR_FILE"
+    echo "--- end diagnostics ---"
+}
+
 if echo "$OUTPUT" | grep -q "FAIL"; then
-    echo "--- TIL TYPE-DIRECTED TEST FAILED ---"
+    dump_diagnostics "FAILED (FAIL marker in stdout)"
     exit 1
 fi
 
 if ! echo "$OUTPUT" | grep -q "PASS"; then
-    echo "--- TIL TYPE-DIRECTED TEST: no PASS output ---"
+    dump_diagnostics "ERROR: no PASS marker in stdout"
+    exit 1
+fi
+
+if [[ $RC -ne 0 ]]; then
+    dump_diagnostics "ERROR: REPL exited non-zero ($RC)"
     exit 1
 fi
 
