@@ -36,7 +36,7 @@ variable count
 
 # ── 1. Direct write and read on same channel, no loop ─────────────
 : test-direct-write-read
-    s" e2e.test.direct" obs-create-channel
+    s" etil.test.e2e.direct" obs-create-channel
     dup obs-message-read
     swap s" hello-direct" obs-message-write
     channel-flush
@@ -48,12 +48,12 @@ variable count
 
 # ── 2. Loopback raw (OUT → IN, no transforms) ─────────────────────
 : test-loopback-raw
-    s" e2e.test.raw.out" s" e2e.test.raw.in" obs-loop-channels lh !
+    s" etil.test.e2e.raw.out" s" etil.test.e2e.raw.in" obs-loop-channels lh !
 
-    s" e2e.test.raw.in" obs-create-channel
+    s" etil.test.e2e.raw.in" obs-create-channel
     obs-message-read
 
-    s" e2e.test.raw.out" obs-create-channel
+    s" etil.test.e2e.raw.out" obs-create-channel
     s" seed-raw" obs-message-write
 
     channel-flush
@@ -69,13 +69,13 @@ variable count
 : xform-add-bang   s" !" s+ true ;
 
 : test-loopback-one-xform
-    s" e2e.test.xf1.out" s" e2e.test.xf1.in" obs-loop-channels lh !
+    s" etil.test.e2e.xf1.out" s" etil.test.e2e.xf1.in" obs-loop-channels lh !
     lh @ ['] xform-add-bang channel-add-transform
 
-    s" e2e.test.xf1.in" obs-create-channel
+    s" etil.test.e2e.xf1.in" obs-create-channel
     obs-message-read
 
-    s" e2e.test.xf1.out" obs-create-channel
+    s" etil.test.e2e.xf1.out" obs-create-channel
     s" wow" obs-message-write
 
     channel-flush
@@ -92,14 +92,14 @@ variable count
 : xform-suffix-Z   s" -Z" s+ true ;
 
 : test-loopback-two-xforms
-    s" e2e.test.xf2.out" s" e2e.test.xf2.in" obs-loop-channels lh !
+    s" etil.test.e2e.xf2.out" s" etil.test.e2e.xf2.in" obs-loop-channels lh !
     lh @ ['] xform-prefix-A channel-add-transform
     lh @ ['] xform-suffix-Z channel-add-transform
 
-    s" e2e.test.xf2.in" obs-create-channel
+    s" etil.test.e2e.xf2.in" obs-create-channel
     obs-message-read
 
-    s" e2e.test.xf2.out" obs-create-channel
+    s" etil.test.e2e.xf2.out" obs-create-channel
     s" mid" obs-message-write
 
     channel-flush
@@ -115,13 +115,13 @@ variable count
 : xform-reject-empty   dup slength 0 > ;
 
 : test-loopback-cancel
-    s" e2e.test.cancel.out" s" e2e.test.cancel.in" obs-loop-channels lh !
+    s" etil.test.e2e.cancel.out" s" etil.test.e2e.cancel.in" obs-loop-channels lh !
     lh @ ['] xform-reject-empty channel-add-transform
 
-    s" e2e.test.cancel.in" obs-create-channel
+    s" etil.test.e2e.cancel.in" obs-create-channel
     obs-message-read
 
-    s" e2e.test.cancel.out" obs-create-channel
+    s" etil.test.e2e.cancel.out" obs-create-channel
     dup s" " obs-message-write     # dropped
     s" kept" obs-message-write     # passes
 
@@ -140,7 +140,7 @@ variable count
 # channel-flush must drain everything that was enqueued.
 : test-burst-100
     0 count !
-    s" e2e.test.burst" obs-create-channel
+    s" etil.test.e2e.burst" obs-create-channel
     dup obs-message-read
 
     100 0 do

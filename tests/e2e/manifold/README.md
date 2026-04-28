@@ -25,39 +25,22 @@ tests/e2e/manifold/
 - The MCP server's bearer token retrievable via a shell command (so the secret
   is never written to disk or shell history).
 - For `broker_loopback_nats.til`: a deployed NATS broker reachable from the
-  ETIL server's container, and a role on the server with the permissions
-  described below.
+  ETIL server's container.
 
-## Role permissions required
+## Role permissions
 
-Add an `e2e_test` role to `roles.json` (see `data/auth-config/roles.json.example`)
-with at minimum:
+The tests use the `admin` role's existing grant pattern `etil.**`. All test
+channels are namespaced under `etil.test.e2e.*`, which `admin` already covers
+out of the box:
 
-```json
-"e2e_test": {
-  "max_sessions": 4,
-  "instruction_budget": 10000000,
-  "session_idle_timeout_seconds": 900,
-  "interpret_execution_limit": 60,
-  "session_execution_limit": 0,
+- `channels_enabled: true`
+- `channels_route_admin: true` (required by `obs-loop-channels`)
+- `channels_network_sink: true` (required by `channel-tap-nats` / `channel-source-nats`)
+- `channel_grants` covering `etil.**` with read/write/route/introspect
 
-  "lvfs_modify": false,
-  "disk_quota": 0,
-
-  "channels_enabled": true,
-  "channels_route_admin": true,
-  "channels_network_sink": true,
-  "channel_grants": [
-    { "pattern": "e2e.test.**",
-      "actions": ["read","write","route","introspect"],
-      "effect": "allow" }
-  ]
-}
-```
-
-`channels_route_admin` is required by `obs-loop-channels`. `channels_network_sink`
-is required by `channel-tap-nats` / `channel-source-nats`. The grant is scoped
-to `e2e.test.**` so the role cannot interfere with production channels.
+If a non-admin role is used instead, it needs the same flags plus an explicit
+grant for `etil.test.e2e.**` (or `etil.**`). No dedicated `e2e_test` role is
+required — the namespace is the isolation mechanism.
 
 ## Running
 
@@ -112,6 +95,7 @@ broker bridges.
    `pass` / `fail` / `expect-eq` / `expect-streq` words handle this).
 2. Append the expected `<name>: PASS` line to the matching `.expected`
    file for documentation; the harness does not enforce it directly.
-3. Channel names must start with `e2e.test.` so the `e2e_test` role's grant
-   matches.
+3. Channel names must start with `etil.test.e2e.` so they fall under the
+   `etil.**` grant pattern admin already has, while staying isolated from
+   production `etil.*` channels.
 4. Re-run via the harness to confirm no regressions.

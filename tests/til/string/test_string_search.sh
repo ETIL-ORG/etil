@@ -12,27 +12,52 @@ if [[ ! -x "$REPL" ]]; then
     exit 1
 fi
 
-OUTPUT=$(cd "$PROJECT_DIR" && "$REPL" <<'EOF'
+TMPDIR_RUN=$(mktemp -d -t til-string-search-XXXXXX)
+trap 'rm -rf "$TMPDIR_RUN"' EXIT
+STDOUT_FILE="$TMPDIR_RUN/stdout"
+STDERR_FILE="$TMPDIR_RUN/stderr"
+
+set +e
+( cd "$PROJECT_DIR" && "$REPL" >"$STDOUT_FILE" 2>"$STDERR_FILE" <<'EOF'
 include tests/til/string/test_string_search.til
 testall
 /quit
 EOF
 )
+RC=$?
+set -e
+
+OUTPUT=$(cat "$STDOUT_FILE")
+ERRORS=$(cat "$STDERR_FILE")
 
 echo "$OUTPUT"
 
-if echo "$OUTPUT" | grep -q "FAIL"; then
-    echo "--- TIL TEST FAILED ---"
-    exit 1
-fi
+dump_diagnostics() {
+    local why="$1"
+    echo "--- TIL STRING-SEARCH TEST $why ---"
+    echo "REPL: $REPL"
+    echo "REPL exit code: $RC"
+    echo "stdout bytes: $(wc -c < "$STDOUT_FILE")"
+    echo "stderr bytes: $(wc -c < "$STDERR_FILE")"
+    echo "--- stdout (cat -v) ---"
+    cat -v "$STDOUT_FILE"
+    echo "--- stderr (cat -v) ---"
+    cat -v "$STDERR_FILE"
+    echo "--- end diagnostics ---"
+}
 
-if echo "$OUTPUT" | grep -qi "error"; then
-    echo "--- TIL TEST ERROR ---"
+if echo "$OUTPUT" | grep -q "FAIL"; then
+    dump_diagnostics "FAILED (FAIL marker in stdout)"
     exit 1
 fi
 
 if ! echo "$OUTPUT" | grep -q "PASS"; then
-    echo "--- TIL TEST ERROR: no PASS output ---"
+    dump_diagnostics "ERROR: no PASS marker in stdout"
+    exit 1
+fi
+
+if [[ $RC -ne 0 ]]; then
+    dump_diagnostics "ERROR: REPL exited non-zero ($RC)"
     exit 1
 fi
 

@@ -130,11 +130,11 @@ In either case the harness is a single self-contained script under `tests/e2e/ma
 
 The role driving the tests must have:
 - `channels_enabled: true`
-- `channel_grants` for `etil.test.**` (Read + Write + Route, allow).
+- `channel_grants` covering `etil.test.e2e.**` (Read + Write + Route, allow).
 - `channels_network_sink: true` for E2E #2 (NATS/AMQP taps and sources require it).
 - `channels_route_admin: true` if `obs-loop-channels` is exercised.
 
-Recommend a dedicated `e2e_test` role in `roles.json.example`, scoped to `etil.test.**` patterns only. The harness logs in as a user mapped to that role.
+The deployed `admin` role already meets all four requirements via its `etil.**` grant — no dedicated `e2e_test` role is needed. Test channels are namespaced under `etil.test.e2e.*`, which keeps them isolated from production `etil.*` channels by name even though the grant pattern is shared.
 
 ---
 

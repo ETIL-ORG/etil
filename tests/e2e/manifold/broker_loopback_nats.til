@@ -4,13 +4,13 @@
 # Manifold E2E #2 — NATS broker round-trip.
 #
 # Round-trip pattern:
-#   local channel  e2e.test.broker.out
+#   local channel  etil.test.e2e.broker.out
 #         │
 #         ▼  channel-tap-nats         (Manifold writes to NATS subject X)
 #         X  NATS broker
 #         │  channel-source-nats      (Manifold reads from NATS subject X)
 #         ▼
-#   local channel  e2e.test.broker.in
+#   local channel  etil.test.e2e.broker.in
 #         │
 #         ▼  obs-message-read + obs-take + obs-subscribe   (assert)
 #
@@ -23,7 +23,7 @@
 # Required role permissions:
 #   channels_enabled: true
 #   channels_network_sink: true
-#   channel_grants: read+write+route+introspect on "e2e.test.**"
+#   channel_grants: read+write+route+introspect on "etil.test.e2e.**"
 #
 # Self-contained — no include directives.
 
@@ -43,21 +43,21 @@ variable captured
 : test-broker-single
     # Install source first so we are subscribed when the tap fires.
     s" NATS_URL" s" json"
-    s" e2e.test.broker.subject.single" s" e2e.test.broker.in.single"
+    s" etil.test.e2e.broker.subject.single" s" etil.test.e2e.broker.in.single"
     channel-source-nats drop
 
-    s" e2e.test.broker.in.single" obs-create-channel
+    s" etil.test.e2e.broker.in.single" obs-create-channel
     obs-message-read
 
     # Now install the tap on the OUT side. tap-nats publishes onto the
     # given NATS subject for every message arriving on the local
     # channel.
     s" NATS_URL" s" json"
-    s" e2e.test.broker.out.single"
-    s" e2e.test.broker.subject.single"
+    s" etil.test.e2e.broker.out.single"
+    s" etil.test.e2e.broker.subject.single"
     channel-tap-nats drop
 
-    s" e2e.test.broker.out.single" obs-create-channel
+    s" etil.test.e2e.broker.out.single" obs-create-channel
     s" round-trip-payload" obs-message-write
 
     channel-flush
@@ -88,18 +88,18 @@ variable seen-idx
     s" " seen1 ! s" " seen2 ! s" " seen3 !
 
     s" NATS_URL" s" json"
-    s" e2e.test.broker.subject.order" s" e2e.test.broker.in.order"
+    s" etil.test.e2e.broker.subject.order" s" etil.test.e2e.broker.in.order"
     channel-source-nats drop
 
-    s" e2e.test.broker.in.order" obs-create-channel
+    s" etil.test.e2e.broker.in.order" obs-create-channel
     obs-message-read
 
     s" NATS_URL" s" json"
-    s" e2e.test.broker.out.order"
-    s" e2e.test.broker.subject.order"
+    s" etil.test.e2e.broker.out.order"
+    s" etil.test.e2e.broker.subject.order"
     channel-tap-nats drop
 
-    s" e2e.test.broker.out.order" obs-create-channel
+    s" etil.test.e2e.broker.out.order" obs-create-channel
     dup s" first"  obs-message-write
     dup s" second" obs-message-write
         s" third"  obs-message-write
