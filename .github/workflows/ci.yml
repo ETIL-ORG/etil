@@ -128,16 +128,15 @@ jobs:
           done
           echo "Total .o files with AVX-512BW: $count"
           echo "=== Sample compile command for gtest-all.cc.o (from compile_commands.json) ==="
-          # Use python since jq may not be present and json may have nested commas
-          python3 -c "
-import json
-with open('build/compile_commands.json') as f:
-    cc = json.load(f)
-for e in cc:
-    if 'gtest-all.cc' in e.get('file', ''):
-        print(e.get('command', ''))
-        break
-" 2>&1 || true
+          python3 - <<'PYEOF' 2>&1 || true
+          import json
+          with open('build/compile_commands.json') as f:
+              cc = json.load(f)
+          for e in cc:
+              if 'gtest-all.cc' in e.get('file', ''):
+                  print(e.get('command', ''))
+                  break
+          PYEOF
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -j$(nproc)
