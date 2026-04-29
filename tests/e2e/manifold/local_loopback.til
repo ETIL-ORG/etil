@@ -138,15 +138,20 @@ variable count
 # Exercises the async dispatcher (Phase 5a ThreadDispatcher) under
 # rapid intra-session burst. All publishes happen before any take;
 # channel-flush must drain everything that was enqueued.
+#
+# Stack note: obs-message-read returns a sub-obs ON TOP of the
+# channel ( ch -- ch sub ). swap once so the subscription sits at
+# TOS-1 and `dup` in the loop body copies the channel, not the sub.
 : test-burst-100
     0 count !
     s" etil.test.e2e.burst" obs-create-channel
-    dup obs-message-read
+    dup obs-message-read       # ( ch sub )
+    swap                       # ( sub ch )
 
     100 0 do
         dup s" m" obs-message-write
     loop
-    drop
+    drop                       # ( sub )
 
     channel-flush
     100 obs-take
