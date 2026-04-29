@@ -24,6 +24,7 @@
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_observable.hpp"
 #include "etil/core/heap_string.hpp"
+#include "etil/core/logging.hpp"
 #include "etil/core/primitives.hpp"
 #include "etil/core/word_impl.hpp"
 #include "etil/manifold/amqp_sink.hpp"
@@ -157,6 +158,15 @@ const char* decision_reason_str(etil::manifold::DecisionReason r) {
         case R::Denied_ExplicitDeny:      return "explicitly denied by a role grant";
         case R::Denied_QuotaExhausted:    return "quota exhausted";
     }
+    // Reached only if a new DecisionReason value was added to the enum
+    // without a matching case here, or if a non-enum-value int was cast
+    // into DecisionReason. Either way it is a programmer error — log it
+    // visibly so the omission cannot rot in production diagnostics.
+    if (auto log = etil::core::logging::get("etil.manifold")) {
+        log->error("decision_reason_str: unrecognized DecisionReason value {} "
+                   "(enum extended without updating this function?)",
+                   static_cast<int>(r));
+    }
     return "unknown";
 }
 
@@ -180,7 +190,16 @@ const char* action_grant_token(etil::manifold::ChannelAction a) {
         case A::Introspect: return "introspect";
         case A::None:       return "none";
     }
-    return "unknown";
+    // Reached only on a non-enum-value cast (the enum's defined values
+    // are all handled). ChannelAction is a bitmask flag set; an OR'd
+    // combination like (Read|Write) is not a single defined value and
+    // would land here. Log so the misuse surfaces.
+    if (auto log = etil::core::logging::get("etil.manifold")) {
+        log->error("action_grant_token: unrecognized ChannelAction value {} "
+                   "(non-enum cast or OR'd mask passed where a single bit was expected?)",
+                   static_cast<int>(a));
+    }
+    return "unknown channel action";
 }
 
 bool rbac_require(ExecutionContext& ctx, const char* word_name,
