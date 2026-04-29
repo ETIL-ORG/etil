@@ -186,13 +186,35 @@ bool Interpreter::evaluate_string(const std::string& code) {
     // Save the current input stream (may be non-null if called mid-line)
     auto* saved_stream = ctx_.input_stream();
     SourceContext saved_ctx = source_context_;
+    size_t saved_line = source_line_;
     source_context_ = SourceContext::Evaluate;
+    source_line_ = 0;
 
-    interpret_line(code);
+    // Iterate per-line so '#' line comments and per-line error
+    // recovery match load_file semantics. interpret_line was designed
+    // for a single logical line; feeding it the entire blob made '#'
+    // (which breaks out of the tokenizer loop) consume the remainder
+    // of the input.
+    std::istringstream iss(code);
+    std::string line;
+    while (std::getline(iss, line)) {
+        ++source_line_;
+        size_t depth_before = ctx_.data_stack().size();
+        interpret_line(line);
+        // Mirror load_file: drop heap values orphaned by a line-level
+        // error so they don't leak or corrupt subsequent lines.
+        if (line_had_error_ && ctx_.data_stack().size() > depth_before) {
+            while (ctx_.data_stack().size() > depth_before) {
+                auto v = ctx_.data_stack().pop();
+                if (v) v->release();
+            }
+        }
+    }
 
     // Restore the outer input stream and source context
     ctx_.set_input_stream(saved_stream);
     source_context_ = saved_ctx;
+    source_line_ = saved_line;
 
     // Detect unterminated definition (same logic as load_file)
     if (compiling_) {
