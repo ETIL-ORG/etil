@@ -193,10 +193,17 @@ else()
         target_link_libraries(etil PUBLIC ${JEMALLOC_LIBRARIES})
     endif()
 
-    # Set compiler-specific options
-    target_compile_options(etil PRIVATE
-        $<$<CXX_COMPILER_ID:GNU>:-march=native -mtune=native>
-    )
+    # Note: top-level CMakeLists.txt already adds -march=native to Release
+    # via CMAKE_CXX_FLAGS_RELEASE. We deliberately do NOT add -march=native
+    # to libetil here, because:
+    # (1) Release path is already covered by the global flag.
+    # (2) Adding it for Debug too caused SIGILL on GitHub Actions: gcc's
+    #     -march=native on Azure-hosted AMD runners detects AVX-512 features
+    #     that the executing CPU can't run (hypervisor exposes AVX-512 via
+    #     cpuid but kernel filters it from /proc/cpuinfo). Combined with
+    #     -fsanitize=address the compiler emits AVX-512BW instructions for
+    #     shadow operations that SIGILL when invoked. See
+    #     docs/claude-knowledge/ci-bugs.md §3.
 endif()
 
 # Install rules
