@@ -552,7 +552,12 @@ nlohmann::json McpServer::tool_interpret(const nlohmann::json& params) {
     auto wall_start = std::chrono::steady_clock::now();
     auto cpu_start = SessionStats::cpu_time_ns();
 
-    session.interp().interpret_line(code);
+    // Use evaluate_string (line-aware) rather than interpret_line:
+    // the MCP `interpret` tool accepts multi-line code, and '#' line
+    // comments must be terminated at '\n'. interpret_line is the
+    // single-logical-line entry; feeding it a blob made '#' consume
+    // the rest of the input.
+    session.interp().evaluate_string(code);
 
     auto wall_end = std::chrono::steady_clock::now();
     auto cpu_end = SessionStats::cpu_time_ns();

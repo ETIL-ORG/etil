@@ -650,3 +650,57 @@ TEST_F(InterpreterTest, InteractiveDefHasNoSourceFile) {
     auto sf = impls->back()->source_file();
     EXPECT_FALSE(sf.has_value());
 }
+
+// --- evaluate_string multi-line behavior ---
+// Regression tests for the bug where evaluate_string fed the entire
+// input blob to interpret_line, causing '#' (line-comment) to consume
+// the rest of the input instead of stopping at '\n'. The fix iterates
+// per line, mirroring load_file semantics. The MCP `interpret` tool
+// (tool_handlers.cpp) routes through evaluate_string, so this is also
+// a regression test for whole-.til-via-MCP execution.
+
+TEST_F(InterpreterTest, EvaluateStringLeadingHashCommentDoesNotEatRest) {
+    interp->evaluate_string("# leading comment\n42 . cr\n");
+    EXPECT_EQ(out.str(), "42 \n");
+}
+
+TEST_F(InterpreterTest, EvaluateStringTrailingHashCommentDoesNotEatNextLine) {
+    interp->evaluate_string("10 . cr   # trailing\n20 . cr\n");
+    EXPECT_EQ(out.str(), "10 \n20 \n");
+}
+
+TEST_F(InterpreterTest, EvaluateStringHandlesTilStyleHeaderBlock) {
+    interp->evaluate_string(
+        "# Copyright (c) 2026 Mark Deazley.\n"
+        "# SPDX-License-Identifier: BSD-3-Clause\n"
+        "#\n"
+        "# Multi-line header simulating a .til file.\n"
+        "42 . cr\n"
+    );
+    EXPECT_EQ(out.str(), "42 \n");
+}
+
+TEST_F(InterpreterTest, EvaluateStringDefAcrossLinesWithComments) {
+    interp->evaluate_string(
+        "# define a word that adds 1\n"
+        ": inc 1 + ;\n"
+        "# call it twice\n"
+        "5 inc . cr\n"
+        "10 inc . cr\n"
+    );
+    EXPECT_EQ(out.str(), "6 \n11 \n");
+}
+
+TEST_F(InterpreterTest, EvaluateStringEmptyLinesArePreserved) {
+    interp->evaluate_string("1 . cr\n\n2 . cr\n");
+    EXPECT_EQ(out.str(), "1 \n2 \n");
+}
+
+TEST_F(InterpreterTest, EvaluateStringDetectsUnterminatedDefinition) {
+    bool ok = interp->evaluate_string(
+        "# A def that never closes\n"
+        ": never-ends 1 2 +\n"
+    );
+    EXPECT_FALSE(ok);
+    EXPECT_NE(err.str().find("unterminated definition"), std::string::npos);
+}
