@@ -12,7 +12,8 @@ tests/e2e/manifold/
 ├── local_loopback.til              — E2E #1: local channel round-trip
 ├── broker_loopback_nats.til        — E2E #2: NATS broker round-trip
 ├── harness/
-│   └── run_e2e.sh                  — bash driver (curl + jq)
+│   ├── run_e2e.py                  — driver (Python 3, stdlib urllib, SSE-aware)
+│   └── run_e2e.sh                  — thin shim that execs run_e2e.py
 └── expected/
     ├── local_loopback.expected     — expected PASS lines for visual diff
     └── broker_loopback_nats.expected
@@ -20,7 +21,7 @@ tests/e2e/manifold/
 
 ## Prerequisites
 
-- Bash, `curl`, `jq` on the driver host (the workstation running the tests).
+- Python 3.10+ on the driver host (stdlib only — no pip install).
 - A reachable deployed ETIL MCP server with HTTP transport enabled.
 - The MCP server's bearer token retrievable via a shell command (so the secret
   is never written to disk or shell history).

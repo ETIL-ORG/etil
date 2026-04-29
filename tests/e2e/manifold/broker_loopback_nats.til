@@ -38,23 +38,36 @@ variable captured
 
 # Driver substitutes NATS_URL with e.g. "nats://nats:4222" before send.
 # Codec defaults to json for header readability when sniffing the wire.
+#
+# Word signatures (from src/manifold/til_primitives.cpp):
+#   channel-tap-nats    ( url codec pattern -- handle )
+#       — 3 args; NATS subject is derived from `pattern` via
+#         BrokerSinkBase::translate_subject (default = identity).
+#   channel-source-nats ( url codec subject pattern -- handle )
+#       — 4 args; explicit `subject` since the source has no channel
+#         to derive from.
+#
+# Round-trip: tap on local channel `etil.test.e2e.broker.out.X`
+# publishes to NATS subject `etil.test.e2e.broker.out.X` (identity
+# translate). Source subscribes to that subject and re-publishes onto
+# local channel `etil.test.e2e.broker.in.X` where the reader takes.
 
 # ── 1. Single-message broker round-trip ──────────────────────────
 : test-broker-single
     # Install source first so we are subscribed when the tap fires.
+    # ( url codec subject pattern -- handle )
     s" NATS_URL" s" json"
-    s" etil.test.e2e.broker.subject.single" s" etil.test.e2e.broker.in.single"
+    s" etil.test.e2e.broker.out.single"
+    s" etil.test.e2e.broker.in.single"
     channel-source-nats drop
 
     s" etil.test.e2e.broker.in.single" obs-create-channel
     obs-message-read
 
-    # Now install the tap on the OUT side. tap-nats publishes onto the
-    # given NATS subject for every message arriving on the local
-    # channel.
+    # Now install the tap on the OUT side.
+    # ( url codec pattern -- handle ) — subject derived from pattern.
     s" NATS_URL" s" json"
     s" etil.test.e2e.broker.out.single"
-    s" etil.test.e2e.broker.subject.single"
     channel-tap-nats drop
 
     s" etil.test.e2e.broker.out.single" obs-create-channel
@@ -76,10 +89,13 @@ variable seen2
 variable seen3
 variable seen-idx
 
+# capture-ordered ( s -- ) — store incoming string in seen<idx+1>,
+# then increment idx. Beyond idx 2, drop the message.
 : capture-ordered
-    seen-idx @ 0 = if seen1 ! 0 else
-    seen-idx @ 1 = if seen2 ! 0 else
-    seen-idx @ 2 = if seen3 ! 0 else drop then then then
+    seen-idx @ 0 = if seen1 ! else
+    seen-idx @ 1 = if seen2 ! else
+    seen-idx @ 2 = if seen3 ! else drop
+    then then then
     seen-idx @ 1 + seen-idx !
 ;
 
@@ -88,7 +104,8 @@ variable seen-idx
     s" " seen1 ! s" " seen2 ! s" " seen3 !
 
     s" NATS_URL" s" json"
-    s" etil.test.e2e.broker.subject.order" s" etil.test.e2e.broker.in.order"
+    s" etil.test.e2e.broker.out.order"
+    s" etil.test.e2e.broker.in.order"
     channel-source-nats drop
 
     s" etil.test.e2e.broker.in.order" obs-create-channel
@@ -96,7 +113,6 @@ variable seen-idx
 
     s" NATS_URL" s" json"
     s" etil.test.e2e.broker.out.order"
-    s" etil.test.e2e.broker.subject.order"
     channel-tap-nats drop
 
     s" etil.test.e2e.broker.out.order" obs-create-channel
