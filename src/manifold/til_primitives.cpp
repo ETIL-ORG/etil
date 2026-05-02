@@ -251,7 +251,7 @@ bool rbac_require(ExecutionContext& ctx, const char* word_name,
     default:
         ctx.err() << "  Fix: add a channel_grants entry to your role in roles.json:\n"
                      "         {\"pattern\": \"" << channel
-                  << "\", \"actions\": [\"" << tok
+                  << R"(", "actions": [")" << tok
                   << "\"], \"effect\": \"allow\"}\n"
                      "       or at runtime:  s\" " << tok << "\" s\" "
                   << channel << "\" s\" <role>\" role-grant-channel\n"
@@ -1075,7 +1075,7 @@ bool prim_mcp_on_roots_changed(ExecutionContext& ctx) {
 // (initially empty) channel tree.
 bool prim_mcp_on_request(ExecutionContext& ctx) {
     bool ok = false;
-    std::string pattern = pop_string(ctx, &ok);
+    const std::string pattern = pop_string(ctx, &ok);
     if (!ok) return false;
     std::string channel = "etil.mcp.in.request.";
     if (pattern == "**" || pattern.empty()) channel += "**";
@@ -1098,7 +1098,7 @@ etil::mcp::RolePermissions* require_role_admin(ExecutionContext& ctx,
                                                const char* word) {
     const auto* perms = ctx.permissions();
     // Standalone mode allows everything including role admin.
-    bool role_admin_ok = (perms == nullptr) || perms->role_admin;
+    bool role_admin_ok = perms == nullptr || perms->role_admin;
     if (!role_admin_ok) {
         ctx.err() << "Error: " << word
                   << ": role_admin permission required\n";
