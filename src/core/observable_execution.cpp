@@ -3,6 +3,7 @@
 
 #include "etil/core/observable_execution.hpp"
 #include "etil/core/observable_async.hpp"
+#include "etil/core/pipeline_wait.hpp"
 
 #include "etil/core/heap_array.hpp"
 #include "etil/core/heap_string.hpp"
@@ -1474,18 +1475,25 @@ bool execute_observable(HeapObservable* obs, ExecutionContext& ctx, const Observ
         // Loop blocks briefly in pop_wait() to amortize cv latency, and
         // yields via ctx.tick() between pulls so a long-running
         // subscription cooperates with session abort / time limits.
+        //
+        // Tick budget is charged ONLY on iters that delivered a message —
+        // idle waits (got == false) consume nothing. The wall-clock
+        // deadline from pipeline-wait-timeout! is the upper bound on
+        // purely-idle waits so a hung subscription can still terminate.
         auto* holder = reinterpret_cast<
             std::shared_ptr<etil::manifold::ChannelSubject>*>(obs->param());
         if (!holder || !*holder) return true;
         auto subject = *holder;
+        const auto deadline = compute_pipeline_deadline();
         while (true) {
-            if (!ctx.tick()) return false;
+            if (std::chrono::steady_clock::now() >= deadline) return false;
             etil::manifold::Message msg;
             bool got = subject->pop_wait(msg, /*wait_ms=*/20);
             if (!got) {
                 if (subject->is_closed()) break;
-                continue;  // spurious wake or timeout — loop
+                continue;  // spurious wake or timeout — loop (no tick charged)
             }
+            if (!ctx.tick()) return false;
             auto* hm = new HeapMap();
             hm->set("channel",
                     Value::from(HeapString::create(msg.channel)));
