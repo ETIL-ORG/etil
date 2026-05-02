@@ -8,6 +8,7 @@
 
 #include "etil/core/heap_object.hpp"
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -26,6 +27,11 @@ struct AsyncNode {
     bool done = false;
     bool stopped = false;
     bool is_source = true;  // only source nodes affect completion tracking
+    // Set by AsyncPipeline::register_handles() to point at the pipeline's
+    // delivery counter. Source-node observer callbacks (TimerNode::on_timer,
+    // IdleNode::on_idle) bump this before invoking the user observer so the
+    // run loop can distinguish productive iters from idle I/O waits.
+    std::atomic<uint64_t>* delivery_counter = nullptr;
     virtual ~AsyncNode() = default;
 #ifndef ETIL_WASM_BUILD
     virtual void register_on(uv_loop_t* loop) = 0;
@@ -53,6 +59,8 @@ struct TimerNode : AsyncNode {
     static void on_timer(uv_timer_t* h) {
         auto* self = static_cast<TimerNode*>(h->data);
         if (self->stopped) return;
+        if (self->delivery_counter)
+            self->delivery_counter->fetch_add(1, std::memory_order_relaxed);
         if (!self->observer(Value(self->counter++), *self->ctx)) {
             self->stopped = true;
             self->done = true;
@@ -98,6 +106,8 @@ struct IdleNode : AsyncNode {
             uv_idle_stop(h);
             return;
         }
+        if (self->delivery_counter)
+            self->delivery_counter->fetch_add(1, std::memory_order_relaxed);
         if (!self->observer(self->values[self->index++], *self->ctx)) {
             self->stopped = true;
             uv_idle_stop(h);
@@ -198,6 +208,7 @@ public:
 #endif
         registered_count_ = nodes_.size();
         for (auto& node : nodes_) {
+            node->delivery_counter = &deliveries_;
             node->register_on(loop);
         }
     }
@@ -211,9 +222,18 @@ public:
         void* uv_loop = loop_;
 #endif
         while (registered_count_ < nodes_.size()) {
+            nodes_[registered_count_]->delivery_counter = &deliveries_;
             nodes_[registered_count_]->register_on(uv_loop);
             ++registered_count_;
         }
+    }
+
+    /// Atomically read-and-clear the delivery counter. Returns true if any
+    /// observer callback fired since the previous call. Used by
+    /// run_async_pipeline() to skip ctx.tick() on iters that were purely
+    /// waiting on I/O (no delivery).
+    bool consume_deliveries_flag() {
+        return deliveries_.exchange(0, std::memory_order_relaxed) > 0;
     }
 
     /// Stop and close all nodes from index 'from' onward (for SwitchMap cancellation).
@@ -327,6 +347,8 @@ private:
     std::vector<DeferredGroup> deferred_;
     void* loop_ = nullptr;  // uv_loop_t* on native, always null on WASM
     size_t registered_count_ = 0;
+    // Bumped by source-node observer callbacks; consumed by the run loop.
+    std::atomic<uint64_t> deliveries_{0};
 };
 
 /// Run an async pipeline on the libuv event loop.
