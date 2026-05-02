@@ -1,0 +1,30 @@
+# Copyright (c) 2026 Mark Deazley. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# test_pipeline_wait_timeout.til — Verify the pipeline-wait-timeout! knob
+# bounds asynchronous pipeline polls by wall-clock time.
+#
+# Installs a long-period obs-timer wrapped in a Take that demands more
+# values than the timer can produce within the deadline. With the timeout
+# set to 0.3 seconds, obs-subscribe must return between 0.2s and 0.5s of
+# wall-clock time. The .sh harness parses the printed elapsed value and
+# asserts the bound, since obs-subscribe returns false on deadline (which
+# the .til layer cannot conditionally branch on at top level).
+
+include tests/til/harness.til
+
+# Set a tight wall-clock deadline.
+0.3 pipeline-wait-timeout!
+
+# Long-running timer the take cannot satisfy in 0.3s.
+# obs-subscribe will return false on deadline; in interpret mode the
+# error is logged but execution continues to the timing math below.
+time-us
+1000 1000 obs-timer 999999 obs-take ' drop obs-subscribe
+time-us swap -
+
+." ELAPSED-US " . cr
+
+# Restore default for any subsequent tests.
+30.0 pipeline-wait-timeout!
+." DONE" cr
