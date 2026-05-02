@@ -46,6 +46,7 @@ set(ETIL_CORE_SOURCES
     core/heap_observable.cpp
     core/observable_execution.cpp
     core/observable_primitives.cpp
+    core/pipeline_wait.cpp
     core/sha256.cpp
     core/interpreter_bootstrap.cpp
     lvfs/lvfs.cpp

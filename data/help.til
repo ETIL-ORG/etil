@@ -694,6 +694,11 @@ s" evolve-seed!" s" stack-effect" s" text" s" ( n -- )" meta! drop
 s" evolve-seed!" s" category" s" text" s" evolution" meta! drop
 s" evolve-seed!" s" prerequisites" s" text" s| Ordering: call BEFORE any evolve-word / evolve-all / evolve-chain / evolve-dag / evolve-sub so mutations are reproducible. Later calls reseed live engines.| meta! drop
 
+s" pipeline-wait-timeout!" s" description" s" text" s" Set wall-clock timeout (seconds) for async-pipeline polls and channel-subscription drains. 0 = no timeout. Default 30." meta! drop
+s" pipeline-wait-timeout!" s" stack-effect" s" text" s" ( seconds-f -- )" meta! drop
+s" pipeline-wait-timeout!" s" category" s" text" s" observables" meta! drop
+s" pipeline-wait-timeout!" s" prerequisites" s" text" s| Process-global; takes effect for loops that begin after the call. Bounds idle waits in obs-subscribe and channel-subscription drains so a hung subscription cannot exhaust the per-interpret execution budget.| meta! drop
+
 s" evolve-sub" s" description" s" text" s" MCE: mutate sub-concept but evaluate chain word for fitness" meta! drop
 s" evolve-sub" s" stack-effect" s" text" s" ( sub-str chain-str -- n )" meta! drop
 s" evolve-sub" s" category" s" text" s" evolution" meta! drop

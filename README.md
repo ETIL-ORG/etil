@@ -2631,6 +2631,20 @@ pipelines:
 | `obs-zip` | `( obs-a obs-b -- obs )` | Combination |
 | `obs?` | `( val -- bool )` | Introspection |
 
+### Tunable Configuration
+
+| Word | Stack Effect | Description |
+|------|-------------|-------------|
+| `pipeline-wait-timeout!` | `( seconds-f -- )` | Set wall-clock timeout (seconds) for async-pipeline polls and channel-subscription drains. 0 = no timeout. Default 30. |
+
+`pipeline-wait-timeout!` bounds how long an `obs-subscribe` (or any other terminal that drives an async pipeline) will wait on idle I/O before returning. The setting is process-global and takes effect for loops that begin after the call. Pair this with the per-`interpret` instruction budget: idle iterations no longer charge against the budget, so a hung subscription is bounded only by this wall-clock deadline.
+
+```
+> 5.0 pipeline-wait-timeout!     # bound async waits at 5 seconds
+> 0.0 pipeline-wait-timeout!     # disable the timeout (run until budget / completion)
+> 30.0 pipeline-wait-timeout!    # restore default
+```
+
 ---
 
 ## Appendix T: Evolution and Selection

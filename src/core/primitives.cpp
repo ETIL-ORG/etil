@@ -12,6 +12,7 @@
 #include "etil/core/heap_matrix.hpp"
 #include "etil/core/heap_observable.hpp"
 #include "etil/core/json_primitives.hpp"
+#include "etil/core/pipeline_wait.hpp"
 #include "etil/core/heap_object.hpp"
 #include "etil/core/heap_primitives.hpp"
 #include "etil/fileio/async_file_io.hpp"
@@ -2065,6 +2066,27 @@ bool prim_evolve_sub(ExecutionContext& ctx) {
     return true;
 }
 
+// pipeline-wait-timeout! ( seconds-f -- )
+// Set the wall-clock timeout (in seconds) for asynchronous pipeline polls
+// and channel-subscription drains. 0 (or negative) means no timeout.
+// Default is 30 seconds. Process-global; takes effect for loops that begin
+// after the call.
+bool prim_pipeline_wait_timeout(ExecutionContext& ctx) {
+    auto opt = ctx.data_stack().pop();
+    if (!opt) return false;
+    double seconds = 0.0;
+    if (opt->type == Value::Type::Float) {
+        seconds = opt->as_float;
+    } else if (opt->type == Value::Type::Integer) {
+        seconds = static_cast<double>(opt->as_int);
+    } else {
+        ctx.data_stack().push(*opt);
+        return false;
+    }
+    set_pipeline_wait_timeout_seconds(seconds);
+    return true;
+}
+
 // evolve-seed! ( n -- )
 // Seed all evolution RNGs for deterministic, reproducible runs.
 bool prim_evolve_seed(ExecutionContext& ctx) {
@@ -3806,6 +3828,8 @@ static const PrimEntry prim_table[] = {
     {"evolve-dag-variance-k!", prim_evolve_dag_variance_k,  1, 0, {T::Integer},           {}},
     {"evolve-dag-depth-discount!", prim_evolve_dag_depth_discount, 1, 0, {T::Float},      {}},
     {"evolve-dag-stats-interval!", prim_evolve_dag_stats_interval, 1, 0, {T::Integer},   {}},
+    // Async-pipeline / channel-subscription wait tunable
+    {"pipeline-wait-timeout!", prim_pipeline_wait_timeout, 1, 0, {T::Float},             {}},
     // Time
     {"time-us",    prim_time_us,     0, 1, {},          {T::Integer}},
     {"us->iso",    prim_us_to_iso,   1, 1, {T::Integer},{T::String}},

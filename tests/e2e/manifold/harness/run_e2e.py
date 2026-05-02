@@ -40,7 +40,11 @@ from pathlib import Path
 from typing import Any
 
 
-_PASS_FAIL_LINE = re.compile(r'^(\S+): (PASS|FAIL)$')
+# Match both labeled (`name: PASS`) verdicts emitted by test wrappers and
+# bare (`PASS`) markers emitted by inner expect-* helpers. Without the bare
+# form a multi-assert test that fails on its 2nd or 3rd assert is silently
+# counted as passing — only the first labeled marker is matched.
+_PASS_FAIL_LINE = re.compile(r'^(?:(\S+): )?(PASS|FAIL)$')
 
 
 @dataclass(frozen=True)
@@ -250,7 +254,8 @@ def tally(captured: str) -> tuple[list[tuple[str, str]], int, int]:
     for line in captured.splitlines():
         m = _PASS_FAIL_LINE.match(line.strip())
         if m:
-            results.append((m.group(1), m.group(2)))
+            name = m.group(1) or '<expect>'
+            results.append((name, m.group(2)))
     pass_n = sum(1 for _, v in results if v == 'PASS')
     fail_n = sum(1 for _, v in results if v == 'FAIL')
     return results, pass_n, fail_n
