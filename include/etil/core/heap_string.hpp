@@ -23,11 +23,12 @@ public:
     /// Factory: allocate HeapString + string data in a single allocation.
     /// Returned object has refcount=1.
     static HeapString* create(std::string_view sv) {
-        size_t alloc_size = sizeof(HeapString) + sv.size() + 1;
+        const size_t stringSize = sv.size();
+        const size_t alloc_size = sizeof(HeapString) + stringSize + 1;
         void* mem = ::operator new(alloc_size);
-        auto* hs = new (mem) HeapString(sv.size());
-        std::memcpy(hs->data_, sv.data(), sv.size());
-        hs->data_[sv.size()] = '\0';
+        auto* hs = new (mem) HeapString(stringSize);
+        std::memcpy(hs->data_, sv.data(), stringSize);
+        hs->data_[stringSize] = '\0';
         return hs;
     }
 
